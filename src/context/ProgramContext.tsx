@@ -124,10 +124,10 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     }, [fetchGrid]);
 
     useEffect(() => {
-        if (wallet && program) {
+        if (program) {
             fetchGridWithTimeout();
         }
-    }, [wallet, program, fetchGridWithTimeout]);
+    }, [program, fetchGridWithTimeout]);
 
     const buyBlock = async (id: number, price: number, color: string = "#FF0000") => {
 
