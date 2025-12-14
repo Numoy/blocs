@@ -9,7 +9,10 @@ import { clusterApiUrl } from "@solana/web3.js";
 
 export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
     // Use Devnet for development, Mainnet for production
-    const endpoint = useMemo(() => clusterApiUrl("devnet"), []);
+    const endpoint = useMemo(() => {
+        // Fallback to direct public endpoint if clusterApiUrl fails
+        return "https://api.devnet.solana.com";
+    }, []);
 
     const wallets = useMemo(
         () => [], // Rely on standard wallet detection (MWA) to avoid duplications like MetaMask/Backpack

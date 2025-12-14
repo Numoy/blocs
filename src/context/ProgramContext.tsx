@@ -109,11 +109,25 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [program]);
 
+    const fetchGridWithTimeout = useCallback(async () => {
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("RPC Timeout")), 15000)
+        );
+
+        try {
+            await Promise.race([fetchGrid(), timeout]);
+        } catch (err) {
+            console.error("Grid Load Timeout/Error:", err);
+            toast.error("Failed to load grid. Network congested.");
+            setIsLoading(false); // Force stop loading
+        }
+    }, [fetchGrid]);
+
     useEffect(() => {
         if (wallet && program) {
-            fetchGrid();
+            fetchGridWithTimeout();
         }
-    }, [wallet, program, fetchGrid]);
+    }, [wallet, program, fetchGridWithTimeout]);
 
     const buyBlock = async (id: number, price: number, color: string = "#FF0000") => {
 
