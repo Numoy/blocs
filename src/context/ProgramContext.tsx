@@ -205,6 +205,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 console.error("Sim Logs:", err.logs);
             }
             toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
+            throw error;
         }
     };
 
@@ -235,6 +236,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error(error);
             toast.error("Update failed", { id: toastId });
+            throw error;
         }
     };
 
@@ -260,6 +262,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error(error);
             toast.error("Listing failed", { id: toastId });
+            throw error;
         }
     };
 

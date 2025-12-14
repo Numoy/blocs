@@ -165,7 +165,7 @@ export const Grid = () => {
                 minScale={0.1}
                 maxScale={10} // More zoom for pixel art
                 centerOnInit
-                limitToBounds={false}
+                limitToBounds={true}
                 wheel={{ step: 0.1 }}
             >
                 <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
