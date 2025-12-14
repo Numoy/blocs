@@ -1,0 +1,174 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 90;
+    backdrop-filter: blur(2px);
+    animation: fadeIn 0.3s ease;
+}
+
+.sidebar {
+    position: fixed;
+    top: 80px;
+    /* Header height */
+    right: 0;
+    width: 100%;
+    max-width: 400px;
+    height: calc(100dvh - 80px);
+    background: #000;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 100;
+    padding: 2rem;
+    overflow-y: auto;
+    transform: translateX(100%);
+    animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 0.5rem;
+}
+
+.section {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.label {
+    font-size: 0.875rem;
+    color: #888;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.value {
+    color: #fff;
+    font-size: 1rem;
+    word-break: break-all;
+}
+
+.link {
+    color: var(--accent-secondary);
+    word-break: break-all;
+}
+
+.button {
+    width: 100%;
+    padding: 1rem;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 1rem;
+}
+
+.buyButton {
+    background: var(--accent-secondary);
+    color: #000;
+}
+
+.buyButton:hover {
+    background: #0fd180;
+    transform: translateY(-2px);
+}
+
+.closeButton {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 1.5rem;
+}
+
+.closeButton:hover {
+    color: #fff;
+}
+
+.input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0.8rem;
+    color: #fff;
+    border-radius: 6px;
+    font-size: 1rem;
+    outline: none;
+}
+
+.input:focus {
+    border-color: var(--accent-secondary);
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        max-height: 85dvh;
+        border-left: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 20px 20px 0 0;
+        transform: translateY(100%);
+        animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        padding-bottom: env(safe-area-inset-bottom, 20px);
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(100%);
+        }
+
+        to {
+            transform: translateY(0);
+        }
+    }
+
+    /* Add a drag handle visual */
+    .sidebar::before {
+        content: '';
+        display: block;
+        width: 40px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+        margin: 0 auto 1rem auto;
+    }
+}

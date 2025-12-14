@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Blocs - 10,000 Blocks on Solana
 
-## Getting Started
+Blocs is a decentralized experiment on the Solana blockchain. A 100x100 grid of 10,000 blocks, fully customizable and ownable by the community.
 
-First, run the development server:
+## Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+-   **Total Supply**: 10,000 Blocks (Fixed).
+-   **Grid Size**: 100x100.
+-   **On-Chain Data**: Color, Text, Image URL, Website URL.
+-   **Economy**: Buy, Sell, Trade. 5% Royalty on secondary sales to the creator.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Project Structure
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+-   `src/`: Next.js Frontend (React, TypeScript, Tailwind).
+-   `anchor/`: Solana Smart Contract (Rust, Anchor Framework).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Verification
 
-## Learn More
+The smart contract is deployed on Solana Devnet (and Mainnet soon). You can verify the code matches the on-chain program.
 
-To learn more about Next.js, take a look at the following resources:
+**Program ID**: `C4MgCjSCzHPnxaFHqTPFH7ur67rKHeunEQAzGRSMDKDM`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Build & Verify
+1.  Navigate to `anchor/`
+2.  Run `anchor build`
+3.  Compare the checksum of `anchor/target/deploy/blocs.so` with the on-chain program data.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Running Locally
 
-## Deploy on Vercel
+### Prerequisites
+-   Node.js 18+
+-   Rust & Cargo
+-   Solana CLI
+-   Anchor CLI
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Steps
+1.  **Frontend**:
+    ```bash
+    npm install
+    npm run dev
+    ```
+    Open `http://localhost:3000`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2.  **Smart Contract**:
+    ```bash
+    cd anchor
+    anchor build
+    anchor test
+    ```
+
+## License
+
+MIT License.

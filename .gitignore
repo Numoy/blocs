@@ -39,3 +39,24 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Anchor
+anchor/target/
+anchor/.anchor/
+anchor/app/
+**/*.json
+!package.json
+!tsconfig.json
+!anchor/programs/blocs/idl.json
+!src/utils/idl.json
+
+# Local keys
+anchor/scripts/keypair.json
+anchor/scripts/admin-keypair.json
+blocs-keypair.json
+*.key
+*.pem
+
+# IDEs
+.vscode
+.idea

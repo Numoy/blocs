@@ -1,0 +1,138 @@
+.container {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    /* Hide scrollbars, let zoom lib handle panning */
+    position: relative;
+    background: #090909;
+}
+
+.grid {
+    display: grid;
+    /* 100 columns, each 12px wide */
+    grid-template-columns: repeat(100, 12px);
+    grid-template-rows: repeat(100, 12px);
+    gap: 1px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 1px;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+    animation: fadeIn 1s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.block {
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+
+.block:hover {
+    transform: scale(1.1);
+    z-index: 10;
+    box-shadow: 0 0 10px var(--accent-secondary);
+    /* Remove background color change on hover if it has an image */
+}
+
+.hoverCard {
+    position: fixed;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    pointer-events: none;
+    /* Let clicks pass through to blocks underneath */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 200px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    animation: fadeIn 0.1s ease-out;
+}
+
+.cardImage {
+    width: 100%;
+    max-width: 250px;
+    max-height: 250px;
+    object-fit: contain;
+    height: auto;
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.cardTitle {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.cardText {
+    font-size: 0.8rem;
+    color: #ccc;
+}
+
+.cardUrl {
+    font-size: 0.7rem;
+    color: #aaa;
+    font-style: italic;
+    word-break: break-all;
+    max-width: 250px;
+}
+
+.cardPrice {
+    font-size: 1rem;
+    color: var(--accent-secondary);
+    font-weight: 600;
+}
+
+.loadingOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    backdrop-filter: blur(5px);
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(20, 241, 149, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--accent-secondary);
+    animation: spin 1s ease-in-out infinite;
+    margin-bottom: 1rem;
+}
+
+.loadingText {
+    color: var(--accent-secondary);
+    font-weight: 500;
+    letter-spacing: 1px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
