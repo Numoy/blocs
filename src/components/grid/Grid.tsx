@@ -113,6 +113,7 @@ export const Grid = () => {
         if (block) {
             setSelectedBlock(block);
             setSidebarMode('view');
+            setHoveredBlock(null); // Clear hover card immediately on click/tap
         }
     }, [getBlockFromEvent]);
 
