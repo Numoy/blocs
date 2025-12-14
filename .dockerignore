@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+anchor
+.gitignore
+.github
+Dockerfile
+README.md
+*.md
