@@ -168,7 +168,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             // IDL type matches: id: u32, color: [u8; 3]
             // Anchor 0.29+ usually expects the array directly, not wrapped.
 
-            const tx = await program.methods.buyBlock(id, rgb)
+            const ix = await program.methods.buyBlock(id, rgb)
                 .accounts({
                     grid: gridPubkey,
                     buyer: wallet.publicKey,
@@ -176,11 +176,28 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                     admin: gridAdmin,
                     systemProgram: SystemProgram.programId,
                 })
-                .rpc({ skipPreflight: true });
+                .instruction();
 
-            console.log("Transaction sent:", tx);
+            const latestBlockhash = await connection.getLatestBlockhash();
+            const transaction = new Transaction({
+                feePayer: wallet.publicKey,
+                ...latestBlockhash,
+            }).add(ix);
 
-            await connection.confirmTransaction(tx, "confirmed");
+            // Explicitly sign with the React Wallet Adapter (more reliable on mobile)
+            const signedTx = await wallet.signTransaction(transaction);
+
+            // Send raw transaction
+            const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+                skipPreflight: true,
+                maxRetries: 3
+            });
+            console.log("Transaction sent:", signature);
+
+            await connection.confirmTransaction({
+                signature,
+                ...latestBlockhash
+            }, "confirmed");
             toast.success("Block purchased!", { id: toastId });
             fetchGrid(); // Refresh data
         } catch (error: unknown) {
