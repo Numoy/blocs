@@ -27,7 +27,7 @@ const ProgramContext = createContext<ProgramContextState | null>(null);
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const { sendTransaction, publicKey } = useWallet();
+    const { sendTransaction, publicKey, signTransaction } = useWallet();
 
     const [isLoading, setIsLoading] = useState(true);
     const [blocks, setBlocks] = useState<BlockData[]>([]);
@@ -190,12 +190,15 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 .add(ix);
 
             // DIAGNOSTIC LOOP:
-            if (!wallet?.signTransaction) {
-                throw new Error("Wallet does not support manual signing");
+            // Direct use of hook 'signTransaction' to ensure best mobile compatibility
+            if (!signTransaction) {
+                throw new Error("Wallet does not support signing (Adapter)");
             }
 
-            toast.loading("Please sign in wallet...");
-            const signedTx = await wallet.signTransaction(transaction);
+            // REMOVED: toast.loading(...) -> This breaks deep links on iOS!
+            // We must call signTransaction IMMEDIATELY after the user click logic (or close to it)
+
+            const signedTx = await signTransaction(transaction);
 
             // Validate Signature specifically for the Sender
             // Legacy Transaction 'signatures' is array of {publicKey, signature}
