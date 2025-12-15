@@ -54,8 +54,8 @@ pub mod blocs {
         // 1. Determine Price and Recipient
         let (price, expected_recipient) = if block.owner == Pubkey::default() {
             // New Block -> Buy from Admin
-            // Price: 0.05 SOL
-            (50_000_000, admin_key) // 0.05 SOL
+            // Price: 0.01 SOL
+            (10_000_000, admin_key) // 0.01 SOL
         } else {
             // Resale -> Buy from Current Owner
             require!(block.is_for_sale == 1, CustomError::NotForSale);

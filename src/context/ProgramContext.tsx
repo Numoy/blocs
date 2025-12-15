@@ -176,106 +176,107 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                     admin: gridAdmin,
                     systemProgram: SystemProgram.programId,
                 })
-                .rpc();
+        })
+                .rpc({ skipPreflight: true });
 
-            console.log("Transaction sent:", tx);
+console.log("Transaction sent:", tx);
 
-            await connection.confirmTransaction(tx, "confirmed");
-            toast.success("Block purchased!", { id: toastId });
-            fetchGrid(); // Refresh data
+await connection.confirmTransaction(tx, "confirmed");
+toast.success("Block purchased!", { id: toastId });
+fetchGrid(); // Refresh data
         } catch (error: unknown) {
-            console.error("Purchase Error:", error);
+    console.error("Purchase Error:", error);
 
-            // Handle User Rejection (Phantom, Solflare, etc)
-            const err = error as { message?: string, name?: string, logs?: string[] };
-            const msg = (err.message || JSON.stringify(error)).toLowerCase();
-            if (
-                msg.includes("user rejected") ||
-                msg.includes("rejected the request") ||
-                msg.includes("stopped") ||
-                msg.includes("cancelled") ||
-                err.name === "WalletSignTransactionError"
-            ) {
-                toast.info("Transaction cancelled", { id: toastId });
-                // We must throw here so the calling function knows it failed!
-                throw new Error("User cancelled");
-            }
+    // Handle User Rejection (Phantom, Solflare, etc)
+    const err = error as { message?: string, name?: string, logs?: string[] };
+    const msg = (err.message || JSON.stringify(error)).toLowerCase();
+    if (
+        msg.includes("user rejected") ||
+        msg.includes("rejected the request") ||
+        msg.includes("stopped") ||
+        msg.includes("cancelled") ||
+        err.name === "WalletSignTransactionError"
+    ) {
+        toast.info("Transaction cancelled", { id: toastId });
+        // We must throw here so the calling function knows it failed!
+        throw new Error("User cancelled");
+    }
 
-            // detailed logs
-            if (err.logs) {
-                console.error("Sim Logs:", err.logs);
-            }
-            toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
-            throw error;
-        }
+    // detailed logs
+    if (err.logs) {
+        console.error("Sim Logs:", err.logs);
+    }
+    toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
+    throw error;
+}
     };
 
-    const updateBlock = async (id: number, text: string, imageUrl: string, url: string) => {
-        if (!program || !wallet) return;
+const updateBlock = async (id: number, text: string, imageUrl: string, url: string) => {
+    if (!program || !wallet) return;
 
-        // Content Moderation
-        if (!isContentAllowed(text, imageUrl)) {
-            toast.error("Content not allowed.");
-            return;
-        }
+    // Content Moderation
+    if (!isContentAllowed(text, imageUrl)) {
+        toast.error("Content not allowed.");
+        return;
+    }
 
-        const toastId = toast.loading("Updating block...");
-        try {
-            const gridPubkey = GRID_PUBKEY;
-
-
-            const tx = await program.methods.updateBlock(id, text, imageUrl, url)
-                .accounts({
-                    grid: gridPubkey,
-                    signer: wallet.publicKey,
-                })
-                .rpc();
-
-            await connection.confirmTransaction(tx, "confirmed");
-            toast.success("Block updated!", { id: toastId });
-            fetchGrid();
-        } catch (error) {
-            console.error(error);
-            toast.error("Update failed", { id: toastId });
-            throw error;
-        }
-    };
-
-    const sellBlock = async (id: number, price: number) => {
-        if (!program || !wallet) return;
-        const toastId = toast.loading("Listing block...");
-        try {
-            const gridPubkey = GRID_PUBKEY;
-
-            const lamports = new BN(price * web3.LAMPORTS_PER_SOL);
+    const toastId = toast.loading("Updating block...");
+    try {
+        const gridPubkey = GRID_PUBKEY;
 
 
-            const tx = await program.methods.sellBlock(id, lamports)
-                .accounts({
-                    grid: gridPubkey,
-                    signer: wallet.publicKey,
-                })
-                .rpc();
+        const tx = await program.methods.updateBlock(id, text, imageUrl, url)
+            .accounts({
+                grid: gridPubkey,
+                signer: wallet.publicKey,
+            })
+            .rpc();
 
-            await connection.confirmTransaction(tx, "confirmed");
-            toast.success("Block listed for sale!", { id: toastId });
-            fetchGrid();
-        } catch (error) {
-            console.error(error);
-            toast.error("Listing failed", { id: toastId });
-            throw error;
-        }
-    };
+        await connection.confirmTransaction(tx, "confirmed");
+        toast.success("Block updated!", { id: toastId });
+        fetchGrid();
+    } catch (error) {
+        console.error(error);
+        toast.error("Update failed", { id: toastId });
+        throw error;
+    }
+};
 
-    const refreshBlock = async () => {
-        await fetchGrid();
-    };
+const sellBlock = async (id: number, price: number) => {
+    if (!program || !wallet) return;
+    const toastId = toast.loading("Listing block...");
+    try {
+        const gridPubkey = GRID_PUBKEY;
 
-    return (
-        <ProgramContext.Provider value={{ blocks, buyBlock, updateBlock, sellBlock, refreshBlock, isLoading }}>
-            {children}
-        </ProgramContext.Provider>
-    );
+        const lamports = new BN(price * web3.LAMPORTS_PER_SOL);
+
+
+        const tx = await program.methods.sellBlock(id, lamports)
+            .accounts({
+                grid: gridPubkey,
+                signer: wallet.publicKey,
+            })
+            .rpc();
+
+        await connection.confirmTransaction(tx, "confirmed");
+        toast.success("Block listed for sale!", { id: toastId });
+        fetchGrid();
+    } catch (error) {
+        console.error(error);
+        toast.error("Listing failed", { id: toastId });
+        throw error;
+    }
+};
+
+const refreshBlock = async () => {
+    await fetchGrid();
+};
+
+return (
+    <ProgramContext.Provider value={{ blocks, buyBlock, updateBlock, sellBlock, refreshBlock, isLoading }}>
+        {children}
+    </ProgramContext.Provider>
+);
 };
 
 export const useProgram = () => {

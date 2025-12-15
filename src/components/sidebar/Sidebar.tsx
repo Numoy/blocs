@@ -128,7 +128,10 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                             setIsBuying(false);
                                         }
                                     }}
-                                    disabled={isBuying}
+                                    style={{
+                                        opacity: isBuying ? 0.7 : 1,
+                                        pointerEvents: isBuying ? 'none' : 'auto'
+                                    }}
                                 >
                                     {isBuying ? "Processing..." : "Buy Block"}
                                 </button>
