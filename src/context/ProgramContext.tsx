@@ -142,6 +142,14 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             const gridPubkey = GRID_PUBKEY;
             console.log("Buying from Grid (Keypair):", gridPubkey.toBase58());
 
+            // NETWORK GUARD: Check if we are actually talking to Devnet
+            const genesisHash = await connection.getGenesisHash();
+            const DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+            if (genesisHash !== DEVNET_GENESIS) {
+                toast.error("App is not connected to Devnet!");
+                throw new Error(`Network Mismatch: App Genesis ${genesisHash} != Devnet`);
+            }
+
             const rgb = hexToRgb(color);
 
             // Determine Recipient
@@ -228,7 +236,10 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             if (err.logs) {
                 console.error("Sim Logs:", err.logs);
             }
-            toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
+            // Add Debug info to toast
+            const debugInfo = ` | Net: ${connection.rpcEndpoint.includes("devnet") ? "Devnet" : "Unknown"} | Key: ${publicKey ? publicKey.toBase58().substring(0, 6) : "None"}`;
+
+            toast.error("Purchase failed: " + (err.message || "Unknown") + debugInfo, { id: toastId, duration: 8000 });
             throw error;
         }
     };
