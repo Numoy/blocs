@@ -74,5 +74,11 @@ jobs:
             # But the docker-compose.yml currently says "build: .".
             # We can override it or just rebuild. Rebuild is safest for now without changing compose file logic too much.
             
-            docker compose down
-            docker compose up -d --build
+            # Try docker compose first, fallback to docker-compose if needed
+            if docker compose version >/dev/null 2>&1; then
+              docker compose down
+              docker compose up -d --build
+            else
+              docker-compose down
+              docker-compose up -d --build
+            fi
