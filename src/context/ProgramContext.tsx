@@ -190,10 +190,29 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }))
                 .add(ix);
 
-            // Send using standard hook, but without skipPreflight to catch simulation errors
-            const signature = await sendTransaction(transaction, connection, {
-                skipPreflight: false,
-                maxRetries: 5
+            // DIAGNOSTIC LOOP:
+            // 1. Ask Wallet to Sign (Explicitly)
+            // Note: 'signTransaction' is available on 'wallet' (AnchorWallet) or we cast useWallet()
+            // We need the 'signTransaction' function from the raw adapter context if possible, 
+            // but 'useAnchorWallet' provides a safe wrapper.
+            if (!wallet?.signTransaction) {
+                throw new Error("Wallet does not support signing");
+            }
+
+            const signedTx = await wallet.signTransaction(transaction);
+
+            // 2. Verify Signature Exists
+            if (!signedTx.signature) {
+                // Some wallets define signedTx.signature, others populate signedTx.signatures array
+                if (signedTx.signatures.length === 0 || signedTx.signatures.every(s => s.signature === null)) {
+                    throw new Error("Wallet returned transaction without signature!");
+                }
+            }
+
+            // 3. Send Raw
+            const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+                skipPreflight: true, // skip simulation to avoid false negatives on mobile
+                maxRetries: 3
             });
 
             console.log("Transaction sent:", signature);
