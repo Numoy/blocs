@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from "react";
-import { useConnection, useAnchorWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { BlockData } from "@/types";
 import { isContentAllowed } from "@/utils/moderation";
 import { toast } from 'sonner';
@@ -27,6 +27,7 @@ const ProgramContext = createContext<ProgramContextState | null>(null);
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
+    const { sendTransaction } = useWallet();
 
     const [isLoading, setIsLoading] = useState(true);
     const [blocks, setBlocks] = useState<BlockData[]>([]);
@@ -178,25 +179,23 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 })
                 .instruction();
 
-            const latestBlockhash = await connection.getLatestBlockhash();
-            const transaction = new Transaction({
-                feePayer: wallet.publicKey,
-                ...latestBlockhash,
-            }).add(ix);
+            const transaction = new Transaction().add(ix);
 
-            // Explicitly sign with the React Wallet Adapter (more reliable on mobile)
-            const signedTx = await wallet.signTransaction(transaction);
+            // Get latest blockhash
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
+            transaction.feePayer = wallet.publicKey;
 
-            // Send raw transaction
-            const signature = await connection.sendRawTransaction(signedTx.serialize(), {
-                skipPreflight: true,
-                maxRetries: 3
-            });
+            // Use the standard wallet adapter 'sendTransaction' hook
+            // This handles signing + sending + mobile deep linking natively
+            const signature = await sendTransaction(transaction, connection, { skipPreflight: true });
+
             console.log("Transaction sent:", signature);
 
             await connection.confirmTransaction({
-                signature,
-                ...latestBlockhash
+                blockhash,
+                lastValidBlockHeight,
+                signature
             }, "confirmed");
             toast.success("Block purchased!", { id: toastId });
             fetchGrid(); // Refresh data
