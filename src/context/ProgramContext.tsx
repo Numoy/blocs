@@ -196,7 +196,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 msg.includes("cancelled") ||
                 err.name === "WalletSignTransactionError"
             ) {
-                toast.info("Transaction cancelled", { id: toastId });
+                // Debugging: Show the actual message to help diagnose "Immediate Failure"
+                toast.error(`Cancelled: ${msg.substring(0, 50)}...`, { id: toastId });
                 // We must throw here so the calling function knows it failed!
                 throw new Error("User cancelled");
             }
