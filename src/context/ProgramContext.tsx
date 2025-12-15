@@ -6,7 +6,7 @@ import { BlockData } from "@/types";
 import { isContentAllowed } from "@/utils/moderation";
 import { toast } from 'sonner';
 import { Program, AnchorProvider, Idl, web3, BN } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Transaction, VersionedTransaction, ComputeBudgetProgram } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
 import { GRID_PUBKEY, BLOCK_PRICE_NEW } from "@/utils/constants";
 
@@ -179,7 +179,9 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 })
                 .instruction();
 
-            const transaction = new Transaction().add(ix);
+            const transaction = new Transaction()
+                .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 })) // Standard limit
+                .add(ix);
 
             // Get latest blockhash
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
