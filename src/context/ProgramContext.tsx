@@ -179,22 +179,22 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 })
                 .instruction();
 
-            // Create Versioned Transaction (Preferred by modern wallets)
+            // Revert to Legacy Transaction for maximum mobile compatibility
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-            const messageV0 = new TransactionMessage({
-                payerKey: publicKey,
-                recentBlockhash: blockhash,
-                instructions: [
-                    ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-                    ix
-                ],
-            }).compileToV0Message();
+            const transaction = new Transaction({
+                feePayer: publicKey,
+                blockhash,
+                lastValidBlockHeight,
+            })
+                .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }))
+                .add(ix);
 
-            const transaction = new VersionedTransaction(messageV0);
-
-            // Use the standard wallet adapter 'sendTransaction' hook
-            const signature = await sendTransaction(transaction, connection, { skipPreflight: true });
+            // Send using standard hook, but without skipPreflight to catch simulation errors
+            const signature = await sendTransaction(transaction, connection, {
+                skipPreflight: false,
+                maxRetries: 5
+            });
 
             console.log("Transaction sent:", signature);
 
