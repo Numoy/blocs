@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  blocs:
+    container_name: blocs
+    image: blocs-app
+    build: .
+    restart: always
+    networks:
+      - app-net
+
+  caddy:
+    container_name: caddy
+    image: caddy:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    networks:
+      - app-net
+    depends_on:
+      - blocs
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  caddy_data:
