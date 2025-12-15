@@ -6,7 +6,7 @@ import { BlockData } from "@/types";
 import { isContentAllowed } from "@/utils/moderation";
 import { toast } from 'sonner';
 import { Program, AnchorProvider, Idl, web3, BN } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, Transaction, VersionedTransaction, ComputeBudgetProgram } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Transaction, VersionedTransaction, ComputeBudgetProgram, TransactionMessage } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
 import { GRID_PUBKEY, BLOCK_PRICE_NEW } from "@/utils/constants";
 
@@ -179,17 +179,21 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 })
                 .instruction();
 
-            const transaction = new Transaction()
-                .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 })) // Standard limit
-                .add(ix);
-
-            // Get latest blockhash
+            // Create Versioned Transaction (Preferred by modern wallets)
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-            transaction.recentBlockhash = blockhash;
-            transaction.feePayer = publicKey;
+
+            const messageV0 = new TransactionMessage({
+                payerKey: publicKey,
+                recentBlockhash: blockhash,
+                instructions: [
+                    ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+                    ix
+                ],
+            }).compileToV0Message();
+
+            const transaction = new VersionedTransaction(messageV0);
 
             // Use the standard wallet adapter 'sendTransaction' hook
-            // This handles signing + sending + mobile deep linking natively
             const signature = await sendTransaction(transaction, connection, { skipPreflight: true });
 
             console.log("Transaction sent:", signature);
