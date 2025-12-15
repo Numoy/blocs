@@ -197,7 +197,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 err.name === "WalletSignTransactionError"
             ) {
                 toast.info("Transaction cancelled", { id: toastId });
-                return;
+                // We must throw here so the calling function knows it failed!
+                throw new Error("User cancelled");
             }
 
             // detailed logs
