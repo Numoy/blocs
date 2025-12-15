@@ -189,31 +189,11 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             })
                 .add(ix);
 
-            // DIAGNOSTIC LOOP:
-            // Direct use of hook 'signTransaction' to ensure best mobile compatibility
-            if (!signTransaction) {
-                throw new Error("Wallet does not support signing (Adapter)");
-            }
-
-            // REMOVED: toast.loading(...) -> This breaks deep links on iOS!
-            // We must call signTransaction IMMEDIATELY after the user click logic (or close to it)
-
-            const signedTx = await signTransaction(transaction);
-
-            // Validate Signature specifically for the Sender
-            // Legacy Transaction 'signatures' is array of {publicKey, signature}
-            const signerData = signedTx.signatures.find(s => s.publicKey.equals(publicKey));
-            if (!signerData || !signerData.signature) {
-                toast.error("Wallet returned 'Success' but left signature blank!");
-                throw new Error("Wallet returned transaction without signature for " + publicKey.toBase58());
-            }
-
-            toast.info(`Signed! Sig: ${Array.from(signerData.signature).slice(0, 4).join(',')}`);
-
-            // 3. Send Raw
-            const signature = await connection.sendRawTransaction(signedTx.serialize(), {
-                skipPreflight: true,
-                maxRetries: 3
+            // Clean, Standard, Official implementation
+            // This relies on the Wallet Adapter to handle deep linking and signing correctly
+            const signature = await sendTransaction(transaction, connection, {
+                skipPreflight: false, // Strict mode: Fail if logic is wrong
+                maxRetries: 3         // Retry on network jitter
             });
 
             console.log("Transaction sent:", signature);
