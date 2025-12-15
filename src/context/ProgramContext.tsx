@@ -187,31 +187,29 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 blockhash,
                 lastValidBlockHeight,
             })
-                .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }))
                 .add(ix);
 
             // DIAGNOSTIC LOOP:
-            // 1. Ask Wallet to Sign (Explicitly)
-            // Note: 'signTransaction' is available on 'wallet' (AnchorWallet) or we cast useWallet()
-            // We need the 'signTransaction' function from the raw adapter context if possible, 
-            // but 'useAnchorWallet' provides a safe wrapper.
             if (!wallet?.signTransaction) {
-                throw new Error("Wallet does not support signing");
+                throw new Error("Wallet does not support manual signing");
             }
 
+            toast.loading("Please sign in wallet...");
             const signedTx = await wallet.signTransaction(transaction);
 
-            // 2. Verify Signature Exists
-            if (!signedTx.signature) {
-                // Some wallets define signedTx.signature, others populate signedTx.signatures array
-                if (signedTx.signatures.length === 0 || signedTx.signatures.every(s => s.signature === null)) {
-                    throw new Error("Wallet returned transaction without signature!");
-                }
+            // Validate Signature specifically for the Sender
+            // Legacy Transaction 'signatures' is array of {publicKey, signature}
+            const signerData = signedTx.signatures.find(s => s.publicKey.equals(publicKey));
+            if (!signerData || !signerData.signature) {
+                toast.error("Wallet returned 'Success' but left signature blank!");
+                throw new Error("Wallet returned transaction without signature for " + publicKey.toBase58());
             }
+
+            toast.info(`Signed! Sig: ${Array.from(signerData.signature).slice(0, 4).join(',')}`);
 
             // 3. Send Raw
             const signature = await connection.sendRawTransaction(signedTx.serialize(), {
-                skipPreflight: true, // skip simulation to avoid false negatives on mobile
+                skipPreflight: true,
                 maxRetries: 3
             });
 
