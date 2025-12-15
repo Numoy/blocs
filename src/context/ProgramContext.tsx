@@ -27,7 +27,7 @@ const ProgramContext = createContext<ProgramContextState | null>(null);
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const { sendTransaction } = useWallet();
+    const { sendTransaction, publicKey } = useWallet();
 
     const [isLoading, setIsLoading] = useState(true);
     const [blocks, setBlocks] = useState<BlockData[]>([]);
@@ -132,7 +132,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
     const buyBlock = async (id: number, price: number, color: string = "#FF0000") => {
 
-        if (!program || !wallet) {
+        if (!program || !publicKey) {
             toast.error("Connect wallet first");
             return;
         }
@@ -172,7 +172,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             const ix = await program.methods.buyBlock(id, rgb)
                 .accounts({
                     grid: gridPubkey,
-                    buyer: wallet.publicKey,
+                    buyer: publicKey,
                     paymentRecipient: recipientPubkey,
                     admin: gridAdmin,
                     systemProgram: SystemProgram.programId,
@@ -184,7 +184,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             // Get latest blockhash
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
             transaction.recentBlockhash = blockhash;
-            transaction.feePayer = wallet.publicKey;
+            transaction.feePayer = publicKey;
 
             // Use the standard wallet adapter 'sendTransaction' hook
             // This handles signing + sending + mobile deep linking natively
