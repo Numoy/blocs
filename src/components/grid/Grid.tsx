@@ -6,10 +6,17 @@ import { BlockData } from '@/types';
 import { Sidebar } from '@/components/sidebar/Sidebar';
 import { useProgram } from '@/context/ProgramContext';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { MyBlocksList } from './MyBlocksList';
+import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
+
+import { useWallet } from '@solana/wallet-adapter-react';
 
 export const Grid = () => {
     const { blocks, buyBlock, isLoading } = useProgram();
+    const { publicKey } = useWallet();
     const [selectedBlock, setSelectedBlock] = useState<BlockData | null>(null);
+
+    const [successBlock, setSuccessBlock] = useState<BlockData | null>(null);
 
     const [hoveredBlock, setHoveredBlock] = useState<BlockData | null>(null);
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
@@ -68,7 +75,7 @@ export const Grid = () => {
         // Draw Grid Lines (Optional, expensive if drawing 200 lines every frame?)
         // Instead I used fillRect with gap above.
 
-    }, [blocks]);
+    }, [blocks, publicKey]);
 
 
     const getBlockFromEvent = useCallback((e: React.MouseEvent) => {
@@ -121,7 +128,9 @@ export const Grid = () => {
         if (!block.price) return;
         try {
             await buyBlock(block.id, block.price);
-            setSidebarMode('edit');
+            // Show Success Modal instead of auto-edit
+            setSuccessBlock(block);
+            // We do NOT setSidebarMode('edit') here anymore
         } catch (error) {
             console.error("Failed to buy block:", error);
         }
@@ -144,6 +153,9 @@ export const Grid = () => {
     const handleCloseSidebar = useCallback(() => {
         setSelectedBlock(null);
     }, []);
+
+    // Filter owned blocks
+    const ownedBlocks = blocks.filter(b => publicKey && b.owner === publicKey.toBase58());
 
     return (
         <div
@@ -209,6 +221,31 @@ export const Grid = () => {
                 onClose={handleCloseSidebar}
                 onBuy={handleBuyBlock}
                 initialMode={sidebarMode}
+            />
+
+            <PurchaseSuccessModal
+                block={successBlock}
+                isOpen={!!successBlock}
+                onClose={() => setSuccessBlock(null)}
+                onEdit={() => {
+                    if (successBlock) {
+                        // Find the updated block (with new owner) from the fresh blocks list
+                        const freshBlock = blocks.find(b => b.id === successBlock.id);
+                        if (freshBlock) {
+                            setSelectedBlock(freshBlock);
+                            setSidebarMode('edit');
+                        }
+                        setSuccessBlock(null);
+                    }
+                }}
+            />
+
+            <MyBlocksList
+                blocks={ownedBlocks}
+                onSelectBlock={(block) => {
+                    setSelectedBlock(block);
+                    setSidebarMode('edit');
+                }}
             />
         </div>
     );

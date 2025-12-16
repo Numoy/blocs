@@ -142,14 +142,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             const gridPubkey = GRID_PUBKEY;
             console.log("Buying from Grid (Keypair):", gridPubkey.toBase58());
 
-            // NETWORK GUARD: Check if we are actually talking to Devnet
-            const genesisHash = await connection.getGenesisHash();
-            const DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
-            if (genesisHash !== DEVNET_GENESIS) {
-                toast.error("App is not connected to Devnet!");
-                throw new Error(`Network Mismatch: App Genesis ${genesisHash} != Devnet`);
-            }
-
             const rgb = hexToRgb(color);
 
             // Determine Recipient
@@ -174,9 +166,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             console.log("Admin for Fee:", gridAdmin.toBase58());
 
             // Call Smart Contract
-            // IDL type matches: id: u32, color: [u8; 3]
-            // Anchor 0.29+ usually expects the array directly, not wrapped.
-
             const ix = await program.methods.buyBlock(id, rgb)
                 .accounts({
                     grid: gridPubkey,
@@ -187,7 +176,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 })
                 .instruction();
 
-            // Revert to Legacy Transaction for maximum mobile compatibility
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
             const transaction = new Transaction({
@@ -197,11 +185,9 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             })
                 .add(ix);
 
-            // Clean, Standard, Official implementation
-            // This relies on the Wallet Adapter to handle deep linking and signing correctly
             const signature = await sendTransaction(transaction, connection, {
-                skipPreflight: false, // Strict mode: Fail if logic is wrong
-                maxRetries: 3         // Retry on network jitter
+                skipPreflight: false,
+                maxRetries: 3
             });
 
             console.log("Transaction sent:", signature);
@@ -226,8 +212,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 msg.includes("cancelled") ||
                 err.name === "WalletSignTransactionError"
             ) {
-                // Debugging: Show the actual message to help diagnose "Immediate Failure"
-                toast.error(`Cancelled: ${msg.substring(0, 50)}...`, { id: toastId });
+                toast.info("Transaction cancelled", { id: toastId });
                 // We must throw here so the calling function knows it failed!
                 throw new Error("User cancelled");
             }
@@ -236,10 +221,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             if (err.logs) {
                 console.error("Sim Logs:", err.logs);
             }
-            // Add Debug info to toast
-            const debugInfo = ` | Net: ${connection.rpcEndpoint.includes("devnet") ? "Devnet" : "Unknown"} | Key: ${publicKey ? publicKey.toBase58().substring(0, 6) : "None"}`;
-
-            toast.error("Purchase failed: " + (err.message || "Unknown") + debugInfo, { id: toastId, duration: 8000 });
+            toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
             throw error;
         }
     };

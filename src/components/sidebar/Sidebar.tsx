@@ -36,20 +36,21 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
         }
     }, [block]);
 
-    // Effect to handle mode switching
+    const isOwner = publicKey && block && block.owner === publicKey.toBase58();
+
     // Effect to handle mode switching
     useEffect(() => {
-        if (initialMode === 'edit') {
+        // Enforce ownership: You cannot edit if you don't own it.
+        // This covers cases where 'initialMode' might be stale or set erroneously.
+        if (initialMode === 'edit' && isOwner) {
             setIsEditing(true);
             initForm();
         } else {
             setIsEditing(false);
         }
-    }, [initialMode, initForm]);
+    }, [initialMode, initForm, isOwner]);
 
     if (!block) return null;
-
-    const isOwner = publicKey && block.owner === publicKey.toBase58();
 
     const handleEditToggle = () => {
         if (!isEditing) {
@@ -111,7 +112,6 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                             </div>
                         )}
 
-                        {/* Debug visibility removed */}
                         {block.isForSale && (block.price !== null) && !isOwner && (
                             <div className={styles.section}>
                                 <span className={styles.label}>Price</span>
