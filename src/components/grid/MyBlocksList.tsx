@@ -36,7 +36,7 @@ export const MyBlocksList: React.FC<MyBlocksListProps> = ({ blocks, onSelectBloc
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={block.imageUrl} alt="" className={styles.thumbnail} />
                             ) : (
-                                <div className={styles.placeholder} style={{ backgroundColor: block.color }} />
+                                <div className={styles.placeholder} style={{ backgroundColor: block.color || '#333' }} />
                             )}
                             <div className={styles.info}>
                                 <span className={styles.id}>Block #{block.id}</span>
