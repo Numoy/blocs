@@ -6,9 +6,9 @@ import { BlockData } from "@/types";
 import { isContentAllowed } from "@/utils/moderation";
 import { toast } from 'sonner';
 import { Program, AnchorProvider, Idl, web3, BN } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, Transaction, VersionedTransaction, ComputeBudgetProgram, TransactionMessage } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
-import { GRID_PUBKEY, BLOCK_PRICE_NEW } from "@/utils/constants";
+import { GRID_PUBKEY, BLOCK_PRICE_NEW, GRID_SIZE } from "@/utils/constants";
 
 // Program ID used for IDL type matching, though we use the instance from constants mainly
 // export const PROGRAM_ID = ... imported from constants
@@ -27,7 +27,7 @@ const ProgramContext = createContext<ProgramContextState | null>(null);
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const { sendTransaction, publicKey, signTransaction } = useWallet();
+    const { sendTransaction, publicKey } = useWallet();
 
     const [isLoading, setIsLoading] = useState(true);
     const [blocks, setBlocks] = useState<BlockData[]>([]);
@@ -41,13 +41,16 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         };
 
         const provider = new AnchorProvider(connection, providerWallet, { preflightCommitment: "confirmed" });
-        return new Program(idl as Idl, provider);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return new Program(idl as Idl, provider) as any;
     }, [connection, wallet]);
 
     const parseString = (arr: number[]): string => {
-        const buffer = Buffer.from(arr);
-        const str = buffer.toString("utf-8").replace(/\0/g, "");
-        return str;
+        // Use TextDecoder for browser compatibility (calls to Buffer will fail)
+        const uint8 = new Uint8Array(arr);
+        const decoder = new TextDecoder("utf-8");
+        // Decode and strip null bytes
+        return decoder.decode(uint8).replace(/\0/g, "");
     };
 
     const parseColor = (arr: number[]): string => {
@@ -73,38 +76,66 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         try {
             setIsLoading(true);
 
-            // @ts-expect-error - Dynamic IDL types are hard for TS
-            const account = await program.account.gridState.fetch(GRID_PUBKEY);
-
-            if (account.admin) {
-                setGridAdmin(account.admin);
+            // Fetch Global Config (for Admin key)
+            const gridAccount = await program.account.gridState.fetchNullable(GRID_PUBKEY);
+            if (gridAccount) {
+                setGridAdmin(gridAccount.admin);
             }
 
+            // Fetch All Blocks (Lazy Init = Fetch Multiple Accounts)
+            const allBlocks = await program.account.block.all();
+
+            // Map existing blocks to a lookup map
+            const blockMap = new Map();
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const parsedBlocks: BlockData[] = account.blocks.map((b: any, index: number) => {
-                const colorRaw = b.color?.array ?? b.color ?? [];
-                const textRaw = b.text?.array ?? b.text ?? [];
-                const imageUrlRaw = b.imageUrl?.array ?? b.imageUrl ?? [];
-                const urlRaw = b.url?.array ?? b.url ?? [];
+            allBlocks.forEach((b: any) => {
+                const data = b.account;
+                const id = data.id;
 
-                const isUnowned = b.owner.equals(PublicKey.default);
+                const colorRaw = data.color ?? [];
+                const textRaw = data.text ?? [];
+                const imageUrlRaw = data.imageUrl ?? [];
+                const urlRaw = data.url ?? [];
 
-                return {
-                    id: index,
-                    owner: isUnowned ? null : b.owner.toBase58(),
-                    price: isUnowned ? BLOCK_PRICE_NEW : (b.price.toNumber() / web3.LAMPORTS_PER_SOL), // Default price for new blocks
-                    isForSale: isUnowned ? true : (b.isForSale === 1 && b.price.toNumber() > 0),
+                blockMap.set(id, {
+                    id: id,
+                    owner: data.owner.toBase58(),
+                    price: data.price.toNumber() / web3.LAMPORTS_PER_SOL,
+                    isForSale: data.isForSale,
                     color: parseColor(colorRaw),
                     text: parseString(textRaw),
                     imageUrl: parseString(imageUrlRaw),
                     url: parseString(urlRaw),
                     image: null
-                };
+                });
             });
 
-            setBlocks(parsedBlocks);
+            // Reconstruct full grid (0 to GRID_SIZE - 1)
+            const fullGrid: BlockData[] = [];
+            for (let i = 0; i < GRID_SIZE; i++) {
+                if (blockMap.has(i)) {
+                    fullGrid.push(blockMap.get(i));
+                } else {
+                    // Empty Block
+                    fullGrid.push({
+                        id: i,
+                        owner: null, // Unowned
+                        price: BLOCK_PRICE_NEW,
+                        isForSale: true,
+                        color: "#222222",
+                        text: "",
+                        imageUrl: "",
+                        url: "",
+                        image: null
+                    });
+                }
+            }
+
+            setBlocks(fullGrid);
         } catch (err) {
             console.error("Failed to fetch grid:", err);
+            toast.error("Failed to fetch grid: " + ((err as Error).message || "Unknown error"));
+            throw err; // Re-throw so fetchGridWithTimeout can catch it if needed, or just let it bubble
         } finally {
             setIsLoading(false);
         }
@@ -140,41 +171,66 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         const toastId = toast.loading("Buying block...");
         try {
             const gridPubkey = GRID_PUBKEY;
-            console.log("Buying from Grid (Keypair):", gridPubkey.toBase58());
+            console.log("Buying from Grid:", gridPubkey.toBase58());
 
             const rgb = hexToRgb(color);
 
-            // Determine Recipient
-            // Find the block in current state to see if it has an owner
+            // Determine if New or Resale
             const targetBlock = blocks.find(b => b.id === id);
-            let recipientPubkey = gridAdmin; // Default to Admin
+            const isResale = targetBlock && targetBlock.owner !== null;
 
-            if (targetBlock && targetBlock.owner) {
-                // It's a resale
-                recipientPubkey = new PublicKey(targetBlock.owner);
+            // Derive Block PDA
+            const [blockPda] = PublicKey.findProgramAddressSync(
+                [
+                    new TextEncoder().encode("block"),
+                    new Uint8Array(new BN(id).toArray("le", 4))
+                ],
+                program.programId
+            );
+
+            let ix;
+
+            if (isResale) {
+                // SECONDARY SALE (buy_resale)
+                const sellerPubkey = new PublicKey(targetBlock!.owner!);
+                let adminKey = gridAdmin;
+
+                // Fallback for admin key if not loaded
+                if (!adminKey) {
+                    // Try to fetch it on the fly or just fail
+                    const gridAcc = await program.account.gridState.fetch(gridPubkey);
+                    adminKey = gridAcc.admin;
+                }
+
+                ix = await program.methods.buyResale(id)
+                    .accounts({
+                        block: blockPda,
+                        grid: gridPubkey,
+                        buyer: publicKey,
+                        seller: sellerPubkey,
+                        admin: adminKey,
+                        systemProgram: SystemProgram.programId,
+                    })
+                    .instruction();
+            } else {
+                // PRIMARY SALE (buy_block)
+                // Needs Admin key for payment
+                let adminKey = gridAdmin;
+                if (!adminKey) {
+                    const gridAcc = await program.account.gridState.fetch(gridPubkey);
+                    adminKey = gridAcc.admin;
+                }
+
+                ix = await program.methods.buyBlock(id, rgb)
+                    .accounts({
+                        block: blockPda,
+                        grid: gridPubkey,
+                        buyer: publicKey,
+                        admin: adminKey,
+                        systemProgram: SystemProgram.programId,
+                    })
+                    .instruction();
             }
-
-            if (!gridAdmin) {
-                throw new Error("Grid Admin key not loaded yet");
-            }
-
-            if (!recipientPubkey) {
-                recipientPubkey = gridAdmin;
-            }
-
-            console.log("Payment Recipient:", recipientPubkey.toBase58());
-            console.log("Admin for Fee:", gridAdmin.toBase58());
-
-            // Call Smart Contract
-            const ix = await program.methods.buyBlock(id, rgb)
-                .accounts({
-                    grid: gridPubkey,
-                    buyer: publicKey,
-                    paymentRecipient: recipientPubkey,
-                    admin: gridAdmin,
-                    systemProgram: SystemProgram.programId,
-                })
-                .instruction();
 
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
@@ -199,7 +255,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             }, "confirmed");
             toast.success("Block purchased!", { id: toastId });
             fetchGrid(); // Refresh data
-        } catch (error: unknown) {
+        } catch (error) {
             console.error("Purchase Error:", error);
 
             // Handle User Rejection (Phantom, Solflare, etc)
@@ -213,7 +269,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 err.name === "WalletSignTransactionError"
             ) {
                 toast.info("Transaction cancelled", { id: toastId });
-                // We must throw here so the calling function knows it failed!
                 throw new Error("User cancelled");
             }
 
@@ -237,13 +292,19 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
         const toastId = toast.loading("Updating block...");
         try {
-            const gridPubkey = GRID_PUBKEY;
-
+            // Derive Block PDA
+            const [blockPda] = PublicKey.findProgramAddressSync(
+                [
+                    new TextEncoder().encode("block"),
+                    new Uint8Array(new BN(id).toArray("le", 4))
+                ],
+                program.programId
+            );
 
             const tx = await program.methods.updateBlock(id, text, imageUrl, url)
                 .accounts({
-                    grid: gridPubkey,
-                    signer: wallet.publicKey,
+                    block: blockPda,
+                    owner: wallet.publicKey,
                 })
                 .rpc();
 
@@ -252,7 +313,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             fetchGrid();
         } catch (error) {
             console.error(error);
-            toast.error("Update failed", { id: toastId });
+            toast.error("Update failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
     };
@@ -261,15 +322,21 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         if (!program || !wallet) return;
         const toastId = toast.loading("Listing block...");
         try {
-            const gridPubkey = GRID_PUBKEY;
-
             const lamports = new BN(price * web3.LAMPORTS_PER_SOL);
 
+            // Derive Block PDA
+            const [blockPda] = PublicKey.findProgramAddressSync(
+                [
+                    new TextEncoder().encode("block"),
+                    new Uint8Array(new BN(id).toArray("le", 4))
+                ],
+                program.programId
+            );
 
             const tx = await program.methods.sellBlock(id, lamports)
                 .accounts({
-                    grid: gridPubkey,
-                    signer: wallet.publicKey,
+                    block: blockPda,
+                    owner: wallet.publicKey,
                 })
                 .rpc();
 
@@ -278,7 +345,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             fetchGrid();
         } catch (error) {
             console.error(error);
-            toast.error("Listing failed", { id: toastId });
+            toast.error("Listing failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
     };

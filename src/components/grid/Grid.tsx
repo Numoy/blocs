@@ -26,6 +26,9 @@ export const Grid = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
 
+    // Increased resolution for better zoom quality
+    const CANVAS_RES = 3000;
+
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -33,10 +36,10 @@ export const Grid = () => {
         if (!ctx) return;
 
         ctx.fillStyle = '#1e1e1e';
-        ctx.fillRect(0, 0, 1200, 1200);
+        ctx.fillRect(0, 0, CANVAS_RES, CANVAS_RES);
 
         const GRID_WIDTH = blocks.length <= 100 ? 5 : 100;
-        const BLOCK_SIZE = 1200 / GRID_WIDTH;
+        const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
 
         blocks.forEach(block => {
             const col = block.id % GRID_WIDTH;
@@ -84,16 +87,16 @@ export const Grid = () => {
 
         const rect = canvas.getBoundingClientRect();
 
-        // Calculate coordinate in CANVAS space (0-1200)
+        // Calculate coordinate in CANVAS space (0-CANVAS_RES)
         // This handles cases where the canvas is scaled via CSS or Zoom lib
-        const scaleX = rect.width / 1200;
-        const scaleY = rect.height / 1200;
+        const scaleX = rect.width / CANVAS_RES;
+        const scaleY = rect.height / CANVAS_RES;
 
         const canvasX = (e.clientX - rect.left) / scaleX;
         const canvasY = (e.clientY - rect.top) / scaleY;
 
         const GRID_WIDTH = blocks.length <= 100 ? 5 : 100;
-        const BLOCK_SIZE = 1200 / GRID_WIDTH;
+        const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
 
         const col = Math.floor(canvasX / BLOCK_SIZE);
         const row = Math.floor(canvasY / BLOCK_SIZE);
@@ -179,13 +182,15 @@ export const Grid = () => {
                 centerOnInit
                 limitToBounds={true}
                 wheel={{ step: 0.1 }}
+                panning={{ velocityDisabled: false }}
+                alignmentAnimation={{ animationTime: 200 }}
             >
                 <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
                     <canvas
                         ref={canvasRef}
-                        width={1200}
-                        height={1200}
-                        style={{}} // Smooth scaling for photos
+                        width={3000}
+                        height={3000}
+                        style={{ margin: '200px' }} // Smooth scaling for photos + detailed padding
                         onClick={handleCanvasClick}
                         onMouseMove={handleMouseMove}
                         onMouseLeave={handleMouseLeave}

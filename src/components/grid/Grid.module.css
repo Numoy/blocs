@@ -1,6 +1,7 @@
 .container {
     width: 100vw;
-    height: 100vh;
+    height: calc(100vh - 84px);
+    margin-top: 84px;
     overflow: hidden;
     /* Hide scrollbars, let zoom lib handle panning */
     position: relative;

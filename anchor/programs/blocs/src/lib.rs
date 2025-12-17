@@ -5,184 +5,197 @@ declare_id!("C4MgCjSCzHPnxaFHqTPFH7ur67rKHeunEQAzGRSMDKDM");
 #[program]
 pub mod blocs {
     use super::*;
-    use anchor_lang::Discriminator;
 
-    // Initialize the grid (Run once by admin)
-    // Note: Account must be created by client with 3.32MB space and owned by program.
+    pub const GRID_SIZE: usize = 10_000;
+    pub const INITIAL_PRICE: u64 = 10_000_000; // 0.01 SOL
+    pub const FEE_PERCENT: u64 = 5;
+
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        let grid_acc = &ctx.accounts.grid;
-        
-        // 1. Verify owner is program
-        require!(grid_acc.owner == ctx.program_id, CustomError::Unauthorized); // Use a generic error or new one
+        let grid = &mut ctx.accounts.grid;
+        grid.admin = ctx.accounts.admin.key();
+        Ok(())
+    }
 
-        // 2. Write Discriminator manually
-        let mut data = grid_acc.try_borrow_mut_data()?;
-        let discriminator = GridState::discriminator();
-        data[0..8].copy_from_slice(&discriminator);
+    // Primary Sale: Buys a NEW block (creates the PDA)
+    pub fn buy_block(ctx: Context<BuyBlock>, id: u32, color: [u8; 3]) -> Result<()> {
+        let id_usize = id as usize;
+        require!(id_usize < GRID_SIZE, CustomError::InvalidBlockId);
+
+        let block = &mut ctx.accounts.block;
+        let admin = &ctx.accounts.admin;
+        let buyer = &ctx.accounts.buyer;
         
-        // 3. Set Admin
-        // We can't use 'load_init' or 'load_mut' because it's Unchecked.
-        // We use standard pointer arithmetic or bytemuck if possible, 
-        // but 'blocks' is huge. Admin is at offset 8.
-        let admin_key = ctx.accounts.admin.key();
-        let admin_bytes = admin_key.to_bytes();
-        data[8..40].copy_from_slice(&admin_bytes);
+        // Transfer SOL to Admin (100% of Initial Price)
+        let cpi_context = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: buyer.to_account_info(),
+                to: admin.to_account_info(),
+            },
+        );
+        anchor_lang::system_program::transfer(cpi_context, INITIAL_PRICE)?;
+
+        // Initialize Block Logic
+        block.id = id;
+        block.owner = buyer.key();
+        block.color = color;
+        block.price = 0; // Not for sale
+        block.is_for_sale = false;
         
-        // Remainder should be zeroed by system program upon creation.
-        // grid.blocks is 0.
+        // Zero out content (Anchor does this mostly, but explicit is good for fixed arrays if needed, though they start 0)
+        // block.text, block.image_url, block.url are Default (0)
+
+        emit!(BlockBought {
+            id,
+            buyer: buyer.key(),
+            price: INITIAL_PRICE,
+        });
 
         Ok(())
     }
 
-    pub fn buy_block(ctx: Context<BuyBlock>, id: u32, color: [u8; 3]) -> Result<()> {
-        let grid = &mut ctx.accounts.grid.load_mut()?;
+    // Secondary Sale: Buys an EXISTING block
+    pub fn buy_resale(ctx: Context<BuyResale>, id: u32) -> Result<()> {
+        let block = &mut ctx.accounts.block;
         let buyer = &ctx.accounts.buyer;
-        let recipient = &ctx.accounts.payment_recipient;
+        let seller = &ctx.accounts.seller;
         let admin = &ctx.accounts.admin;
+
+        // Validation handled by constraints:
+        // - block.id matches seed (Anchor default)
+        // - block.is_for_sale checked below or via constraint? 
+        //   User suggestion didn't include is_for_sale constraint, but we should add it or keep require.
+        //   Let's keep require for logic state, constraints for auth.
+        require!(block.is_for_sale, CustomError::NotForSale);
         
-        // Define Admin (Creator) Key
-        let admin_key = grid.admin;
+        // Seller == block.owner checked by constraint.
+        // Admin == grid.admin checked by constraint.
+
+        let price = block.price;
+
+        // Calculate Fees
+        let fee = price
+            .checked_mul(FEE_PERCENT).ok_or(CustomError::MathOverflow)?
+            .checked_div(100).ok_or(CustomError::MathOverflow)?;
         
-        // Validation: Ensure the passed 'admin' account matches the grid's admin
-        require!(admin.key() == admin_key, CustomError::InvalidAdmin);
+        let seller_amount = price.checked_sub(fee).ok_or(CustomError::MathOverflow)?;
 
-        let id_usize = id as usize;
-        require!(id_usize < 10000, CustomError::InvalidBlockId);
+        // Transfer 95% to Seller
+        let cpi_ctx_seller = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: buyer.to_account_info(),
+                to: seller.to_account_info(),
+            },
+        );
+        anchor_lang::system_program::transfer(cpi_ctx_seller, seller_amount)?;
 
-        let block = &mut grid.blocks[id_usize];
+        // Transfer 5% to Admin
+        let cpi_ctx_admin = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: buyer.to_account_info(),
+                to: admin.to_account_info(),
+            },
+        );
+        anchor_lang::system_program::transfer(cpi_ctx_admin, fee)?;
 
-        // 1. Determine Price and Recipient
-        let (price, expected_recipient) = if block.owner == Pubkey::default() {
-            // New Block -> Buy from Admin
-            // Price: 0.01 SOL
-            (10_000_000, admin_key) // 0.01 SOL
-        } else {
-            // Resale -> Buy from Current Owner
-            require!(block.is_for_sale == 1, CustomError::NotForSale);
-            (block.price, block.owner)
-        };
-
-        // 2. Validation
-        require!(recipient.key() == expected_recipient, CustomError::InvalidRecipient);
-        
-        // 3. Transfer SOL with Fee Split
-        if expected_recipient == admin_key {
-            // Primary Sale (100% to Admin)
-             let cpi_context = CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                anchor_lang::system_program::Transfer {
-                    from: buyer.to_account_info(),
-                    to: admin.to_account_info(),
-                },
-            );
-            anchor_lang::system_program::transfer(cpi_context, price)?;
-        } else {
-            // Secondary Sale (95% to Seller, 5% to Admin)
-            let fee = price * 5 / 100;
-            let seller_amount = price - fee;
-            
-            // Transfer 95% to Seller
-            let cpi_ctx_seller = CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                anchor_lang::system_program::Transfer {
-                    from: buyer.to_account_info(),
-                    to: recipient.to_account_info(),
-                },
-            );
-            anchor_lang::system_program::transfer(cpi_ctx_seller, seller_amount)?;
-
-            // Transfer 5% to Admin
-            let cpi_ctx_admin = CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                anchor_lang::system_program::Transfer {
-                    from: buyer.to_account_info(),
-                    to: admin.to_account_info(),
-                },
-            );
-            anchor_lang::system_program::transfer(cpi_ctx_admin, fee)?;
-        }
-        
-        // 4. Update State
+        // Update State
         block.owner = buyer.key();
-        block.color = color;
-        block.is_for_sale = 0; // False
-        block.price = 0; // Reset
+        block.is_for_sale = false;
+        block.price = 0;
         
-        // Reset content
-        block.text = [0; 64]; 
-        block.image_url = [0; 128];
-        block.url = [0; 128];
+        // Content Preservation: We DO NOT reset text/image/url.
+        // block.text = [0; 64]; 
+        // block.image_url = [0; 128];
+        // block.url = [0; 128];
+
+        emit!(BlockSold {
+            id,
+            price,
+            is_for_sale: false,
+        });
+
+        emit!(BlockBought {
+            id,
+            buyer: buyer.key(),
+            price,
+        });
 
         Ok(())
     }
 
     pub fn update_block(ctx: Context<UpdateBlock>, id: u32, text: String, image_url: String, url: String) -> Result<()> {
-        let grid = &mut ctx.accounts.grid.load_mut()?;
-        let id_usize = id as usize;
-        require!(id_usize < 10000, CustomError::InvalidBlockId);
-
-        let block = &mut grid.blocks[id_usize];
-        require!(block.owner == ctx.accounts.signer.key(), CustomError::Unauthorized);
+        let block = &mut ctx.accounts.block;
+        
+        // Verify owner (Already checked by `has_one` or `constraint` usually, but manual check is safe)
+        require!(block.owner == ctx.accounts.owner.key(), CustomError::Unauthorized);
 
         // Copy strings to fixed-size arrays
-        // Note: This truncates if too long, frontend should validate.
         copy_string_to_array(&text, &mut block.text);
         copy_string_to_array(&image_url, &mut block.image_url);
         copy_string_to_array(&url, &mut block.url);
+
+        emit!(BlockUpdated {
+            id,
+            owner: ctx.accounts.owner.key(),
+        });
 
         Ok(())
     }
 
     pub fn sell_block(ctx: Context<UpdateBlock>, id: u32, price: u64) -> Result<()> {
-        let grid = &mut ctx.accounts.grid.load_mut()?;
-        let id_usize = id as usize;
-        require!(id_usize < 10000, CustomError::InvalidBlockId);
-
-        let block = &mut grid.blocks[id_usize];
-        require!(block.owner == ctx.accounts.signer.key(), CustomError::Unauthorized);
+        let block = &mut ctx.accounts.block;
+        // require!(block.owner == ctx.accounts.owner.key(), CustomError::Unauthorized); // handled by has_one
 
         if price > 0 {
-            block.is_for_sale = 1; // True
+            block.is_for_sale = true;
             block.price = price;
         } else {
-            block.is_for_sale = 0; // False (Delist)
+            block.is_for_sale = false; // Delist
             block.price = 0;
         }
+
+        emit!(BlockSold {
+            id,
+            price,
+            is_for_sale: block.is_for_sale,
+        });
+
         Ok(())
     }
 }
 
 // --------------------------------------------------------
-// DATA STRUCTURES (Zero Copy for Performance)
+// DATA STRUCTURES
 // --------------------------------------------------------
 
-#[account(zero_copy)]
+#[account]
 pub struct GridState {
-    pub admin: Pubkey,
-    pub blocks: [BlockInfo; 10000], // Increased to 10,000 (100x100)
+    pub admin: Pubkey, // 32
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-#[repr(C)]
-pub struct BlockInfo {
+#[account]
+pub struct Block {
+    pub id: u32,             // 4
     pub owner: Pubkey,       // 32
     pub price: u64,          // 8
-    pub is_for_sale: u8,     // 1
+    pub is_for_sale: bool,   // 1
     pub color: [u8; 3],      // 3
-    pub padding: [u8; 4],    // 4
-    
-    // Content (Fixed Size Arrays)
     pub text: [u8; 64],      // 64
-    pub image_url: [u8; 128], // 128
+    pub image_url: [u8; 128],// 128
     pub url: [u8; 128],      // 128
+}
+
+impl Block {
+    // 8 (Discriminator) + 4 + 32 + 8 + 1 + 3 + 64 + 128 + 128 = 376
+    pub const LEN: usize = 8 + 4 + 32 + 8 + 1 + 3 + 64 + 128 + 128;
 }
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    /// CHECK: We are manually initializing this account because it is too large (>10KB) for CPI.
-    /// We will write the discriminator and admin key manually.
-    #[account(mut)]
-    pub grid: UncheckedAccount<'info>,
+    #[account(init, payer = admin, space = 8 + 32, seeds = [b"grid"], bump)]
+    pub grid: Account<'info, GridState>,
     
     #[account(mut)]
     pub admin: Signer<'info>,
@@ -191,18 +204,59 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(id: u32)]
 pub struct BuyBlock<'info> {
-    #[account(mut)]
-    pub grid: AccountLoader<'info, GridState>,
+    #[account(
+        init,
+        payer = buyer,
+        space = Block::LEN,
+        seeds = [b"block", id.to_le_bytes().as_ref()],
+        bump
+    )]
+    pub block: Account<'info, Block>,
+
+    #[account(
+        mut, 
+        seeds = [b"grid"], 
+        bump,
+        constraint = grid.admin == admin.key() @ CustomError::InvalidAdmin
+    )]
+    pub grid: Account<'info, GridState>,
     
     #[account(mut)]
     pub buyer: Signer<'info>,
 
-    /// CHECK: We verify this account matches the block owner or admin inside the instruction logic
+    /// CHECK: Validated via constraint on grid
     #[account(mut)]
-    pub payment_recipient: SystemAccount<'info>,
+    pub admin: SystemAccount<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
 
-    /// CHECK: Verified to match grid.admin
+#[derive(Accounts)]
+#[instruction(id: u32)]
+pub struct BuyResale<'info> {
+    #[account(
+        mut,
+        seeds = [b"block", id.to_le_bytes().as_ref()],
+        bump,
+        constraint = block.owner == seller.key() @ CustomError::Unauthorized
+    )]
+    pub block: Account<'info, Block>,
+
+    #[account(
+        seeds = [b"grid"], 
+        bump,
+        constraint = grid.admin == admin.key() @ CustomError::InvalidAdmin
+    )]
+    pub grid: Account<'info, GridState>,
+    
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+
+    #[account(mut)]
+    pub seller: SystemAccount<'info>,
+
     #[account(mut)]
     pub admin: SystemAccount<'info>,
     
@@ -212,19 +266,14 @@ pub struct BuyBlock<'info> {
 #[derive(Accounts)]
 #[instruction(id: u32)]
 pub struct UpdateBlock<'info> {
-    #[account(mut)]
-    pub grid: AccountLoader<'info, GridState>,
-    #[account(address = grid.load()?.blocks[id as usize].owner)] // Verify signer is owner
-    pub signer: Signer<'info>,
-}
-
-#[derive(Accounts)]
-#[instruction(id: u32)]
-pub struct SellBlock<'info> {
-    #[account(mut)]
-    pub grid: AccountLoader<'info, GridState>,
-    #[account(address = grid.load()?.blocks[id as usize].owner)] // Verify signer is owner
-    pub signer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"block", id.to_le_bytes().as_ref()],
+        bump,
+        has_one = owner // Anchor can auto-check owner field
+    )]
+    pub block: Account<'info, Block>,
+    pub owner: Signer<'info>,
 }
 
 #[error_code]
@@ -239,15 +288,42 @@ pub enum CustomError {
     InvalidRecipient,
     #[msg("Invalid Admin Account.")]
     InvalidAdmin,
+    #[msg("Grid is already initialized.")]
+    AlreadyInitialized,
+    #[msg("Math Overflow.")]
+    MathOverflow,
+}
+
+#[event]
+pub struct BlockBought {
+    pub id: u32,
+    pub buyer: Pubkey,
+    pub price: u64,
+}
+
+#[event]
+pub struct BlockUpdated {
+    pub id: u32,
+    pub owner: Pubkey,
+}
+
+#[event]
+pub struct BlockSold {
+    pub id: u32,
+    pub price: u64,
+    pub is_for_sale: bool,
 }
 
 // Helper
 fn copy_string_to_array(s: &str, arr: &mut [u8]) {
-    let bytes = s.as_bytes();
-    let len = bytes.len().min(arr.len());
-    arr[..len].copy_from_slice(&bytes[..len]);
-    // Zero out the rest
-    for i in len..arr.len() {
-        arr[i] = 0;
+    let mut end_index = s.len().min(arr.len());
+    
+    while !s.is_char_boundary(end_index) {
+        end_index -= 1;
     }
+
+    let bytes = &s.as_bytes()[..end_index];
+    arr[..end_index].copy_from_slice(bytes);
+    
+    arr[end_index..].fill(0);
 }
