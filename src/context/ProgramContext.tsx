@@ -10,6 +10,7 @@ import { PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@so
 import idl from "@/utils/idl.json";
 import { GRID_PUBKEY, BLOCK_PRICE_NEW, GRID_SIZE } from "@/utils/constants";
 import { isMobile, isWalletBrowser, generateWalletDeepLinks } from "@/utils/mobile";
+import { WalletSelectorModal } from "@/components/modals";
 
 // Program ID used for IDL type matching, though we use the instance from constants mainly
 // export const PROGRAM_ID = ... imported from constants
@@ -44,6 +45,9 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [blocks, setBlocks] = useState<BlockData[]>([]);
     const [gridAdmin, setGridAdmin] = useState<PublicKey | null>(null);
+
+    const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+    const [walletModalUrl, setWalletModalUrl] = useState("");
 
     const program = useMemo(() => {
         const providerWallet = wallet || {
@@ -307,19 +311,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             }
 
             if (isMobile() && !isWalletBrowser()) {
-                const urls = generateWalletDeepLinks(window.location.href);
-                toast.error(
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <span>Transaction failed. Open in wallet app:</span>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
-                            <a href={urls.phantom} style={{ padding: '6px 8px', background: '#AB9FF2', color: 'black', borderRadius: '4px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>Phantom</a>
-                            <a href={urls.solflare} style={{ padding: '6px 8px', background: '#FC7225', color: 'white', borderRadius: '4px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>Solflare</a>
-                            <a href={urls.backpack} style={{ padding: '6px 8px', background: '#E33E3F', color: 'white', borderRadius: '4px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>Backpack</a>
-                            <a href={urls.metamask} style={{ padding: '6px 8px', background: '#F6851B', color: 'white', borderRadius: '4px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>MetaMask</a>
-                        </div>
-                    </div>,
-                    { id: toastId, duration: 8000 }
-                );
+                setWalletModalUrl(window.location.href);
+                setIsWalletModalOpen(true);
                 throw error;
             }
 
@@ -427,6 +420,11 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     return (
         <ProgramContext.Provider value={{ blocks, buyBlock, updateBlock, sellBlock, refreshBlock, isLoading }}>
             {children}
+            <WalletSelectorModal
+                isOpen={isWalletModalOpen}
+                onClose={() => setIsWalletModalOpen(false)}
+                currentUrl={walletModalUrl}
+            />
         </ProgramContext.Provider>
     );
 };
