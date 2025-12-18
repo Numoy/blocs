@@ -9,6 +9,7 @@ import { Program, AnchorProvider, Idl, web3, BN } from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
 import { GRID_PUBKEY, BLOCK_PRICE_NEW, GRID_SIZE } from "@/utils/constants";
+import { isMobile, isWalletBrowser, generateWalletDeepLinks } from "@/utils/mobile";
 
 // Program ID used for IDL type matching, though we use the instance from constants mainly
 // export const PROGRAM_ID = ... imported from constants
@@ -20,6 +21,17 @@ interface ProgramContextState {
     sellBlock: (id: number, price: number) => Promise<void>;
     refreshBlock: () => Promise<void>;
     isLoading: boolean;
+}
+
+interface RawBlockAccount {
+    id: number;
+    owner: PublicKey;
+    price: BN;
+    isForSale: boolean;
+    color: number[];
+    text: number[];
+    imageUrl: number[];
+    url: number[];
 }
 
 const ProgramContext = createContext<ProgramContextState | null>(null);
@@ -88,7 +100,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             // Map existing blocks to a lookup map
             const blockMap = new Map();
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            allBlocks.forEach((b: any) => {
+            allBlocks.forEach((b: { account: RawBlockAccount }) => {
                 const data = b.account;
                 const id = data.id;
 
@@ -161,7 +173,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [program, fetchGridWithTimeout]);
 
-    const buyBlock = async (id: number, price: number, color: string = "#FF0000") => {
+    const buyBlock = async (id: number, price: number, color: string = "#9945FF") => {
 
         if (!program || !publicKey) {
             toast.error("Connect wallet first");
@@ -248,15 +260,31 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
             console.log("Transaction sent:", signature);
 
+            // Optimistic Update
+            const previousBlocks = [...blocks];
+            setBlocks(prev => prev.map(b => b.id === id ? {
+                ...b,
+                owner: publicKey!.toBase58(),
+                price: 0,
+                isForSale: false,
+                color: color
+            } : b));
+
             await connection.confirmTransaction({
                 blockhash,
                 lastValidBlockHeight,
                 signature
             }, "confirmed");
+
             toast.success("Block purchased!", { id: toastId });
-            fetchGrid(); // Refresh data
+            fetchGrid(); // Eventual consistency
         } catch (error) {
             console.error("Purchase Error:", error);
+            // Revert Optimistic Update (if needed, but we used setBlocks callback, so we might need to restore)
+            // Since we don't have the explicit previous state easily accessible in the catch block without capturing it before
+            // We can just re-fetch grid to ensure correctness or rely on the previousBlocks capture if we used it.
+            // Simplified: Just re-fetch grid on error to sync.
+            fetchGrid();
 
             // Handle User Rejection (Phantom, Solflare, etc)
             const err = error as { message?: string, name?: string, logs?: string[] };
@@ -272,10 +300,29 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 throw new Error("User cancelled");
             }
 
+
             // detailed logs
             if (err.logs) {
                 console.error("Sim Logs:", err.logs);
             }
+
+            if (isMobile() && !isWalletBrowser()) {
+                const urls = generateWalletDeepLinks(window.location.href);
+                toast.error(
+                    <div className="flex flex-col gap-2">
+                        <span>Transaction failed. Open in wallet app:</span>
+                        <div className="grid grid-cols-2 gap-2 mt-1">
+                            <a href={urls.phantom} className="px-2 py-1.5 bg-[#AB9FF2] text-black rounded text-center text-xs font-bold no-underline hover:opacity-90">Phantom</a>
+                            <a href={urls.solflare} className="px-2 py-1.5 bg-[#FC7225] text-white rounded text-center text-xs font-bold no-underline hover:opacity-90">Solflare</a>
+                            <a href={urls.backpack} className="px-2 py-1.5 bg-[#E33E3F] text-white rounded text-center text-xs font-bold no-underline hover:opacity-90">Backpack</a>
+                            <a href={urls.metamask} className="px-2 py-1.5 bg-[#F6851B] text-white rounded text-center text-xs font-bold no-underline hover:opacity-90">MetaMask</a>
+                        </div>
+                    </div>,
+                    { id: toastId, duration: 8000 }
+                );
+                throw error;
+            }
+
             toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
             throw error;
         }
@@ -308,11 +355,20 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 })
                 .rpc();
 
+            // Optimistic Update
+            setBlocks(prev => prev.map(b => b.id === id ? {
+                ...b,
+                text,
+                imageUrl,
+                url
+            } : b));
+
             await connection.confirmTransaction(tx, "confirmed");
             toast.success("Block updated!", { id: toastId });
             fetchGrid();
         } catch (error) {
             console.error(error);
+            fetchGrid(); // Revert/Sync on error
             toast.error("Update failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
@@ -340,11 +396,19 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 })
                 .rpc();
 
+            // Optimistic Update
+            setBlocks(prev => prev.map(b => b.id === id ? {
+                ...b,
+                price: price,
+                isForSale: price > 0
+            } : b));
+
             await connection.confirmTransaction(tx, "confirmed");
             toast.success("Block listed for sale!", { id: toastId });
             fetchGrid();
         } catch (error) {
             console.error(error);
+            fetchGrid(); // Revert/Sync on error
             toast.error("Listing failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }

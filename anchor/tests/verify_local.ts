@@ -24,9 +24,7 @@ describe("blocs-verification", () => {
             await program.methods
                 .initialize()
                 .accounts({
-                    grid: gridPubkey,
                     admin: admin.publicKey,
-                    systemProgram: anchor.web3.SystemProgram.programId,
                 })
                 .rpc();
 
@@ -51,19 +49,22 @@ describe("blocs-verification", () => {
         await program.methods
             .buyBlock(42, [255, 0, 0]) // ID 42, Red Color
             .accounts({
-                grid: gridPubkey,
                 buyer: buyer.publicKey,
-                systemProgram: anchor.web3.SystemProgram.programId,
             })
             .signers([buyer])
             .rpc();
 
         // Verify
-        const gridAccount = await program.account.gridState.fetch(gridPubkey);
-        const block = gridAccount.blocks[42]; // ZeroCopy access might require special handling in TS? 
-        // Usually Anchor TS client maps `blocks` to an array if defined as such in IDL.
 
-        expect(block.owner.toBase58()).to.equal(buyer.publicKey.toBase58());
-        console.log("Block #42 bought by", block.owner.toBase58());
+        // Derive Block PDA
+        const [blockPubkey] = anchor.web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("block"), new anchor.BN(42).toArrayLike(Buffer, "le", 4)],
+            program.programId
+        );
+
+        const blockAccount = await program.account.block.fetch(blockPubkey);
+
+        expect(blockAccount.owner.toBase58()).to.equal(buyer.publicKey.toBase58());
+        console.log("Block #42 bought by", blockAccount.owner.toBase58());
     });
 });
