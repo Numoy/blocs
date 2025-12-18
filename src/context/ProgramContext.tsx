@@ -311,6 +311,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             }
 
             if (isMobile() && !isWalletBrowser()) {
+                toast.dismiss(toastId); // Dismiss the loading toast
                 setWalletModalUrl(window.location.href);
                 setIsWalletModalOpen(true);
                 throw error;
