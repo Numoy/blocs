@@ -39,7 +39,7 @@ const ProgramContext = createContext<ProgramContextState | null>(null);
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const { sendTransaction, publicKey } = useWallet();
+    const { sendTransaction, publicKey, connected } = useWallet();
 
     const [isLoading, setIsLoading] = useState(true);
     const [blocks, setBlocks] = useState<BlockData[]>([]);
@@ -175,7 +175,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
     const buyBlock = async (id: number, price: number, color: string = "#9945FF") => {
 
-        if (!program || !publicKey) {
+        if (!connected || !publicKey) {
             toast.error("Connect wallet first");
             return;
         }
@@ -309,13 +309,13 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             if (isMobile() && !isWalletBrowser()) {
                 const urls = generateWalletDeepLinks(window.location.href);
                 toast.error(
-                    <div className="flex flex-col gap-2">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <span>Transaction failed. Open in wallet app:</span>
-                        <div className="grid grid-cols-2 gap-2 mt-1">
-                            <a href={urls.phantom} className="px-2 py-1.5 bg-[#AB9FF2] text-black rounded text-center text-xs font-bold no-underline hover:opacity-90">Phantom</a>
-                            <a href={urls.solflare} className="px-2 py-1.5 bg-[#FC7225] text-white rounded text-center text-xs font-bold no-underline hover:opacity-90">Solflare</a>
-                            <a href={urls.backpack} className="px-2 py-1.5 bg-[#E33E3F] text-white rounded text-center text-xs font-bold no-underline hover:opacity-90">Backpack</a>
-                            <a href={urls.metamask} className="px-2 py-1.5 bg-[#F6851B] text-white rounded text-center text-xs font-bold no-underline hover:opacity-90">MetaMask</a>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                            <a href={urls.phantom} style={{ padding: '6px 8px', background: '#AB9FF2', color: 'black', borderRadius: '4px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>Phantom</a>
+                            <a href={urls.solflare} style={{ padding: '6px 8px', background: '#FC7225', color: 'white', borderRadius: '4px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>Solflare</a>
+                            <a href={urls.backpack} style={{ padding: '6px 8px', background: '#E33E3F', color: 'white', borderRadius: '4px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>Backpack</a>
+                            <a href={urls.metamask} style={{ padding: '6px 8px', background: '#F6851B', color: 'white', borderRadius: '4px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none' }}>MetaMask</a>
                         </div>
                     </div>,
                     { id: toastId, duration: 8000 }
@@ -329,7 +329,10 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const updateBlock = async (id: number, text: string, imageUrl: string, url: string) => {
-        if (!program || !wallet) return;
+        if (!connected || !wallet) {
+            toast.error("Connect wallet first");
+            return;
+        }
 
         // Content Moderation
         if (!isContentAllowed(text, imageUrl)) {
@@ -375,7 +378,10 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const sellBlock = async (id: number, price: number) => {
-        if (!program || !wallet) return;
+        if (!connected || !wallet) {
+            toast.error("Connect wallet first");
+            return;
+        }
         const toastId = toast.loading("Listing block...");
         try {
             const lamports = new BN(price * web3.LAMPORTS_PER_SOL);
