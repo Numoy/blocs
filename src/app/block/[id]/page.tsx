@@ -98,7 +98,7 @@ export default function BlockPage() {
                 <div style={{
                     width: '100%',
                     aspectRatio: '1/1',
-                    backgroundColor: block.color || '#222',
+                    backgroundColor: block.imageUrl ? 'transparent' : (block.color || '#222'),
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
