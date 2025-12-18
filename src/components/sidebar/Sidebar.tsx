@@ -6,6 +6,7 @@ import styles from './Sidebar.module.css';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/context/ProgramContext';
 import { SidebarInput } from './SidebarInput';
+import { toast } from 'sonner';
 
 interface SidebarProps {
     block: BlockData | null;
@@ -144,10 +145,30 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                         )}
 
                         {isOwner && (
-                            <button className={styles.button} style={{ background: '#333', color: '#fff' }} onClick={handleEditToggle}>
+                            <button className={styles.button} style={{ background: '#333', color: '#fff', marginBottom: '8px' }} onClick={handleEditToggle}>
                                 Edit Block
                             </button>
                         )}
+
+                        <button
+                            className={styles.button}
+                            style={{ background: 'transparent', border: '1px solid #333', color: '#fff' }}
+                            onClick={() => {
+                                const url = `${window.location.origin}/block/${block.id}`;
+                                if (navigator.share) {
+                                    navigator.share({
+                                        title: `Block #${block.id}`,
+                                        text: `Check out Block #${block.id} on 10000-blocks.com`,
+                                        url: url
+                                    }).catch(console.error);
+                                } else {
+                                    navigator.clipboard.writeText(url);
+                                    toast.success("Link copied to clipboard!");
+                                }
+                            }}
+                        >
+                            Share Block
+                        </button>
                     </>
                 ) : (
                     <>
