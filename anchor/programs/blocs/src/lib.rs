@@ -8,15 +8,16 @@ pub mod blocs {
 
     pub const GRID_SIZE: usize = 10_000;
     pub const INITIAL_PRICE: u64 = 10_000_000; // 0.01 SOL
-    pub const FEE_PERCENT: u64 = 5;
+    pub const FEE_BASIS_POINTS: u64 = 500; // 5%
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let grid = &mut ctx.accounts.grid;
+        require_eq!(grid.admin, Pubkey::default(), CustomError::AlreadyInitialized);
         grid.admin = ctx.accounts.admin.key();
         Ok(())
     }
 
-    // Primary Sale: Buys a NEW block (creates the PDA)
+    // Primary Sale: Buys a NEW block
     pub fn buy_block(ctx: Context<BuyBlock>, id: u32, color: [u8; 3]) -> Result<()> {
         let id_usize = id as usize;
         require!(id_usize < GRID_SIZE, CustomError::InvalidBlockId);
@@ -25,7 +26,9 @@ pub mod blocs {
         let admin = &ctx.accounts.admin;
         let buyer = &ctx.accounts.buyer;
         
-        // Transfer SOL to Admin (100% of Initial Price)
+        let price = INITIAL_PRICE.checked_add(id.into()).ok_or(CustomError::MathOverflow)?;
+
+        // Transfer SOL to Admin
         let cpi_context = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
             anchor_lang::system_program::Transfer {
@@ -33,18 +36,15 @@ pub mod blocs {
                 to: admin.to_account_info(),
             },
         );
-        anchor_lang::system_program::transfer(cpi_context, INITIAL_PRICE)?;
+        anchor_lang::system_program::transfer(cpi_context, price)?;
 
-        // Initialize Block Logic
+        // Initialize Block
         block.id = id;
         block.owner = buyer.key();
         block.color = color;
         block.price = 0; // Not for sale
         block.is_for_sale = false;
         
-        // Zero out content (Anchor does this mostly, but explicit is good for fixed arrays if needed, though they start 0)
-        // block.text, block.image_url, block.url are Default (0)
-
         emit!(BlockBought {
             id,
             buyer: buyer.key(),
@@ -61,26 +61,19 @@ pub mod blocs {
         let seller = &ctx.accounts.seller;
         let admin = &ctx.accounts.admin;
 
-        // Validation handled by constraints:
-        // - block.id matches seed (Anchor default)
-        // - block.is_for_sale checked below or via constraint? 
-        //   User suggestion didn't include is_for_sale constraint, but we should add it or keep require.
-        //   Let's keep require for logic state, constraints for auth.
         require!(block.is_for_sale, CustomError::NotForSale);
         
-        // Seller == block.owner checked by constraint.
-        // Admin == grid.admin checked by constraint.
-
         let price = block.price;
-
+        require!(**buyer.lamports.borrow() >= price, CustomError::InsufficientFunds);
+        
         // Calculate Fees
         let fee = price
-            .checked_mul(FEE_PERCENT).ok_or(CustomError::MathOverflow)?
-            .checked_div(100).ok_or(CustomError::MathOverflow)?;
+            .checked_mul(FEE_BASIS_POINTS).ok_or(CustomError::MathOverflow)?
+            .checked_div(10000).ok_or(CustomError::MathOverflow)?;
         
         let seller_amount = price.checked_sub(fee).ok_or(CustomError::MathOverflow)?;
 
-        // Transfer 95% to Seller
+        // Transfer to Seller
         let cpi_ctx_seller = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
             anchor_lang::system_program::Transfer {
@@ -90,7 +83,7 @@ pub mod blocs {
         );
         anchor_lang::system_program::transfer(cpi_ctx_seller, seller_amount)?;
 
-        // Transfer 5% to Admin
+        // Transfer to Admin
         let cpi_ctx_admin = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
             anchor_lang::system_program::Transfer {
@@ -105,18 +98,7 @@ pub mod blocs {
         block.is_for_sale = false;
         block.price = 0;
         
-        // Content Preservation: We DO NOT reset text/image/url.
-        // block.text = [0; 64]; 
-        // block.image_url = [0; 128];
-        // block.url = [0; 128];
-
-        emit!(BlockSold {
-            id,
-            price,
-            is_for_sale: false,
-        });
-
-        emit!(BlockBought {
+        emit!(BlockResold {
             id,
             buyer: buyer.key(),
             price,
@@ -127,14 +109,11 @@ pub mod blocs {
 
     pub fn update_block(ctx: Context<UpdateBlock>, id: u32, text: String, image_url: String, url: String) -> Result<()> {
         let block = &mut ctx.accounts.block;
-        
-        // Verify owner (Already checked by `has_one` or `constraint` usually, but manual check is safe)
-        require!(block.owner == ctx.accounts.owner.key(), CustomError::Unauthorized);
 
         // Copy strings to fixed-size arrays
-        copy_string_to_array(&text, &mut block.text);
-        copy_string_to_array(&image_url, &mut block.image_url);
-        copy_string_to_array(&url, &mut block.url);
+        copy_string_to_array(&text, &mut block.text)?;
+        copy_string_to_array(&image_url, &mut block.image_url)?;
+        copy_string_to_array(&url, &mut block.url)?;
 
         emit!(BlockUpdated {
             id,
@@ -144,16 +123,14 @@ pub mod blocs {
         Ok(())
     }
 
-    pub fn sell_block(ctx: Context<UpdateBlock>, id: u32, price: u64) -> Result<()> {
+    pub fn sell_block(ctx: Context<SellBlock>, id: u32, price: u64) -> Result<()> {
         let block = &mut ctx.accounts.block;
-        // require!(block.owner == ctx.accounts.owner.key(), CustomError::Unauthorized); // handled by has_one
 
         if price > 0 {
             block.is_for_sale = true;
             block.price = price;
         } else {
             block.is_for_sale = false; // Delist
-            block.price = 0;
         }
 
         emit!(BlockSold {
@@ -276,6 +253,19 @@ pub struct UpdateBlock<'info> {
     pub owner: Signer<'info>,
 }
 
+#[derive(Accounts)]
+#[instruction(id: u32)]
+pub struct SellBlock<'info> {
+    #[account(
+        mut,
+        seeds = [b"block", id.to_le_bytes().as_ref()],
+        bump,
+        has_one = owner // Anchor can auto-check owner field
+    )]
+    pub block: Account<'info, Block>,
+    pub owner: Signer<'info>,
+}
+
 #[error_code]
 pub enum CustomError {
     #[msg("You are not the owner of this block.")]
@@ -292,6 +282,10 @@ pub enum CustomError {
     AlreadyInitialized,
     #[msg("Math Overflow.")]
     MathOverflow,
+    #[msg("Insufficient funds.")]
+    InsufficientFunds,
+    #[msg("String is too long.")]
+    StringTooLong,
 }
 
 #[event]
@@ -314,9 +308,19 @@ pub struct BlockSold {
     pub is_for_sale: bool,
 }
 
+#[event]
+pub struct BlockResold {
+    pub id: u32,
+    pub buyer: Pubkey,
+    pub price: u64,
+}
+
 // Helper
-fn copy_string_to_array(s: &str, arr: &mut [u8]) {
-    let mut end_index = s.len().min(arr.len());
+fn copy_string_to_array(s: &str, arr: &mut [u8]) -> Result<()> {
+    if s.len() > arr.len() {
+        return err!(CustomError::StringTooLong);
+    }
+    let mut end_index = s.len();
     
     while !s.is_char_boundary(end_index) {
         end_index -= 1;
@@ -326,4 +330,5 @@ fn copy_string_to_array(s: &str, arr: &mut [u8]) {
     arr[..end_index].copy_from_slice(bytes);
     
     arr[end_index..].fill(0);
+    Ok(())
 }

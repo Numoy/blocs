@@ -16,7 +16,7 @@ blocs = "C4MgCjSCzHPnxaFHqTPFH7ur67rKHeunEQAzGRSMDKDM"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Devnet"
+cluster = "Localnet"
 wallet = "/Users/maerz/.config/solana/id.json"
 
 [scripts]

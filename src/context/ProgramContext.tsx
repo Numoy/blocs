@@ -181,7 +181,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
         if (!connected || !publicKey) {
             toast.error("Connect wallet first");
-            return;
+            throw new Error("Wallet not connected");
         }
 
         const toastId = toast.loading("Buying block...");
@@ -325,7 +325,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const updateBlock = async (id: number, text: string, imageUrl: string, url: string) => {
         if (!connected || !wallet) {
             toast.error("Connect wallet first");
-            return;
+            throw new Error("Wallet not connected");
         }
 
         // Content Moderation
@@ -374,7 +374,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const sellBlock = async (id: number, price: number) => {
         if (!connected || !wallet) {
             toast.error("Connect wallet first");
-            return;
+            throw new Error("Wallet not connected");
         }
         const toastId = toast.loading("Listing block...");
         try {
