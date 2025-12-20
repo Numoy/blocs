@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 interface SidebarProps {
     block: BlockData | null;
     onClose: () => void;
-    onBuy: (block: BlockData) => void;
+    onBuy: (block: BlockData, color?: string) => void;
     initialMode?: 'view' | 'edit';
 }
 
@@ -20,12 +20,14 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
     const { updateBlock, sellBlock } = useProgram();
     const [isEditing, setIsEditing] = useState(initialMode === 'edit');
     const [isBuying, setIsBuying] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     // Form State
     const [text, setText] = useState("");
     const [imageUrl, setImageUrl] = useState("");
     const [url, setUrl] = useState("");
     const [price, setPrice] = useState("");
+    const [color, setColor] = useState("#222222");
 
     // Initialize form when block changes or editing starts
     const initForm = useCallback(() => {
@@ -34,6 +36,7 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
             setImageUrl(block.imageUrl || "");
             setUrl(block.url || "");
             setPrice(block.price ? block.price.toString() : "");
+            setColor(block.color || "#222222");
         }
     }, [block]);
 
@@ -58,6 +61,45 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
             initForm();
         }
         setIsEditing(!isEditing);
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            toast.error("File size too large (max 5MB)");
+            return;
+        }
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const response = await fetch("/api/upload", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Upload failed");
+            }
+
+            const data = await response.json();
+            if (data.url) {
+                setImageUrl(data.url);
+                toast.success("Image uploaded!");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Upload failed: " + ((error as Error).message));
+        } finally {
+            setIsUploading(false);
+            // Reset input value to allow re-uploading same file if needed
+            e.target.value = '';
+        }
     };
 
     const handleSave = async () => {
@@ -119,12 +161,23 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                 <div className={styles.value} style={{ fontSize: '1.5rem', color: 'var(--accent-secondary)' }}>
                                     {block.price} SOL
                                 </div>
+
+                                <div style={{ marginTop: '1rem' }}>
+                                    <span className={styles.label}>Choose Color</span>
+                                    <input
+                                        type="color"
+                                        value={color}
+                                        onChange={(e) => setColor(e.target.value)}
+                                        style={{ width: '100%', height: '40px', cursor: 'pointer', border: 'none', borderRadius: '8px' }}
+                                    />
+                                </div>
+
                                 <button
                                     className={`${styles.button} ${styles.buyButton} `}
                                     onClick={async () => {
                                         setIsBuying(true);
                                         try {
-                                            await onBuy(block);
+                                            await onBuy(block, color);
                                         } finally {
                                             setIsBuying(false);
                                         }
@@ -180,11 +233,76 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                             maxLength={64}
                         />
 
-                        <SidebarInput
-                            label="Image URL"
-                            value={imageUrl}
-                            onChange={setImageUrl}
-                        />
+                        {/* Image Management */}
+                        <div className={styles.section}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                                <span className={styles.label} style={{ marginBottom: 0 }}>Image</span>
+                                <div title="Supported formats: PNG, JPG, GIF, WEBP, SVG" style={{ cursor: 'help', display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            {imageUrl ? (
+                                <div style={{ marginBottom: '10px' }}>
+                                    {/* Preview */}
+                                    <div style={{ position: 'relative', width: '100%', marginBottom: '10px' }}>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={imageUrl}
+                                            alt="Preview"
+                                            style={{
+                                                width: '100%',
+                                                borderRadius: '8px',
+                                                maxHeight: '200px',
+                                                objectFit: 'contain',
+                                                background: '#333',
+                                                border: '1px solid #444'
+                                            }}
+                                        />
+                                    </div>
+
+                                    <button
+                                        className={styles.button}
+                                        style={{ background: '#ff4444', color: '#fff', width: '100%' }}
+                                        onClick={() => setImageUrl("")}
+                                    >
+                                        Remove Image
+                                    </button>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexDirection: 'column', width: '100%' }}>
+                                    <label
+                                        className={styles.button}
+                                        style={{
+                                            background: 'rgba(255,255,255,0.1)',
+                                            border: '1px solid rgba(255,255,255,0.1)',
+                                            color: '#fff',
+                                            cursor: 'pointer',
+                                            display: 'block',
+                                            textAlign: 'center',
+                                            padding: '8px 16px',
+                                            fontSize: '0.9rem',
+                                            marginBottom: 0,
+                                            width: '100%'
+                                        }}
+                                    >
+                                        {isUploading ? "Uploading..." : "Upload New Image"}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            style={{ display: 'none' }}
+                                            disabled={isUploading}
+                                            onChange={handleFileUpload}
+                                        />
+                                    </label>
+                                    {isUploading && <span style={{ fontSize: '0.8rem', color: '#888' }}>Uploading...</span>}
+                                </div>
+                            )}
+                        </div>
 
                         <SidebarInput
                             label="Link URL"

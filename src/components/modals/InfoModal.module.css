@@ -92,6 +92,17 @@
     color: #666;
 }
 
+.link {
+    color: #14F195;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.link:hover {
+    color: #fff;
+    text-decoration: underline;
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;

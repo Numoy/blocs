@@ -53,7 +53,13 @@ export const Grid = () => {
             if (block.imageUrl) {
                 const cached = imageCache.current.get(block.imageUrl);
                 if (cached && cached.complete) {
-                    ctx.drawImage(cached, x, y, BLOCK_SIZE, BLOCK_SIZE);
+                    if (cached.naturalWidth > 0) {
+                        ctx.drawImage(cached, x, y, BLOCK_SIZE, BLOCK_SIZE);
+                    } else {
+                        // Image loaded but has 0 width (e.g. SVG without dimensions). 
+                        // Do not draw to avoid 'broken state' error.
+                        // allow background color to show.
+                    }
                 } else if (!cached) {
                     const img = new Image();
                     img.src = block.imageUrl;
@@ -127,10 +133,10 @@ export const Grid = () => {
         }
     }, [getBlockFromEvent]);
 
-    const handleBuyBlock = useCallback(async (block: BlockData) => {
+    const handleBuyBlock = useCallback(async (block: BlockData, color?: string) => {
         if (!block.price) return;
         try {
-            await buyBlock(block.id, block.price);
+            await buyBlock(block.id, block.price, color);
             // Show Success Modal instead of auto-edit
             setSuccessBlock(block);
             // We do NOT setSidebarMode('edit') here anymore
