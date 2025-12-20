@@ -11,13 +11,13 @@ import { toast } from 'sonner';
 interface SidebarProps {
     block: BlockData | null;
     onClose: () => void;
-    onBuy: (block: BlockData, color?: string) => void;
+    onBuy: (block: BlockData) => void;
     initialMode?: 'view' | 'edit';
 }
 
 export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: SidebarProps) => {
     const { publicKey } = useWallet();
-    const { updateBlock, sellBlock } = useProgram();
+    const { updateBlock, sellBlock, openWalletModal } = useProgram();
     const [isEditing, setIsEditing] = useState(initialMode === 'edit');
     const [isBuying, setIsBuying] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -27,7 +27,6 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
     const [imageUrl, setImageUrl] = useState("");
     const [url, setUrl] = useState("");
     const [price, setPrice] = useState("");
-    const [color, setColor] = useState("#222222");
 
     // Initialize form when block changes or editing starts
     const initForm = useCallback(() => {
@@ -36,7 +35,6 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
             setImageUrl(block.imageUrl || "");
             setUrl(block.url || "");
             setPrice(block.price ? block.price.toString() : "");
-            setColor(block.color || "#222222");
         }
     }, [block]);
 
@@ -162,22 +160,16 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                     {block.price} SOL
                                 </div>
 
-                                <div style={{ marginTop: '1rem' }}>
-                                    <span className={styles.label}>Choose Color</span>
-                                    <input
-                                        type="color"
-                                        value={color}
-                                        onChange={(e) => setColor(e.target.value)}
-                                        style={{ width: '100%', height: '40px', cursor: 'pointer', border: 'none', borderRadius: '8px' }}
-                                    />
-                                </div>
-
                                 <button
                                     className={`${styles.button} ${styles.buyButton} `}
                                     onClick={async () => {
+                                        if (!publicKey) {
+                                            openWalletModal();
+                                            return;
+                                        }
                                         setIsBuying(true);
                                         try {
-                                            await onBuy(block, color);
+                                            await onBuy(block);
                                         } finally {
                                             setIsBuying(false);
                                         }

@@ -133,10 +133,10 @@ export const Grid = () => {
         }
     }, [getBlockFromEvent]);
 
-    const handleBuyBlock = useCallback(async (block: BlockData, color?: string) => {
+    const handleBuyBlock = useCallback(async (block: BlockData) => {
         if (!block.price) return;
         try {
-            await buyBlock(block.id, block.price, color);
+            await buyBlock(block.id, block.price);
             // Show Success Modal instead of auto-edit
             setSuccessBlock(block);
             // We do NOT setSidebarMode('edit') here anymore

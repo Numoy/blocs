@@ -82,3 +82,56 @@ a {
     margin-right: 6px !important;
   }
 }
+
+/* Wallet Adapter Modal Customization */
+.wallet-adapter-modal-wrapper {
+  background-color: #1a1a1a !important;
+  border: 1px solid #333 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5) !important;
+  font-family: inherit !important;
+}
+
+.wallet-adapter-modal-title {
+  color: var(--foreground) !important;
+  font-weight: 600 !important;
+  font-size: 1.25rem !important;
+}
+
+.wallet-adapter-modal-button {
+  background-color: #222 !important;
+  border: 1px solid #333 !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+  color: #fff !important;
+}
+
+.wallet-adapter-modal-button:hover {
+  background-color: #333 !important;
+  border-color: var(--accent) !important;
+  transform: translateY(-1px);
+}
+
+.wallet-adapter-modal-overlay {
+  background: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.wallet-adapter-modal-list {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.wallet-adapter-modal-list li {
+  margin-bottom: 8px !important;
+}
+
+.wallet-adapter-dropdown-list {
+  background-color: #222 !important;
+  border: 1px solid #333 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+}
+
+.wallet-adapter-dropdown-list-item:hover {
+  background-color: #333 !important;
+}

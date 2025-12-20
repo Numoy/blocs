@@ -54,9 +54,9 @@ export const WalletSelectorModal: React.FC<WalletSelectorModalProps> = ({ isOpen
     return (
         <div className={styles.overlay} onClick={onClose}>
             <div className={styles.modal} onClick={e => e.stopPropagation()}>
-                <h2 className={styles.title}>Transaction Failed</h2>
+                <h2 className={styles.title}>Connect Wallet</h2>
                 <p className={styles.subtitle}>
-                    Use a wallet browser to complete this purchase securely.
+                    Choose a wallet to connect or open this app in your wallet browser.
                 </p>
 
                 <div className={styles.grid}>
