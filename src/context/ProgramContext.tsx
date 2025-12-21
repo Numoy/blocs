@@ -11,6 +11,7 @@ import { PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@so
 import idl from "@/utils/idl.json";
 import { GRID_PUBKEY, BLOCK_PRICE_NEW, GRID_SIZE } from "@/utils/constants";
 import { isMobile, isWalletBrowser, generateWalletDeepLinks } from "@/utils/mobile";
+import { WalletSelectorModal } from "@/components/modals";
 
 // Program ID used for IDL type matching, though we use the instance from constants mainly
 // export const PROGRAM_ID = ... imported from constants
@@ -47,6 +48,9 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [blocks, setBlocks] = useState<BlockData[]>([]);
     const [gridAdmin, setGridAdmin] = useState<PublicKey | null>(null);
+
+    const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+    const [walletModalUrl, setWalletModalUrl] = useState("");
 
     const program = useMemo(() => {
         const providerWallet = wallet || {
@@ -311,7 +315,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
             if (isMobile() && !isWalletBrowser()) {
                 toast.dismiss(toastId);
-                setVisible(true);
+                setWalletModalUrl(window.location.href);
+                setIsWalletModalOpen(true);
                 throw error;
             }
 
@@ -416,11 +421,23 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         await fetchGrid();
     };
 
-    const openWalletModal = () => setVisible(true);
+    const openWalletModal = () => {
+        if (isMobile() && !isWalletBrowser()) {
+            setWalletModalUrl(window.location.href);
+            setIsWalletModalOpen(true);
+        } else {
+            setVisible(true);
+        }
+    };
 
     return (
         <ProgramContext.Provider value={{ blocks, buyBlock, updateBlock, sellBlock, refreshBlock, isLoading, openWalletModal }}>
             {children}
+            <WalletSelectorModal
+                isOpen={isWalletModalOpen}
+                onClose={() => setIsWalletModalOpen(false)}
+                currentUrl={walletModalUrl}
+            />
         </ProgramContext.Provider>
     );
 };
