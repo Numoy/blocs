@@ -141,6 +141,12 @@ pub mod blocs {
 
         Ok(())
     }
+
+    pub fn update_admin(ctx: Context<UpdateAdmin>, new_admin: Pubkey) -> Result<()> {
+        let grid = &mut ctx.accounts.grid;
+        grid.admin = new_admin;
+        Ok(())
+    }
 }
 
 // --------------------------------------------------------
@@ -203,7 +209,6 @@ pub struct BuyBlock<'info> {
     #[account(mut)]
     pub buyer: Signer<'info>,
 
-    /// CHECK: Validated via constraint on grid
     #[account(mut)]
     pub admin: SystemAccount<'info>,
     
@@ -266,6 +271,18 @@ pub struct SellBlock<'info> {
     pub owner: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct UpdateAdmin<'info> {
+    #[account(
+        mut,
+        seeds = [b"grid"],
+        bump,
+        has_one = admin
+    )]
+    pub grid: Account<'info, GridState>,
+    pub admin: Signer<'info>,
+}
+
 #[error_code]
 pub enum CustomError {
     #[msg("You are not the owner of this block.")]
@@ -320,15 +337,9 @@ fn copy_string_to_array(s: &str, arr: &mut [u8]) -> Result<()> {
     if s.len() > arr.len() {
         return err!(CustomError::StringTooLong);
     }
-    let mut end_index = s.len();
-    
-    while !s.is_char_boundary(end_index) {
-        end_index -= 1;
-    }
-
-    let bytes = &s.as_bytes()[..end_index];
+    let end_index = s.len();
+    let bytes = s.as_bytes();
     arr[..end_index].copy_from_slice(bytes);
-    
     arr[end_index..].fill(0);
     Ok(())
 }

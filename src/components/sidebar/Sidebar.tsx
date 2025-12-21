@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { BlockData } from '@/types';
 import styles from './Sidebar.module.css';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/context/ProgramContext';
 import { SidebarInput } from './SidebarInput';
 import { toast } from 'sonner';
@@ -16,11 +16,26 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: SidebarProps) => {
+    const { connection } = useConnection();
     const { publicKey } = useWallet();
     const { updateBlock, sellBlock, openWalletModal } = useProgram();
     const [isEditing, setIsEditing] = useState(initialMode === 'edit');
     const [isBuying, setIsBuying] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [rentFee, setRentFee] = useState<number | null>(null);
+
+    useEffect(() => {
+        const fetchRent = async () => {
+            try {
+                // 376 bytes is the Block account size
+                const rent = await connection.getMinimumBalanceForRentExemption(376);
+                setRentFee(rent / 1e9); // Convert lamports to SOL
+            } catch (e) {
+                console.error("Failed to fetch rent", e);
+            }
+        };
+        fetchRent();
+    }, [connection]);
 
     // Form State
     const [text, setText] = useState("");
@@ -156,9 +171,26 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                         {block.isForSale && (block.price !== null) && !isOwner && (
                             <div className={styles.section}>
                                 <span className={styles.label}>Price</span>
-                                <div className={styles.value} style={{ fontSize: '1.5rem', color: 'var(--accent-secondary)' }}>
-                                    {block.price} SOL
-                                </div>
+                                {(!block.owner && rentFee) ? (
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#ccc' }}>
+                                            <span>Block Price:</span>
+                                            <span>{block.price} SOL</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#ccc' }}>
+                                            <span>Network Fee (Rent):</span>
+                                            <span>~{rentFee.toFixed(4)} SOL</span>
+                                        </div>
+                                        <div style={{ borderTop: '1px solid #333', marginTop: '4px', paddingTop: '4px', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                                            <span>Total:</span>
+                                            <span>~{((block.price || 0) + rentFee).toFixed(4)} SOL</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className={styles.value} style={{ fontSize: '1.5rem', color: 'var(--accent-secondary)' }}>
+                                        {block.price} SOL
+                                    </div>
+                                )}
 
                                 <button
                                     className={`${styles.button} ${styles.buyButton} `}
