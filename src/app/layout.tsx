@@ -6,6 +6,7 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 import { WalletContextProvider } from "@/components/providers/WalletContextProvider";
 import { Header } from "@/components/layout/Header";
 import { ProgramProvider } from "@/context/ProgramContext";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
 const outfit = Outfit({ subsets: ["latin"] });
 
@@ -45,8 +46,10 @@ export default function RootLayout({
       <body className={outfit.className} suppressHydrationWarning>
         <WalletContextProvider>
           <ProgramProvider>
-            <Header />
-            {children}
+            <ErrorBoundary>
+              <Header />
+              {children}
+            </ErrorBoundary>
             <Toaster position="bottom-right" theme="dark" />
           </ProgramProvider>
         </WalletContextProvider>

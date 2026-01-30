@@ -3,7 +3,7 @@ version: '3.8'
 services:
   blocs:
     container_name: blocs
-    image: blocs-app
+    image: ghcr.io/maerz/blocs:latest
     build: .
     restart: always
     networks:

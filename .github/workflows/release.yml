@@ -46,39 +46,29 @@ jobs:
 
       - name: Deploy to Hetzner
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GITHUB_TOKEN,GITHUB_ACTOR
           script: |
+            # Login to GHCR
+            echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+
             cd ~/blocs
             git pull
-            # Update the docker-compose to use the new image
-            # (First change image name in compose to match GHCR if needed, 
-            # OR we ensure the compose file uses the correct image name)
             
-            # Since our compose file says 'image: blocs-app' (local build name)
-            # We should probably update compose to use the GHCR image for production
-            # OR we can just rebuild on server. 
+            # Pull the latest image
+            docker compose pull
             
-            # OPTION 1: Rebuild on server (Simpler given current setup)
-            # docker compose down
-            # docker compose up -d --build
-            
-            # OPTION 2: Use the pre-built image from GHCR (Faster, cleaner)
-            # We need to make sure docker-compose.yml uses the ghcr image.
-            # Let's assume we want Option 1 for now as it matches previous flow?
-            # Actually user asked to "run a new release", usually implies pre-built artifacts.
-            
-            # Let's stick to the Robust Option: Pull the image we just built.
-            # But the docker-compose.yml currently says "build: .".
-            # We can override it or just rebuild. Rebuild is safest for now without changing compose file logic too much.
-            
-            # Try docker compose first, fallback to docker-compose if needed
+            # Restart containers
             if docker compose version >/dev/null 2>&1; then
               docker compose down
-              docker compose up -d --build
+              docker compose up -d
             else
               docker-compose down
-              docker-compose up -d --build
+              docker-compose up -d
             fi

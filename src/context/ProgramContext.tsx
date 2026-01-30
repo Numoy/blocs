@@ -10,7 +10,8 @@ import { Program, AnchorProvider, Idl, web3, BN } from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
 import { GRID_PUBKEY, BLOCK_PRICE_NEW, GRID_SIZE } from "@/utils/constants";
-import { isMobile, isWalletBrowser, generateWalletDeepLinks } from "@/utils/mobile";
+import { isMobile, isWalletBrowser } from "@/utils/mobile";
+import { parseColor, hexToRgb } from "@/utils/colors";
 import { WalletSelectorModal } from "@/components/modals";
 
 // Program ID used for IDL type matching, though we use the instance from constants mainly
@@ -72,22 +73,9 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         return decoder.decode(uint8).replace(/\0/g, "");
     };
 
-    const parseColor = (arr: number[]): string => {
-        if (arr.length < 3) return "#ffffff";
-        const r = arr[0].toString(16).padStart(2, '0');
-        const g = arr[1].toString(16).padStart(2, '0');
-        const b = arr[2].toString(16).padStart(2, '0');
-        return `#${r}${g}${b}`;
-    };
 
-    const hexToRgb = (hex: string): [number, number, number] => {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? [
-            parseInt(result[1], 16),
-            parseInt(result[2], 16),
-            parseInt(result[3], 16)
-        ] : [255, 255, 255];
-    };
+
+
 
     const fetchGrid = useCallback(async () => {
         if (!program) return;
@@ -106,7 +94,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
             // Map existing blocks to a lookup map
             const blockMap = new Map();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             
             allBlocks.forEach((b: { account: RawBlockAccount }) => {
                 const data = b.account;
                 const id = data.id;
@@ -268,7 +256,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             console.log("Transaction sent:", signature);
 
             // Optimistic Update
-            const previousBlocks = [...blocks];
+            // const previousBlocks = [...blocks]; // (Unused)
             setBlocks(prev => prev.map(b => b.id === id ? {
                 ...b,
                 owner: publicKey!.toBase58(),

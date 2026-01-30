@@ -125,11 +125,11 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
 
     return (
         <>
-            <div className={styles.overlay} onClick={onClose} />
-            <div className={styles.sidebar}>
+            <div className={styles.overlay} onClick={onClose} aria-hidden="true" />
+            <div className={styles.sidebar} role="dialog" aria-modal="true" aria-labelledby="sidebar-title">
                 <button className={styles.closeButton} onClick={onClose} aria-label="Close sidebar">×</button>
 
-                <h2 className={styles.title}>Block #{block.id}</h2>
+                <h2 id="sidebar-title" className={styles.title}>Block #{block.id}</h2>
 
                 {!isEditing ? (
                     <>
