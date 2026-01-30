@@ -232,16 +232,8 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                             style={{ background: 'transparent', border: '1px solid #333', color: '#fff' }}
                             onClick={() => {
                                 const url = `${window.location.origin}/block/${block.id}`;
-                                if (navigator.share) {
-                                    navigator.share({
-                                        title: `Block #${block.id}`,
-                                        text: `Check out Block #${block.id} on 10000-blocks.com`,
-                                        url: url
-                                    }).catch(console.error);
-                                } else {
-                                    navigator.clipboard.writeText(url);
-                                    toast.success("Link copied to clipboard!");
-                                }
+                                navigator.clipboard.writeText(url);
+                                toast.success("Link copied to clipboard!");
                             }}
                         >
                             Share Block
