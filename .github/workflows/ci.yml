@@ -85,14 +85,13 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.cargo/bin/anchor
-          key: anchor-${{ runner.os }}-v0.30.1
+          key: anchor-${{ runner.os }}-v0.32.1
 
       - name: Install Anchor CLI
         if: steps.cache-anchor.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.cargo/bin
-          curl -sSfL https://github.com/coral-xyz/anchor/releases/download/v0.30.1/anchor-cli-x86_64-unknown-linux-gnu.tar.bz2 | tar -xj
-          mv anchor ~/.cargo/bin/
+          curl -sSfL https://github.com/solana-foundation/anchor/releases/download/v0.32.1/anchor-0.32.1-x86_64-unknown-linux-gnu -o ~/.cargo/bin/anchor
           chmod +x ~/.cargo/bin/anchor
 
       - name: Add Anchor to Path
