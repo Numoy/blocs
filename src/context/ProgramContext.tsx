@@ -61,9 +61,9 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         };
 
         const provider = new AnchorProvider(connection, providerWallet, { preflightCommitment: "confirmed" });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return new Program(idl as Idl, provider) as any;
+        return new Program(idl as Idl, provider);
     }, [connection, wallet]);
+
 
     const parseString = (arr: number[]): string => {
         // Use TextDecoder for browser compatibility (calls to Buffer will fail)
@@ -163,9 +163,40 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     }, [fetchGrid]);
 
     useEffect(() => {
-        if (program) {
-            fetchGridWithTimeout();
-        }
+        if (!program) return;
+
+        fetchGridWithTimeout();
+
+        // --- REAL-TIME UPDATES ---
+        let listenerId: number;
+
+        const setupListener = async () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            listenerId = program.addEventListener("BlockBought", (event: any) => {
+                const id = event.id;
+                const buyer = event.buyer.toBase58();
+                // const price = event.price.toNumber() / web3.LAMPORTS_PER_SOL; // Unused for now
+
+                setBlocks(prev => prev.map(b => b.id === id ? {
+                    ...b,
+                    owner: buyer,
+                    price: 0,
+                    isForSale: false,
+                } : b));
+                toast.info(`Block #${id} was just bought!`);
+            });
+            
+            // We can add more listeners for Updated/Sold/Resold similarly
+            // program.addEventListener("BlockUpdated", ...)
+        };
+
+        setupListener();
+
+        return () => {
+            if (listenerId !== undefined) {
+                program.removeEventListener(listenerId);
+            }
+        };
     }, [program, fetchGridWithTimeout]);
 
     const buyBlock = async (id: number, price: number, color: string = "#9945FF") => {

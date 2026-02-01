@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import { writeFile, mkdir } from "fs/promises";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { s3Client, BUCKET_NAME } from "@/utils/s3";
+import sharp from "sharp";
 
 export async function POST(request: Request) {
     try {
@@ -14,18 +15,51 @@ export async function POST(request: Request) {
             );
         }
 
+        // --- VALIDATION ---
+        const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+        const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            return NextResponse.json(
+                { error: "Invalid file type. Only PNG, JPEG, GIF, and WEBP are allowed." },
+                { status: 400 }
+            );
+        }
+
+        if (file.size > MAX_SIZE) {
+            return NextResponse.json(
+                { error: "File too large. Maximum size is 5MB." },
+                { status: 400 }
+            );
+        }
+        // ------------------
+
         const buffer = Buffer.from(await file.arrayBuffer());
-        const filename = Date.now() + "_" + file.name.replaceAll(" ", "_");
 
-        // Ensure uploads directory exists (in project root, not public)
-        const uploadDir = path.join(process.cwd(), "uploads");
-        await mkdir(uploadDir, { recursive: true });
+        // --- OPTIMIZATION (Sharp) ---
+        const optimizedBuffer = await sharp(buffer)
+            .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 80 })
+            .toBuffer();
 
-        const filepath = path.join(uploadDir, filename);
-        await writeFile(filepath, buffer);
+        // Sanitize filename & change extension to webp
+        const originalName = file.name.replace(/\.[^/.]+$/, ""); // remove extension
+        const sanitizedName = originalName.replace(/[^a-zA-Z0-9.-]/g, "_");
+        const filename = `${Date.now()}_${sanitizedName}.webp`;
+        // -----------------------------
 
-        // Return the dynamic API URL
-        const fileUrl = `/api/images/${filename}`;
+        const command = new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: filename,
+            Body: optimizedBuffer,
+            ContentType: "image/webp",
+            // ACL: "public-read", 
+        });
+
+        await s3Client.send(command);
+
+        const region = process.env.HETZNER_REGION || "fsn1";
+        const fileUrl = `https://${BUCKET_NAME}.${region}.your-objectstorage.com/${filename}`;
 
         return NextResponse.json({ url: fileUrl, success: true });
     } catch (error) {

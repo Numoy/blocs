@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Toaster } from 'sonner';
 import { Outfit } from "next/font/google"; // Or use another font like Outfit if desired for modern look
 import "./globals.css";
+import "./env-init";
+// import { Inter } from "next/font/google";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import { WalletContextProvider } from "@/components/providers/WalletContextProvider";
 import { Header } from "@/components/layout/Header";

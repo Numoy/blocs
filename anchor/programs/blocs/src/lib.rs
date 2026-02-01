@@ -25,6 +25,7 @@ pub mod blocs {
         let block = &mut ctx.accounts.block;
         let admin = &ctx.accounts.admin;
         let buyer = &ctx.accounts.buyer;
+        let clock = Clock::get()?;
         
         let price = INITIAL_PRICE.checked_add(id.into()).ok_or(CustomError::MathOverflow)?;
 
@@ -44,6 +45,7 @@ pub mod blocs {
         block.color = color;
         block.price = 0; // Not for sale
         block.is_for_sale = false;
+        block.timestamp = clock.unix_timestamp;
         
         emit!(BlockBought {
             id,
@@ -60,6 +62,7 @@ pub mod blocs {
         let buyer = &ctx.accounts.buyer;
         let seller = &ctx.accounts.seller;
         let admin = &ctx.accounts.admin;
+        let clock = Clock::get()?;
 
         require!(block.is_for_sale, CustomError::NotForSale);
         
@@ -97,6 +100,7 @@ pub mod blocs {
         block.owner = buyer.key();
         block.is_for_sale = false;
         block.price = 0;
+        block.timestamp = clock.unix_timestamp;
         
         emit!(BlockResold {
             id,
@@ -147,6 +151,11 @@ pub mod blocs {
         grid.admin = new_admin;
         Ok(())
     }
+
+    pub fn close_block(_ctx: Context<CloseBlock>, _id: u32) -> Result<()> {
+        // Rent is automatically returned to the owner via the `close` constraint
+        Ok(())
+    }
 }
 
 // --------------------------------------------------------
@@ -168,11 +177,12 @@ pub struct Block {
     pub text: [u8; 64],      // 64
     pub image_url: [u8; 128],// 128
     pub url: [u8; 128],      // 128
+    pub timestamp: i64,      // 8
 }
 
 impl Block {
-    // 8 (Discriminator) + 4 + 32 + 8 + 1 + 3 + 64 + 128 + 128 = 376
-    pub const LEN: usize = 8 + 4 + 32 + 8 + 1 + 3 + 64 + 128 + 128;
+    // 8 (Discriminator) + 4 + 32 + 8 + 1 + 3 + 64 + 128 + 128 + 8 = 384
+    pub const LEN: usize = 8 + 4 + 32 + 8 + 1 + 3 + 64 + 128 + 128 + 8;
 }
 
 #[derive(Accounts)]
@@ -283,6 +293,21 @@ pub struct UpdateAdmin<'info> {
     pub admin: Signer<'info>,
 }
 
+#[derive(Accounts)]
+#[instruction(id: u32)]
+pub struct CloseBlock<'info> {
+    #[account(
+        mut,
+        seeds = [b"block", id.to_le_bytes().as_ref()],
+        bump,
+        has_one = owner,
+        close = owner
+    )]
+    pub block: Account<'info, Block>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+}
+
 #[error_code]
 pub enum CustomError {
     #[msg("You are not the owner of this block.")]
@@ -342,4 +367,41 @@ fn copy_string_to_array(s: &str, arr: &mut [u8]) -> Result<()> {
     arr[..end_index].copy_from_slice(bytes);
     arr[end_index..].fill(0);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_copy_string_to_array_success() {
+        let mut arr = [0u8; 10];
+        copy_string_to_array("hello", &mut arr).unwrap();
+        assert_eq!(&arr[0..5], b"hello");
+        assert_eq!(arr[5], 0);
+    }
+
+    #[test]
+    fn test_copy_string_to_array_exact_length() {
+        let mut arr = [0u8; 5];
+        copy_string_to_array("hello", &mut arr).unwrap();
+        assert_eq!(&arr, b"hello");
+    }
+
+    #[test]
+    fn test_copy_string_to_array_overflow() {
+        let mut arr = [0u8; 4];
+        let result = copy_string_to_array("hello", &mut arr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_copy_string_to_array_padding() {
+        let mut arr = [1u8; 10]; // Fill with 1s
+        copy_string_to_array("abc", &mut arr).unwrap();
+        assert_eq!(&arr[0..3], b"abc");
+        for i in 3..10 {
+            assert_eq!(arr[i], 0);
+        }
+    }
 }

@@ -8,11 +8,11 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 
 
 export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
-    // Use Devnet for development, Mainnet for production
+    // Use environment variable for RPC endpoint, fallback to Devnet
     const endpoint = useMemo(() => {
-        // Fallback to direct public endpoint if clusterApiUrl fails
-        return "https://api.devnet.solana.com";
+        return process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
     }, []);
+
 
     const wallets = useMemo(
         () => [], // Rely on standard wallet detection (MWA) to avoid duplications like MetaMask/Backpack
