@@ -243,6 +243,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                     adminKey = gridAcc.admin;
                 }
 
+                if (!adminKey) throw new Error("Grid admin not found");
+
                 ix = await program.methods.buyResale(id)
                     .accounts({
                         block: blockPda,
@@ -262,6 +264,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                     const gridAcc = await (program.account as any).gridState.fetch(gridPubkey);
                     adminKey = gridAcc.admin;
                 }
+
+                if (!adminKey) throw new Error("Grid admin not found");
 
                 ix = await program.methods.buyBlock(id, rgb)
                     .accounts({
