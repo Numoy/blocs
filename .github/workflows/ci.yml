@@ -86,8 +86,21 @@ jobs:
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/v1.18.23/install)"
 
-      - name: Add Solana to Path
-        run: echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      - name: Setup Solana Path
+        run: |
+          echo "Locating Solana binaries..."
+          SOLANA_BIN_DIR=$(find /home/runner/.local/share/solana -name cargo-build-sbf -type f | head -n 1 | xargs dirname)
+          if [ -z "$SOLANA_BIN_DIR" ]; then
+            echo "::error::Could not find cargo-build-sbf binary"
+            exit 1
+          fi
+          echo "Found Solana binaries at: $SOLANA_BIN_DIR"
+          chmod +x "$SOLANA_BIN_DIR/cargo-build-sbf"
+          echo "$SOLANA_BIN_DIR" >> $GITHUB_PATH
+
+      - name: Verify Solana Path
+        run: |
+          cargo-build-sbf --version || echo "cargo-build-sbf not found in PATH yet (might need new shell)"
 
       - name: Cache Anchor CLI
         id: cache-anchor
@@ -107,9 +120,7 @@ jobs:
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build Program
-        run: |
-          export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
-          anchor build
+        run: anchor build
 
       # Run tests on localnet (default provider in CI usage usually implies localnet if not specified)
       - name: Run Tests
