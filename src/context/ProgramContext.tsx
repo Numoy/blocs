@@ -238,7 +238,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 // Fallback for admin key if not loaded
                 if (!adminKey) {
                     // Try to fetch it on the fly or just fail
-                    const gridAcc = await program.account.gridState.fetch(gridPubkey);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const gridAcc = await (program.account as any).gridState.fetch(gridPubkey);
                     adminKey = gridAcc.admin;
                 }
 
@@ -257,7 +258,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 // Needs Admin key for payment
                 let adminKey = gridAdmin;
                 if (!adminKey) {
-                    const gridAcc = await program.account.gridState.fetch(gridPubkey);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const gridAcc = await (program.account as any).gridState.fetch(gridPubkey);
                     adminKey = gridAcc.admin;
                 }
 
