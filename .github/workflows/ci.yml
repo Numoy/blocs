@@ -68,26 +68,28 @@ jobs:
             anchor/target
           key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cache Solana CLI
-        id: cache-solana
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.local/share/solana/install
-          key: solana-${{ runner.os }}-v1.18.23-v2
+      # - name: Cache Solana CLI
+      #   id: cache-solana
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: |
+      #       ~/.local/share/solana/install
+      #     key: solana-${{ runner.os }}-v1.18.23-v2
 
       - name: Install Solana CLI
-        if: steps.cache-solana.outputs.cache-hit != 'true'
+        # if: steps.cache-solana.outputs.cache-hit != 'true'
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/v1.18.23/install)"
 
       - name: Add Solana to Path
         run: echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
-      - name: Verify Solana Install
+      - name: Check Environment
         run: |
           echo "PATH: $PATH"
-          ls -l /home/runner/.local/share/solana/install/active_release/bin/cargo-build-sbf || echo "Binary not found"
+          ls -la /home/runner/.local/share/solana/install/active_release/bin/
+          /home/runner/.local/share/solana/install/active_release/bin/cargo-build-sbf --version || echo "Failed to run cargo-build-sbf direct"
+          cargo --list
 
       - name: Symlink Solana Binaries to Cargo Bin
         run: |
