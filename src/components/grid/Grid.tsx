@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import styles from './Grid.module.css';
 import { BlockData } from '@/types';
 import { Sidebar } from '@/components/sidebar/Sidebar';
