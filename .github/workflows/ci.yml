@@ -57,10 +57,7 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Cargo registry + index
         uses: actions/cache@v3
@@ -117,7 +114,9 @@ jobs:
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build Program
-        run: anchor build
+        run: |
+          export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
+          anchor build
 
       # Run tests on localnet (default provider in CI usage usually implies localnet if not specified)
       - name: Run Tests
