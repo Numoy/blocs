@@ -92,6 +92,13 @@ jobs:
           echo "PATH: $PATH"
           ls -l /home/runner/.local/share/solana/install/active_release/bin/cargo-build-sbf || echo "Binary not found"
 
+      - name: Symlink Solana Binaries to Cargo Bin
+        run: |
+          mkdir -p ~/.cargo/bin
+          ln -sf /home/runner/.local/share/solana/install/active_release/bin/cargo-build-sbf ~/.cargo/bin/cargo-build-sbf
+          ln -sf /home/runner/.local/share/solana/install/active_release/bin/solana ~/.cargo/bin/solana
+          ln -sf /home/runner/.local/share/solana/install/active_release/bin/solana-keygen ~/.cargo/bin/solana-keygen
+
       - name: Cache Anchor CLI
         id: cache-anchor
         uses: actions/cache@v3
