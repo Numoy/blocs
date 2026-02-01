@@ -84,13 +84,15 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             setIsLoading(true);
 
             // Fetch Global Config (for Admin key)
-            const gridAccount = await program.account.gridState.fetchNullable(GRID_PUBKEY);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const gridAccount = await (program.account as any).gridState.fetchNullable(GRID_PUBKEY);
             if (gridAccount) {
                 setGridAdmin(gridAccount.admin);
             }
 
             // Fetch All Blocks (Lazy Init = Fetch Multiple Accounts)
-            const allBlocks = await program.account.block.all();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const allBlocks = await (program.account as any).block.all();
 
             // Map existing blocks to a lookup map
             const blockMap = new Map();
