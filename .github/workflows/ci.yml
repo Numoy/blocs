@@ -77,7 +77,7 @@ jobs:
         with:
           path: |
             ~/.local/share/solana/install
-          key: solana-${{ runner.os }}-v1.18.23
+          key: solana-${{ runner.os }}-v1.18.23-v2
 
       - name: Install Solana CLI
         if: steps.cache-solana.outputs.cache-hit != 'true'
@@ -86,6 +86,11 @@ jobs:
 
       - name: Add Solana to Path
         run: echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Verify Solana Install
+        run: |
+          echo "PATH: $PATH"
+          ls -l /home/runner/.local/share/solana/install/active_release/bin/cargo-build-sbf || echo "Binary not found"
 
       - name: Cache Anchor CLI
         id: cache-anchor
