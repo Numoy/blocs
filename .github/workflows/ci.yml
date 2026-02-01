@@ -10,6 +10,12 @@ jobs:
   frontend:
     name: Frontend Check
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SOLANA_RPC_URL: https://api.devnet.solana.com
+      HETZNER_ACCESS_KEY_ID: dummy
+      HETZNER_SECRET_ACCESS_KEY: dummy
+      HETZNER_BUCKET_NAME: dummy
+      HETZNER_REGION: fsn1
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,12 +34,6 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          NEXT_PUBLIC_SOLANA_RPC_URL: https://api.devnet.solana.com
-          HETZNER_ACCESS_KEY_ID: dummy
-          HETZNER_SECRET_ACCESS_KEY: dummy
-          HETZNER_BUCKET_NAME: dummy
-          HETZNER_REGION: fsn1
 
   anchor:
     name: Anchor Check
