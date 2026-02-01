@@ -76,6 +76,11 @@ jobs:
       #       ~/.local/share/solana/install
       #     key: solana-${{ runner.os }}-v1.18.23-v2
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config build-essential libudev-dev libssl-dev
+
       - name: Install Solana CLI
         # if: steps.cache-solana.outputs.cache-hit != 'true'
         run: |
@@ -83,20 +88,6 @@ jobs:
 
       - name: Add Solana to Path
         run: echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-
-      - name: Check Environment
-        run: |
-          echo "PATH: $PATH"
-          ls -la /home/runner/.local/share/solana/install/active_release/bin/
-          /home/runner/.local/share/solana/install/active_release/bin/cargo-build-sbf --version || echo "Failed to run cargo-build-sbf direct"
-          cargo --list
-
-      - name: Symlink Solana Binaries to Cargo Bin
-        run: |
-          mkdir -p ~/.cargo/bin
-          ln -sf /home/runner/.local/share/solana/install/active_release/bin/cargo-build-sbf ~/.cargo/bin/cargo-build-sbf
-          ln -sf /home/runner/.local/share/solana/install/active_release/bin/solana ~/.cargo/bin/solana
-          ln -sf /home/runner/.local/share/solana/install/active_release/bin/solana-keygen ~/.cargo/bin/solana-keygen
 
       - name: Cache Anchor CLI
         id: cache-anchor
