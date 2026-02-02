@@ -89,8 +89,8 @@ jobs:
       - name: Setup Solana Path
         run: |
           echo "Locating Solana binaries..."
-          SOLANA_BIN_DIR=$(find /home/runner/.local/share/solana -name cargo-build-sbf -type f | head -n 1 | xargs dirname)
-          if [ -z "$SOLANA_BIN_DIR" ]; then
+          SOLANA_BIN_DIR="$HOME/.local/share/solana/install/active_release/bin"
+          if [ ! -x "$SOLANA_BIN_DIR/cargo-build-sbf" ]; then
             echo "::error::Could not find cargo-build-sbf binary"
             exit 1
           fi
