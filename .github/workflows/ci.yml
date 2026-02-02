@@ -84,8 +84,14 @@ jobs:
       - name: Install Solana CLI
         # if: steps.cache-solana.outputs.cache-hit != 'true'
         run: |
-          sh -c "$(curl -sSfL https://release.solana.com/v1.18.23/install)"
-          "$HOME/.local/share/solana/install/active_release/bin/solana-install" init v1.18.23
+          set -euo pipefail
+          sh -c "$(curl -sSfL --retry 5 --retry-delay 2 --retry-connrefused https://release.solana.com/v1.18.23/install)"
+          SOLANA_INSTALL_BIN="$HOME/.local/share/solana/install/active_release/bin/solana-install"
+          if [ ! -x "$SOLANA_INSTALL_BIN" ]; then
+            echo "::error::Solana install did not produce solana-install binary at $SOLANA_INSTALL_BIN"
+            exit 1
+          fi
+          "$SOLANA_INSTALL_BIN" init v1.18.23
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
 
