@@ -85,6 +85,9 @@ jobs:
         # if: steps.cache-solana.outputs.cache-hit != 'true'
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/v1.18.23/install)"
+          "$HOME/.local/share/solana/install/active_release/bin/solana-install" init v1.18.23
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
 
       - name: Setup Solana Path
         run: |
@@ -100,7 +103,7 @@ jobs:
 
       - name: Verify Solana Path
         run: |
-          cargo-build-sbf --version || echo "cargo-build-sbf not found in PATH yet (might need new shell)"
+          cargo-build-sbf --version
 
       - name: Cache Anchor CLI
         id: cache-anchor
