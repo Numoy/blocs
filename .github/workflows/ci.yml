@@ -89,11 +89,17 @@ jobs:
       - name: Setup Solana Path
         run: |
           echo "Locating Solana binaries..."
-          SOLANA_BIN_DIR="$HOME/.local/share/solana/install/active_release/bin"
-          if [ ! -x "$SOLANA_BIN_DIR/cargo-build-sbf" ]; then
+          SOLANA_ROOT="$HOME/.local/share/solana"
+          if [ ! -d "$SOLANA_ROOT" ]; then
+            echo "::error::Solana install directory not found at $SOLANA_ROOT"
+            exit 1
+          fi
+          SOLANA_BIN_PATH="$(find "$SOLANA_ROOT" -type f -path "*/bin/cargo-build-sbf" -print -quit)"
+          if [ -z "$SOLANA_BIN_PATH" ]; then
             echo "::error::Could not find cargo-build-sbf binary"
             exit 1
           fi
+          SOLANA_BIN_DIR="$(dirname "$SOLANA_BIN_PATH")"
           echo "Found Solana binaries at: $SOLANA_BIN_DIR"
           chmod +x "$SOLANA_BIN_DIR/cargo-build-sbf"
           echo "$SOLANA_BIN_DIR" >> $GITHUB_PATH
