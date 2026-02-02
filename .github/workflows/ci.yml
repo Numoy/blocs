@@ -89,12 +89,19 @@ jobs:
       - name: Setup Solana Path
         run: |
           echo "Locating Solana binaries..."
-          SOLANA_ROOT="$HOME/.local/share/solana"
-          if [ ! -d "$SOLANA_ROOT" ]; then
-            echo "::error::Solana install directory not found at $SOLANA_ROOT"
-            exit 1
-          fi
-          SOLANA_BIN_PATH="$(find "$SOLANA_ROOT" -type f -path "*/bin/cargo-build-sbf" -print -quit)"
+          SOLANA_SEARCH_ROOTS=(
+            "$HOME/.local/share/solana"
+            "$HOME/.local/share/solana/install"
+          )
+          SOLANA_BIN_PATH=""
+          for ROOT in "${SOLANA_SEARCH_ROOTS[@]}"; do
+            if [ -d "$ROOT" ]; then
+              SOLANA_BIN_PATH="$(find "$ROOT" -type f -path "*/bin/cargo-build-sbf" -print -quit)"
+              if [ -n "$SOLANA_BIN_PATH" ]; then
+                break
+              fi
+            fi
+          done
           if [ -z "$SOLANA_BIN_PATH" ]; then
             echo "::error::Could not find cargo-build-sbf binary"
             exit 1
