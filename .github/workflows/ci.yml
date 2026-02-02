@@ -59,6 +59,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # Cache Cargo Registry (Speeds up Rust builds)
       - name: Cache Cargo registry + index
         uses: actions/cache@v3
         with:
@@ -68,40 +69,16 @@ jobs:
             anchor/target
           key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
 
-      # - name: Cache Solana CLI
-      #   id: cache-solana
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: |
-      #       ~/.local/share/solana/install
-      #     key: solana-${{ runner.os }}-v1.18.23-v2
+      # Cache Solana CLI (Restored and fixed)
+      - name: Cache Solana CLI
+        id: cache-solana
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/solana-release
+          key: solana-${{ runner.os }}-v1.18.23
 
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config build-essential libudev-dev libssl-dev
-
-      - name: Install Solana CLI
-        # if: steps.cache-solana.outputs.cache-hit != 'true'
-        run: |
-          sh -c "$(curl -sSfL https://release.solana.com/v1.18.23/install)"
-
-      - name: Setup Solana Path
-        run: |
-          echo "Locating Solana binaries..."
-          SOLANA_BIN_DIR=$(find /home/runner/.local/share/solana -name cargo-build-sbf -type f | head -n 1 | xargs dirname)
-          if [ -z "$SOLANA_BIN_DIR" ]; then
-            echo "::error::Could not find cargo-build-sbf binary"
-            exit 1
-          fi
-          echo "Found Solana binaries at: $SOLANA_BIN_DIR"
-          chmod +x "$SOLANA_BIN_DIR/cargo-build-sbf"
-          echo "$SOLANA_BIN_DIR" >> $GITHUB_PATH
-
-      - name: Verify Solana Path
-        run: |
-          cargo-build-sbf --version || echo "cargo-build-sbf not found in PATH yet (might need new shell)"
-
+      # Cache Anchor CLI
       - name: Cache Anchor CLI
         id: cache-anchor
         uses: actions/cache@v3
@@ -109,6 +86,18 @@ jobs:
           path: ~/.cargo/bin/anchor
           key: anchor-${{ runner.os }}-v0.32.1
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config build-essential libudev-dev libssl-dev
+
+      # Install Solana (Only if cache miss) - Using GitHub Releases for reliability
+      - name: Install Solana CLI
+        if: steps.cache-solana.outputs.cache-hit != 'true'
+        run: |
+          curl -sSfL https://github.com/solana-labs/solana/releases/download/v1.18.23/solana-release-x86_64-unknown-linux-gnu.tar.bz2 | tar jxf - -C $HOME
+
+      # Install Anchor (Only if cache miss)
       - name: Install Anchor CLI
         if: steps.cache-anchor.outputs.cache-hit != 'true'
         run: |
@@ -116,12 +105,19 @@ jobs:
           curl -sSfL https://github.com/solana-foundation/anchor/releases/download/v0.32.1/anchor-0.32.1-x86_64-unknown-linux-gnu -o ~/.cargo/bin/anchor
           chmod +x ~/.cargo/bin/anchor
 
-      - name: Add Anchor to Path
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      # Set Paths - This applies to all subsequent steps
+      - name: Add Tools to Path
+        run: |
+          echo "$HOME/solana-release/bin" >> $GITHUB_PATH
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Verify Versions
+        run: |
+          solana --version
+          anchor --version
 
       - name: Build Program
         run: anchor build
 
-      # Run tests on localnet (default provider in CI usage usually implies localnet if not specified)
       - name: Run Tests
         run: anchor test
