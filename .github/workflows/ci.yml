@@ -86,6 +86,27 @@ jobs:
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/v1.18.23/install)"
 
+      - name: Solana Diagnostics
+        run: |
+          ls -la "$HOME/.local/share/solana/install/active_release/bin"
+          command -v solana || true
+          command -v cargo-build-sbf || true
+          command -v cargo-build-bpf || true
+          if command -v solana; then
+            solana --version
+          else
+            echo "solana not found in PATH"
+          fi
+          if command -v cargo-build-sbf; then
+            cargo-build-sbf --version
+          else
+            echo "cargo-build-sbf not found in PATH"
+          fi
+          if ! command -v cargo-build-sbf && ! command -v cargo-build-bpf; then
+            echo "::error::Neither cargo-build-sbf nor cargo-build-bpf is available in PATH."
+            exit 1
+          fi
+
       - name: Setup Solana Path
         run: |
           echo "Locating Solana binaries..."
