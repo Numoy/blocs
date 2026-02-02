@@ -96,19 +96,22 @@ jobs:
           SOLANA_BIN_PATH=""
           for ROOT in "${SOLANA_SEARCH_ROOTS[@]}"; do
             if [ -d "$ROOT" ]; then
-              SOLANA_BIN_PATH="$(find "$ROOT" -type f -path "*/bin/cargo-build-sbf" -print -quit)"
+              SOLANA_BIN_PATH="$(find "$ROOT" -type f -name cargo-build-sbf -print -quit)"
+              if [ -z "$SOLANA_BIN_PATH" ]; then
+                SOLANA_BIN_PATH="$(find "$ROOT" -type f -name cargo-build-bpf -print -quit)"
+              fi
               if [ -n "$SOLANA_BIN_PATH" ]; then
                 break
               fi
             fi
           done
           if [ -z "$SOLANA_BIN_PATH" ]; then
-            echo "::error::Could not find cargo-build-sbf binary"
+            echo "::error::Could not find cargo-build-sbf or cargo-build-bpf binary"
             exit 1
           fi
           SOLANA_BIN_DIR="$(dirname "$SOLANA_BIN_PATH")"
           echo "Found Solana binaries at: $SOLANA_BIN_DIR"
-          chmod +x "$SOLANA_BIN_DIR/cargo-build-sbf"
+          chmod +x "$SOLANA_BIN_PATH"
           echo "$SOLANA_BIN_DIR" >> $GITHUB_PATH
 
       - name: Verify Solana Path
