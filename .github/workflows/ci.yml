@@ -89,22 +89,33 @@ jobs:
       - name: Setup Solana Path
         run: |
           echo "Locating Solana binaries..."
-          SOLANA_SEARCH_ROOTS=(
-            "$HOME/.local/share/solana"
-            "$HOME/.local/share/solana/install"
-          )
-          SOLANA_BIN_PATH=""
-          for ROOT in "${SOLANA_SEARCH_ROOTS[@]}"; do
-            if [ -d "$ROOT" ]; then
-              SOLANA_BIN_PATH="$(find "$ROOT" -type f -name cargo-build-sbf -print -quit)"
-              if [ -z "$SOLANA_BIN_PATH" ]; then
-                SOLANA_BIN_PATH="$(find "$ROOT" -type f -name cargo-build-bpf -print -quit)"
+          SOLANA_ACTIVE_BIN="$HOME/.local/share/solana/install/active_release/bin"
+          if [ -d "$SOLANA_ACTIVE_BIN" ]; then
+            echo "Adding active Solana bin to PATH: $SOLANA_ACTIVE_BIN"
+            echo "$SOLANA_ACTIVE_BIN" >> $GITHUB_PATH
+            export PATH="$SOLANA_ACTIVE_BIN:$PATH"
+          fi
+          SOLANA_BIN_PATH="$(command -v cargo-build-sbf || true)"
+          if [ -z "$SOLANA_BIN_PATH" ]; then
+            SOLANA_BIN_PATH="$(command -v cargo-build-bpf || true)"
+          fi
+          if [ -z "$SOLANA_BIN_PATH" ]; then
+            SOLANA_SEARCH_ROOTS=(
+              "$HOME/.local/share/solana"
+              "$HOME/.local/share/solana/install"
+            )
+            for ROOT in "${SOLANA_SEARCH_ROOTS[@]}"; do
+              if [ -d "$ROOT" ]; then
+                SOLANA_BIN_PATH="$(find "$ROOT" -type f -name cargo-build-sbf -print -quit)"
+                if [ -z "$SOLANA_BIN_PATH" ]; then
+                  SOLANA_BIN_PATH="$(find "$ROOT" -type f -name cargo-build-bpf -print -quit)"
+                fi
+                if [ -n "$SOLANA_BIN_PATH" ]; then
+                  break
+                fi
               fi
-              if [ -n "$SOLANA_BIN_PATH" ]; then
-                break
-              fi
-            fi
-          done
+            done
+          fi
           if [ -z "$SOLANA_BIN_PATH" ]; then
             echo "::error::Could not find cargo-build-sbf or cargo-build-bpf binary"
             exit 1
