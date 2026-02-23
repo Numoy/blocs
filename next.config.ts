@@ -26,6 +26,8 @@ const analyticsOrigin = "https://analytics.marvinmaerz.com";
 // Allow secure RPC backends that may be injected at build/runtime without hardcoding every provider domain.
 const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com", "https:", "wss:", analyticsOrigin];
 const imgSrc = ["'self'", "data:", "blob:", ...assetOrigins, "https:"];
+const styleSrc = ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"];
+const fontSrc = ["'self'", "data:", "https://fonts.gstatic.com"];
 const scriptSrc = [
   "'self'",
   "'unsafe-inline'",
@@ -42,8 +44,8 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   `script-src ${scriptSrc.join(" ")}`,
-  "style-src 'self' 'unsafe-inline'",
-  "font-src 'self' data:",
+  `style-src ${styleSrc.join(" ")}`,
+  `font-src ${fontSrc.join(" ")}`,
   `img-src ${imgSrc.join(" ")}`,
   `connect-src ${[...connectSrc, ...(isDev ? ["ws://localhost:*"] : [])].join(" ")}`,
   "form-action 'self'",
