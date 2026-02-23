@@ -6,10 +6,11 @@ import { GRID_SIZE, PROGRAM_ID } from "@/utils/constants";
 import { Metadata } from 'next';
 import { toSafeExternalUrl } from "@/utils/url";
 import { unstable_cache } from "next/cache";
+import { resolveSolanaRpcEndpoint } from "@/utils/rpc";
 
 // This is a Server Component
 
-const rpcUrl = process.env.SOLANA_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
+const rpcUrl = resolveSolanaRpcEndpoint(process.env.SOLANA_RPC_URL, process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
 const connection = new Connection(rpcUrl, "confirmed");
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const provider = new AnchorProvider(connection, { publicKey: PublicKey.default } as any, {});

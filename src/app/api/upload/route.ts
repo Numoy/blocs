@@ -11,6 +11,7 @@ import {
     PROGRAM_ID
 } from "@/utils/constants";
 import { buildUploadAuthMessage, UPLOAD_AUTH_MAX_AGE_MS } from "@/utils/uploadAuth";
+import { resolveSolanaRpcEndpoint } from "@/utils/rpc";
 
 export const runtime = "nodejs";
 
@@ -26,10 +27,7 @@ const RATE_LIMIT_MAX_BY_WALLET = 12;
 const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const MAX_INPUT_PIXELS = 16_777_216; // 4096x4096 upper bound
-const SOLANA_RPC_URL =
-    process.env.SOLANA_RPC_URL ||
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-    "https://api.devnet.solana.com";
+const SOLANA_RPC_URL = resolveSolanaRpcEndpoint(process.env.SOLANA_RPC_URL, process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
 const solanaConnection = new Connection(SOLANA_RPC_URL, "confirmed");
 const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL?.replace(/\/+$/, "");
 const UPSTASH_REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;

@@ -16,6 +16,7 @@ import { WalletSelectorModal } from "@/components/modals";
 import { parseSolToLamports } from "@/utils/sol";
 import { toSafeExternalUrl } from "@/utils/url";
 import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
+import { resolveSolanaRpcEndpoint } from "@/utils/rpc";
 
 // Program ID used for IDL type matching, though we use the instance from constants mainly
 // export const PROGRAM_ID = ... imported from constants
@@ -145,7 +146,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                     setIsSyncing(true);
                 }
 
-                const primaryEndpoint = connection.rpcEndpoint;
+                const primaryEndpoint = resolveSolanaRpcEndpoint(connection.rpcEndpoint);
                 const rpcCandidates = [primaryEndpoint, ...getFallbackRpcEndpoints(primaryEndpoint)];
                 let loadedGrid = false;
                 let lastError: unknown = null;
