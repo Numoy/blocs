@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { Sidebar } from '../Sidebar';
 import { BlockData } from '@/types';
 
@@ -7,6 +7,7 @@ import { BlockData } from '@/types';
 const mockUpdateBlock = vi.fn();
 const mockSellBlock = vi.fn();
 const mockOpenWalletModal = vi.fn();
+const mockGetMinimumBalanceForRentExemption = vi.fn();
 
 vi.mock('@/context/ProgramContext', () => ({
     useProgram: () => ({
@@ -24,7 +25,7 @@ vi.mock('@solana/wallet-adapter-react', () => ({
     }),
     useConnection: () => ({
         connection: {
-            getMinimumBalanceForRentExemption: vi.fn().mockResolvedValue(1000000), // 0.001 SOL
+            getMinimumBalanceForRentExemption: mockGetMinimumBalanceForRentExemption, // 0.001 SOL
         },
     }),
 }));
@@ -57,43 +58,53 @@ const mockOwnedBlock: BlockData = {
 describe('Sidebar Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockGetMinimumBalanceForRentExemption.mockResolvedValue(1000000);
     });
 
-    it('should not render if no block provided', () => {
-        const { container } = render(
-            <Sidebar block={null} onClose={vi.fn()} onBuy={vi.fn()} />
-        );
+    const renderSidebar = async (block: BlockData | null, overrides?: { onClose?: () => void; onBuy?: (block: BlockData) => void }) => {
+        const onClose = overrides?.onClose ?? vi.fn();
+        const onBuy = overrides?.onBuy ?? vi.fn();
+        const rendered = render(<Sidebar block={block} onClose={onClose} onBuy={onBuy} />);
+        await waitFor(() => expect(mockGetMinimumBalanceForRentExemption).toHaveBeenCalled());
+        return { ...rendered, onClose, onBuy };
+    };
+
+    it('should not render if no block provided', async () => {
+        const { container } = await renderSidebar(null);
         expect(container).toBeEmptyDOMElement();
     });
 
-    it('should render block details correctly', () => {
-        render(<Sidebar block={mockBlock} onClose={vi.fn()} onBuy={vi.fn()} />);
+    it('should render block details correctly', async () => {
+        await renderSidebar(mockBlock);
 
         expect(screen.getByText('Block #1')).toBeInTheDocument();
         expect(screen.getByText('Hello World')).toBeInTheDocument();
     });
 
-    it('should show Buy button for for-sale blocks not owned by user', () => {
-        const onBuy = vi.fn();
-        render(<Sidebar block={mockBlock} onClose={vi.fn()} onBuy={onBuy} />);
+    it('should show Buy button for for-sale blocks not owned by user', async () => {
+        const onBuy = vi.fn().mockResolvedValue(undefined);
+        await renderSidebar(mockBlock, { onBuy });
 
         const buyButton = screen.getByText('Buy Block');
         expect(buyButton).toBeInTheDocument();
 
-        fireEvent.click(buyButton);
-        expect(onBuy).toHaveBeenCalledWith(mockBlock);
+        await act(async () => {
+            fireEvent.click(buyButton);
+        });
+
+        await waitFor(() => expect(onBuy).toHaveBeenCalledWith(mockBlock));
     });
 
-    it('should show Edit button for owned blocks', () => {
-        render(<Sidebar block={mockOwnedBlock} onClose={vi.fn()} onBuy={vi.fn()} />);
+    it('should show Edit button for owned blocks', async () => {
+        await renderSidebar(mockOwnedBlock);
 
         expect(screen.getByText('Edit Block')).toBeInTheDocument();
         expect(screen.queryByText('Buy Block')).not.toBeInTheDocument();
     });
 
-    it('should call onClose when close button clicked', () => {
+    it('should call onClose when close button clicked', async () => {
         const onClose = vi.fn();
-        render(<Sidebar block={mockBlock} onClose={onClose} onBuy={vi.fn()} />);
+        await renderSidebar(mockBlock, { onClose });
 
         fireEvent.click(screen.getByLabelText('Close sidebar'));
         expect(onClose).toHaveBeenCalled();

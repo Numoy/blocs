@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { BlockData } from '@/types';
+import { GRID_WIDTH } from '@/utils/constants';
 
 interface UseGridInteractionProps {
     canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -8,11 +9,25 @@ interface UseGridInteractionProps {
 }
 
 export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES }: UseGridInteractionProps) => {
-    const [selectedBlock, setSelectedBlock] = useState<BlockData | null>(null);
-    const [hoveredBlock, setHoveredBlock] = useState<BlockData | null>(null);
+    const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null);
+    const [hoveredBlockId, setHoveredBlockId] = useState<number | null>(null);
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
     const [sidebarMode, setSidebarMode] = useState<'view' | 'edit'>('view');
     const dragStart = useRef({ x: 0, y: 0 });
+
+    const selectedBlock = useMemo(() => {
+        if (selectedBlockId === null) return null;
+        return blocks[selectedBlockId] ?? null;
+    }, [blocks, selectedBlockId]);
+
+    const hoveredBlock = useMemo(() => {
+        if (hoveredBlockId === null) return null;
+        return blocks[hoveredBlockId] ?? null;
+    }, [blocks, hoveredBlockId]);
+
+    const setSelectedBlock = useCallback((block: BlockData | null) => {
+        setSelectedBlockId(block ? block.id : null);
+    }, []);
 
     const getBlockFromEvent = useCallback((e: React.MouseEvent) => {
         const canvas = canvasRef.current;
@@ -26,7 +41,6 @@ export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES }: UseGridInt
         const canvasX = (e.clientX - rect.left) / scaleX;
         const canvasY = (e.clientY - rect.top) / scaleY;
 
-        const GRID_WIDTH = blocks.length <= 100 ? 5 : 100;
         const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
 
         const col = Math.floor(canvasX / BLOCK_SIZE);
@@ -45,28 +59,28 @@ export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES }: UseGridInt
 
         const block = getBlockFromEvent(e);
         if (block) {
-            setSelectedBlock(block);
+            setSelectedBlockId(block.id);
             setSidebarMode('view');
-            setHoveredBlock(null);
+            setHoveredBlockId(null);
         }
     }, [getBlockFromEvent]);
 
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
         const block = getBlockFromEvent(e);
         if (block) {
-            setHoveredBlock(block);
+            setHoveredBlockId(block.id);
             setCursorPos({ x: e.clientX, y: e.clientY });
         } else {
-            setHoveredBlock(null);
+            setHoveredBlockId(null);
         }
     }, [getBlockFromEvent]);
 
     const handleMouseLeave = useCallback(() => {
-        setHoveredBlock(null);
+        setHoveredBlockId(null);
     }, []);
 
     const handleCloseSidebar = useCallback(() => {
-        setSelectedBlock(null);
+        setSelectedBlockId(null);
     }, []);
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -79,33 +93,31 @@ export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES }: UseGridInt
         if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             e.preventDefault();
 
-            if (!selectedBlock && blocks.length > 0) {
-                setSelectedBlock(blocks[0]);
+            if (selectedBlockId === null && blocks.length > 0) {
+                setSelectedBlockId(blocks[0].id);
                 return;
             }
 
-            if (selectedBlock) {
-                const GRID_WIDTH = blocks.length <= 100 ? 5 : 100;
-                let newId = selectedBlock.id;
-                const currentIndex = selectedBlock.id - 1;
+            if (selectedBlockId !== null) {
+                let newId = selectedBlockId;
 
                 if (e.key === 'ArrowRight') {
-                    if ((currentIndex + 1) % GRID_WIDTH !== 0) newId += 1;
+                    if ((selectedBlockId + 1) % GRID_WIDTH !== 0) newId += 1;
                 } else if (e.key === 'ArrowLeft') {
-                    if (currentIndex % GRID_WIDTH !== 0) newId -= 1;
+                    if (selectedBlockId % GRID_WIDTH !== 0) newId -= 1;
                 } else if (e.key === 'ArrowDown') {
-                    if (currentIndex + GRID_WIDTH < blocks.length) newId += GRID_WIDTH;
+                    if (selectedBlockId + GRID_WIDTH < blocks.length) newId += GRID_WIDTH;
                 } else if (e.key === 'ArrowUp') {
-                    if (currentIndex - GRID_WIDTH >= 0) newId -= GRID_WIDTH;
+                    if (selectedBlockId - GRID_WIDTH >= 0) newId -= GRID_WIDTH;
                 }
 
-                if (newId !== selectedBlock.id && newId > 0 && newId <= blocks.length) {
-                    setSelectedBlock(blocks[newId - 1]);
+                if (newId !== selectedBlockId && newId >= 0 && newId < blocks.length) {
+                    setSelectedBlockId(newId);
                     setSidebarMode('view');
                 }
             }
         }
-    }, [selectedBlock, blocks]);
+    }, [selectedBlockId, blocks]);
 
     return {
         selectedBlock,

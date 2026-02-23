@@ -19,6 +19,12 @@ url = "https://api.apr.dev"
 cluster = "Localnet"
 wallet = "/Users/maerz/.config/solana/id.json"
 
+[test.validator]
+bind_address = "127.0.0.1"
+rpc_port = 18899
+faucet_port = 19900
+ledger = ".anchor/test-ledger-blocs"
+
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 init = "yarn run ts-node scripts/init.ts"

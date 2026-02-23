@@ -2,22 +2,30 @@ import { BN, Program, AnchorProvider, Idl } from "@coral-xyz/anchor";
 import { Connection, PublicKey } from "@solana/web3.js";
 import BlockClient from "./BlockClient";
 import idl from "@/utils/idl.json";
-import { PROGRAM_ID } from "@/utils/constants";
+import { GRID_SIZE, PROGRAM_ID } from "@/utils/constants";
 import { Metadata } from 'next';
+import { toSafeExternalUrl } from "@/utils/url";
+import { unstable_cache } from "next/cache";
 
 // This is a Server Component
 
-const getBlockData = async (id: number) => {
-    // 1. Connection
-    // Use a public RPC or specific env var
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com";
-    const connection = new Connection(rpcUrl, "confirmed");
+const rpcUrl = process.env.SOLANA_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
+const connection = new Connection(rpcUrl, "confirmed");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const provider = new AnchorProvider(connection, { publicKey: PublicKey.default } as any, {});
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const program = new Program(idl as Idl, provider) as any;
 
-    // 2. Provider (Read-only)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const provider = new AnchorProvider(connection, { publicKey: PublicKey.default } as any, {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const program = new Program(idl as Idl, provider) as any;
+const parseString = (arr: number[]) => {
+    const uint8 = new Uint8Array(arr);
+    const decoder = new TextDecoder("utf-8");
+    return decoder.decode(uint8).replace(/\0/g, "");
+};
+
+const fetchBlockDataFromChain = async (id: number) => {
+    if (!Number.isInteger(id) || id < 0 || id >= GRID_SIZE) {
+        return null;
+    }
 
     // 3. Derive PDA
     const [blockPda] = PublicKey.findProgramAddressSync(
@@ -33,13 +41,6 @@ const getBlockData = async (id: number) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const account: any = await program.account.block.fetch(blockPda);
 
-        // Helper to parse bytes to string
-        const parseString = (arr: number[]) => {
-            const uint8 = new Uint8Array(arr);
-            const decoder = new TextDecoder("utf-8");
-            return decoder.decode(uint8).replace(/\0/g, "");
-        };
-
         return {
             id: account.id,
             text: parseString(account.text),
@@ -53,12 +54,32 @@ const getBlockData = async (id: number) => {
     }
 };
 
+const getBlockDataCached = unstable_cache(
+    async (id: number) => fetchBlockDataFromChain(id),
+    ["block-metadata-v1"],
+    { revalidate: 20 }
+);
+
+const getBlockData = async (id: number) => {
+    if (!Number.isInteger(id) || id < 0 || id >= GRID_SIZE) {
+        return null;
+    }
+    return getBlockDataCached(id);
+};
+
 type Props = {
     params: { id: string };
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-    const id = parseInt(params.id);
+    const id = parseInt(params.id, 10);
+    if (!Number.isInteger(id) || id < 0 || id >= GRID_SIZE) {
+        return {
+            title: "Blocs",
+            description: "Explore the 10,000 block grid on Solana.",
+        };
+    }
+
     const block = await getBlockData(id);
 
     if (!block) {
@@ -71,19 +92,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const title = block.text ? `Block #${id}: "${block.text}"` : `Block #${id} - Blocs`;
     const description = block.imageUrl ? "Check out this image block on Blocs!" : `Owned by ${block.owner.slice(0, 4)}...${block.owner.slice(-4)}`;
 
+    const safeImageUrl = toSafeExternalUrl(block.imageUrl);
+
     return {
         title: title,
         description: description,
         openGraph: {
             title: title,
             description: description,
-            images: block.imageUrl ? [block.imageUrl] : [], // TODO: Add default OG image if none
+            images: safeImageUrl ? [safeImageUrl] : [], // TODO: Add default OG image if none
         },
         twitter: {
             card: "summary_large_image",
             title: title,
             description: description,
-            images: block.imageUrl ? [block.imageUrl] : [],
+            images: safeImageUrl ? [safeImageUrl] : [],
         }
     };
 }

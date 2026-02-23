@@ -15,12 +15,15 @@ import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
 import { useWallet } from '@solana/wallet-adapter-react';
 
 import { useSearchParams } from 'next/navigation';
+import { GRID_SIZE, GRID_WIDTH } from '@/utils/constants';
+import { toSafeExternalUrl } from '@/utils/url';
 
 export const Grid = () => {
-    const { blocks, buyBlock, isLoading } = useProgram();
+    const { blocks, buyBlock, isLoading, isSyncing } = useProgram();
     const { publicKey } = useWallet();
     const [successBlock, setSuccessBlock] = useState<BlockData | null>(null);
     const searchParams = useSearchParams();
+    const blockParam = searchParams.get('block');
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -29,11 +32,9 @@ export const Grid = () => {
 
     // Deep Linking Logic
     const initialTransform = useMemo(() => {
-        const blockIdParam = searchParams.get('block');
-        if (blockIdParam) {
-            const id = parseInt(blockIdParam, 10);
-            if (!isNaN(id) && id >= 0 && id < 10000) {
-                const GRID_WIDTH = 100;
+        if (blockParam) {
+            const id = parseInt(blockParam, 10);
+            if (!isNaN(id) && id >= 0 && id < GRID_SIZE) {
                 const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH; // 30
                 const col = id % GRID_WIDTH;
                 const row = Math.floor(id / GRID_WIDTH);
@@ -63,7 +64,7 @@ export const Grid = () => {
             }
         }
         return { scale: 0.6, positionX: 0, positionY: 0 }; // Default
-    }, [searchParams]);
+    }, [blockParam]);
 
     const { visibleBounds, updateVisibility } = useGridVisibility({
         canvasRes: CANVAS_RES,
@@ -95,6 +96,7 @@ export const Grid = () => {
         blocks,
         CANVAS_RES
     });
+    const safeHoveredImageUrl = toSafeExternalUrl(hoveredBlock?.imageUrl);
 
     const handleBuyBlock = useCallback(async (block: BlockData) => {
         if (!block.price) return;
@@ -107,7 +109,11 @@ export const Grid = () => {
     }, [buyBlock]);
 
     // Filter owned blocks
-    const ownedBlocks = blocks.filter(b => publicKey && b.owner === publicKey.toBase58());
+    const ownedBlocks = useMemo(() => {
+        const owner = publicKey?.toBase58();
+        if (!owner) return [];
+        return blocks.filter(b => b.owner === owner);
+    }, [blocks, publicKey]);
 
     return (
         <div
@@ -122,13 +128,32 @@ export const Grid = () => {
                     <div className={styles.loadingText}>Synchronizing with Solana...</div>
                 </div>
             )}
+            {!isLoading && isSyncing && (
+                <div
+                    style={{
+                        position: "absolute",
+                        top: 16,
+                        right: 16,
+                        zIndex: 20,
+                        background: "rgba(0,0,0,0.65)",
+                        color: "#bbb",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 999,
+                        padding: "6px 10px",
+                        fontSize: "0.75rem",
+                        letterSpacing: "0.02em",
+                    }}
+                >
+                    Syncing…
+                </div>
+            )}
             <TransformWrapper
                 initialScale={initialTransform.scale}
                 initialPositionX={initialTransform.positionX}
                 initialPositionY={initialTransform.positionY}
                 minScale={0.1}
                 maxScale={10}
-                centerOnInit={!searchParams.get('block')} // Only center if no block param
+                centerOnInit={!blockParam} // Only center if no block param
                 limitToBounds={true}
                 wheel={{ step: 0.1 }}
                 panning={{ velocityDisabled: false }}
@@ -139,9 +164,9 @@ export const Grid = () => {
                 <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
                     <canvas
                         ref={canvasRef}
-                        width={3000}
-                        height={3000}
-                        style={{ margin: '200px' }}
+                        width={CANVAS_RES}
+                        height={CANVAS_RES}
+                        style={{ margin: `${CANVAS_MARGIN}px` }}
                         onClick={handleCanvasClick}
                         onMouseMove={handleMouseMove}
                         onMouseLeave={handleMouseLeave}
@@ -169,7 +194,7 @@ export const Grid = () => {
                 >
                     <div className={styles.cardTitle}>Block #{hoveredBlock.id}</div>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {hoveredBlock.imageUrl && <img src={hoveredBlock.imageUrl} alt="" className={styles.cardImage} />}
+                    {safeHoveredImageUrl && <img src={safeHoveredImageUrl} alt="" className={styles.cardImage} />}
                     {hoveredBlock.text && <div className={styles.cardText}>{hoveredBlock.text}</div>}
                     {hoveredBlock.url && <div className={styles.cardUrl}>{hoveredBlock.url}</div>}
                     {hoveredBlock.isForSale && <div className={styles.cardPrice}>For Sale: {hoveredBlock.price} SOL</div>}

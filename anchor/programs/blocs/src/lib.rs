@@ -50,7 +50,7 @@ pub mod blocs {
         emit!(BlockBought {
             id,
             buyer: buyer.key(),
-            price: INITIAL_PRICE,
+            price,
         });
 
         Ok(())
@@ -135,6 +135,7 @@ pub mod blocs {
             block.price = price;
         } else {
             block.is_for_sale = false; // Delist
+            block.price = 0;
         }
 
         emit!(BlockSold {

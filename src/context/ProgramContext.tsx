@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo, useRef } from "react";
 import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { BlockData } from "@/types";
@@ -9,10 +9,12 @@ import { toast } from 'sonner';
 import { Program, AnchorProvider, Idl, web3, BN } from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
-import { GRID_PUBKEY, BLOCK_PRICE_NEW, GRID_SIZE } from "@/utils/constants";
+import { GRID_PUBKEY, GRID_SIZE, getPrimaryBlockPriceSol } from "@/utils/constants";
 import { isMobile, isWalletBrowser } from "@/utils/mobile";
 import { parseColor, hexToRgb } from "@/utils/colors";
 import { WalletSelectorModal } from "@/components/modals";
+import { parseSolToLamports } from "@/utils/sol";
+import { toSafeExternalUrl } from "@/utils/url";
 
 // Program ID used for IDL type matching, though we use the instance from constants mainly
 // export const PROGRAM_ID = ... imported from constants
@@ -21,9 +23,10 @@ interface ProgramContextState {
     blocks: BlockData[];
     buyBlock: (id: number, price: number, color?: string) => Promise<void>;
     updateBlock: (id: number, text: string, imageUrl: string, url: string) => Promise<void>;
-    sellBlock: (id: number, price: number) => Promise<void>;
+    sellBlock: (id: number, priceInput: string) => Promise<void>;
     refreshBlock: () => Promise<void>;
     isLoading: boolean;
+    isSyncing: boolean;
     openWalletModal: () => void;
 }
 
@@ -39,6 +42,7 @@ interface RawBlockAccount {
 }
 
 const ProgramContext = createContext<ProgramContextState | null>(null);
+const PRICE_EPSILON_SOL = 1e-9;
 
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
@@ -47,11 +51,17 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { setVisible } = useWalletModal();
 
     const [isLoading, setIsLoading] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [blocks, setBlocks] = useState<BlockData[]>([]);
     const [gridAdmin, setGridAdmin] = useState<PublicKey | null>(null);
 
     const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
     const [walletModalUrl, setWalletModalUrl] = useState("");
+    const fetchGridInFlightRef = useRef<Promise<void> | null>(null);
+    const scheduledSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const scheduledSyncAtRef = useRef<number | null>(null);
+    const isMountedRef = useRef(true);
+    const hasLoadedOnceRef = useRef(false);
 
     const program = useMemo(() => {
         const providerWallet = wallet || {
@@ -73,6 +83,13 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         return decoder.decode(uint8).replace(/\0/g, "");
     };
 
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
 
 
 
@@ -80,104 +97,191 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const fetchGrid = useCallback(async () => {
         if (!program) return;
 
-        try {
-            setIsLoading(true);
+        if (fetchGridInFlightRef.current) {
+            await fetchGridInFlightRef.current;
+            return;
+        }
 
-            // Fetch Global Config (for Admin key)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const gridAccount = await (program.account as any).gridState.fetchNullable(GRID_PUBKEY);
-            if (gridAccount) {
-                setGridAdmin(gridAccount.admin);
-            }
+        const run = async () => {
+            const isInitialLoad = !hasLoadedOnceRef.current;
+            try {
+                if (isMountedRef.current && isInitialLoad) {
+                    setIsLoading(true);
+                }
+                if (isMountedRef.current && !isInitialLoad) {
+                    setIsSyncing(true);
+                }
 
-            // Fetch All Blocks (Lazy Init = Fetch Multiple Accounts)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const allBlocks = await (program.account as any).block.all();
+                // Fetch Global Config (for Admin key)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const gridAccount = await (program.account as any).gridState.fetchNullable(GRID_PUBKEY);
+                if (gridAccount && isMountedRef.current) {
+                    setGridAdmin(gridAccount.admin);
+                }
 
-            // Map existing blocks to a lookup map
-            const blockMap = new Map();
-             
-            allBlocks.forEach((b: { account: RawBlockAccount }) => {
-                const data = b.account;
-                const id = data.id;
+                // Fetch All Blocks (Lazy Init = Fetch Multiple Accounts)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const allBlocks = await (program.account as any).block.all();
 
-                const colorRaw = data.color ?? [];
-                const textRaw = data.text ?? [];
-                const imageUrlRaw = data.imageUrl ?? [];
-                const urlRaw = data.url ?? [];
+                // Map existing blocks to a lookup map
+                const blockMap = new Map();
+                 
+                allBlocks.forEach((b: { account: RawBlockAccount }) => {
+                    const data = b.account;
+                    const id = data.id;
 
-                blockMap.set(id, {
-                    id: id,
-                    owner: data.owner.toBase58(),
-                    price: data.price.toNumber() / web3.LAMPORTS_PER_SOL,
-                    isForSale: data.isForSale,
-                    color: parseColor(colorRaw),
-                    text: parseString(textRaw),
-                    imageUrl: parseString(imageUrlRaw),
-                    url: parseString(urlRaw),
-                    image: null
-                });
-            });
+                    const colorRaw = data.color ?? [];
+                    const textRaw = data.text ?? [];
+                    const imageUrlRaw = data.imageUrl ?? [];
+                    const urlRaw = data.url ?? [];
+                    const parsedImageUrl = toSafeExternalUrl(parseString(imageUrlRaw));
 
-            // Reconstruct full grid (0 to GRID_SIZE - 1)
-            const fullGrid: BlockData[] = [];
-            for (let i = 0; i < GRID_SIZE; i++) {
-                if (blockMap.has(i)) {
-                    fullGrid.push(blockMap.get(i));
-                } else {
-                    // Empty Block
-                    fullGrid.push({
-                        id: i,
-                        owner: null, // Unowned
-                        price: BLOCK_PRICE_NEW,
-                        isForSale: true,
-                        color: "#222222",
-                        text: "",
-                        imageUrl: "",
-                        url: "",
+                    blockMap.set(id, {
+                        id: id,
+                        owner: data.owner.toBase58(),
+                        price: data.price.toNumber() / web3.LAMPORTS_PER_SOL,
+                        isForSale: data.isForSale,
+                        color: parseColor(colorRaw),
+                        text: parseString(textRaw),
+                        imageUrl: parsedImageUrl || "",
+                        url: parseString(urlRaw),
                         image: null
                     });
+                });
+
+                // Reconstruct full grid (0 to GRID_SIZE - 1)
+                const fullGrid: BlockData[] = [];
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    if (blockMap.has(i)) {
+                        fullGrid.push(blockMap.get(i));
+                    } else {
+                        // Empty Block
+                        fullGrid.push({
+                            id: i,
+                            owner: null, // Unowned
+                            price: getPrimaryBlockPriceSol(i),
+                            isForSale: true,
+                            color: "#222222",
+                            text: "",
+                            imageUrl: "",
+                            url: "",
+                            image: null
+                        });
+                    }
+                }
+
+                if (isMountedRef.current) {
+                    setBlocks(fullGrid);
+                }
+                hasLoadedOnceRef.current = true;
+            } catch (err) {
+                console.error("Failed to fetch grid:", err);
+                if (isMountedRef.current) {
+                    toast.error("Failed to fetch grid: " + ((err as Error).message || "Unknown error"));
+                }
+                throw err; // Re-throw so fetchGridWithTimeout can catch it if needed, or just let it bubble
+            } finally {
+                if (isMountedRef.current && isInitialLoad) {
+                    setIsLoading(false);
+                }
+                if (isMountedRef.current && !isInitialLoad) {
+                    setIsSyncing(false);
                 }
             }
+        };
 
-            setBlocks(fullGrid);
-        } catch (err) {
-            console.error("Failed to fetch grid:", err);
-            toast.error("Failed to fetch grid: " + ((err as Error).message || "Unknown error"));
-            throw err; // Re-throw so fetchGridWithTimeout can catch it if needed, or just let it bubble
+        const runPromise = run();
+        fetchGridInFlightRef.current = runPromise;
+
+        try {
+            await runPromise;
         } finally {
-            setIsLoading(false);
+            fetchGridInFlightRef.current = null;
         }
     }, [program]);
 
+    const queueGridSync = useCallback((delayMs = 500) => {
+        const boundedDelay = Math.max(delayMs, 0);
+        const now = Date.now();
+        const nextRunAt = now + boundedDelay;
+        const existingRunAt = scheduledSyncAtRef.current;
+
+        if (
+            scheduledSyncRef.current !== null &&
+            existingRunAt !== null &&
+            existingRunAt <= nextRunAt
+        ) {
+            return;
+        }
+
+        if (scheduledSyncRef.current !== null) {
+            clearTimeout(scheduledSyncRef.current);
+        }
+
+        scheduledSyncAtRef.current = nextRunAt;
+        scheduledSyncRef.current = setTimeout(() => {
+            scheduledSyncRef.current = null;
+            scheduledSyncAtRef.current = null;
+            void fetchGrid();
+        }, boundedDelay);
+    }, [fetchGrid]);
+
     const fetchGridWithTimeout = useCallback(async () => {
-        const timeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("RPC Timeout")), 15000)
-        );
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const timeout = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error("RPC Timeout")), 15000);
+        });
 
         try {
             await Promise.race([fetchGrid(), timeout]);
         } catch (err) {
             console.error("Grid Load Timeout/Error:", err);
-            toast.error("Failed to load grid. Network congested.");
-            setIsLoading(false); // Force stop loading
+            if (isMountedRef.current) {
+                toast.error("Failed to load grid. Network congested.");
+                if (!hasLoadedOnceRef.current) {
+                    setIsLoading(false); // Force stop loading on first load
+                } else {
+                    setIsSyncing(false);
+                }
+            }
+        } finally {
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+            }
         }
     }, [fetchGrid]);
 
     useEffect(() => {
         if (!program) return;
 
-        fetchGridWithTimeout();
+        void fetchGridWithTimeout();
 
         // --- REAL-TIME UPDATES ---
-        let listenerId: number;
+        let disposed = false;
+        const listenerIds: number[] = [];
+
+        const registerListener = async (
+            eventName: "BlockBought" | "BlockSold" | "BlockResold",
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            handler: (event: any) => void
+        ) => {
+            try {
+                const listenerId = await program.addEventListener(eventName, handler);
+                if (disposed) {
+                    await program.removeEventListener(listenerId);
+                    return;
+                }
+                listenerIds.push(listenerId);
+            } catch (error) {
+                console.error(`Failed to subscribe to ${eventName}:`, error);
+            }
+        };
 
         const setupListener = async () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            listenerId = program.addEventListener("BlockBought", (event: any) => {
+            await registerListener("BlockBought", (event: any) => {
                 const id = event.id;
                 const buyer = event.buyer.toBase58();
-                // const price = event.price.toNumber() / web3.LAMPORTS_PER_SOL; // Unused for now
 
                 setBlocks(prev => prev.map(b => b.id === id ? {
                     ...b,
@@ -186,22 +290,58 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                     isForSale: false,
                 } : b));
                 toast.info(`Block #${id} was just bought!`);
+                queueGridSync(200);
             });
-            
-            // We can add more listeners for Updated/Sold/Resold similarly
-            // program.addEventListener("BlockUpdated", ...)
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await registerListener("BlockSold", (event: any) => {
+                const id = event.id;
+                const isForSale = Boolean(event.isForSale ?? event.is_for_sale);
+                const priceLamports = typeof event.price?.toNumber === "function"
+                    ? event.price.toNumber()
+                    : Number(event.price || 0);
+                const priceSol = isForSale ? priceLamports / web3.LAMPORTS_PER_SOL : 0;
+
+                setBlocks(prev => prev.map(b => b.id === id ? {
+                    ...b,
+                    isForSale,
+                    price: priceSol,
+                } : b));
+                queueGridSync(200);
+            });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await registerListener("BlockResold", (event: any) => {
+                const id = event.id;
+                const buyer = event.buyer.toBase58();
+
+                setBlocks(prev => prev.map(b => b.id === id ? {
+                    ...b,
+                    owner: buyer,
+                    price: 0,
+                    isForSale: false,
+                } : b));
+                toast.info(`Block #${id} was resold.`);
+                queueGridSync(200);
+            });
         };
 
-        setupListener();
+        void setupListener();
 
         return () => {
-            if (listenerId !== undefined) {
-                program.removeEventListener(listenerId);
+            disposed = true;
+            for (const listenerId of listenerIds) {
+                void program.removeEventListener(listenerId);
+            }
+            if (scheduledSyncRef.current !== null) {
+                clearTimeout(scheduledSyncRef.current);
+                scheduledSyncRef.current = null;
+                scheduledSyncAtRef.current = null;
             }
         };
-    }, [program, fetchGridWithTimeout]);
+    }, [program, fetchGridWithTimeout, queueGridSync]);
 
-    const buyBlock = async (id: number, price: number, color: string = "#9945FF") => {
+    const buyBlock = useCallback(async (id: number, price: number, color: string = "#9945FF") => {
 
         if (!connected || !publicKey) {
             toast.error("Connect wallet first");
@@ -211,13 +351,28 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         const toastId = toast.loading("Buying block...");
         try {
             const gridPubkey = GRID_PUBKEY;
-            console.log("Buying from Grid:", gridPubkey.toBase58());
 
             const rgb = hexToRgb(color);
 
             // Determine if New or Resale
             const targetBlock = blocks.find(b => b.id === id);
-            const isResale = targetBlock && targetBlock.owner !== null;
+            if (!targetBlock) {
+                await fetchGrid();
+                throw new Error("Block data unavailable. Please retry.");
+            }
+
+            const isResale = targetBlock.owner !== null;
+            if (isResale && (!targetBlock.isForSale || !targetBlock.price || targetBlock.price <= 0)) {
+                toast.error("This block is no longer for sale.");
+                await fetchGrid();
+                throw new Error("Block is not for sale");
+            }
+
+            if (isResale && Math.abs((targetBlock.price || 0) - price) > PRICE_EPSILON_SOL) {
+                toast.error("Price changed. Grid refreshed.");
+                await fetchGrid();
+                throw new Error("Price changed");
+            }
 
             // Derive Block PDA
             const [blockPda] = PublicKey.findProgramAddressSync(
@@ -232,7 +387,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
             if (isResale) {
                 // SECONDARY SALE (buy_resale)
-                const sellerPubkey = new PublicKey(targetBlock!.owner!);
+                const sellerPubkey = new PublicKey(targetBlock.owner!);
                 let adminKey = gridAdmin;
 
                 // Fallback for admin key if not loaded
@@ -292,8 +447,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 maxRetries: 3
             });
 
-            console.log("Transaction sent:", signature);
-
             // Optimistic Update
             // const previousBlocks = [...blocks]; // (Unused)
             setBlocks(prev => prev.map(b => b.id === id ? {
@@ -311,14 +464,14 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             }, "confirmed");
 
             toast.success("Block purchased!", { id: toastId });
-            fetchGrid(); // Eventual consistency
+            queueGridSync(); // Eventual consistency
         } catch (error) {
             console.error("Purchase Error:", error);
             // Revert Optimistic Update (if needed, but we used setBlocks callback, so we might need to restore)
             // Since we don't have the explicit previous state easily accessible in the catch block without capturing it before
             // We can just re-fetch grid to ensure correctness or rely on the previousBlocks capture if we used it.
             // Simplified: Just re-fetch grid on error to sync.
-            fetchGrid();
+            queueGridSync(0);
 
             // Handle User Rejection (Phantom, Solflare, etc)
             const err = error as { message?: string, name?: string, logs?: string[] };
@@ -350,7 +503,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
             throw error;
         }
-    };
+    }, [connected, publicKey, blocks, gridAdmin, program, connection, sendTransaction, fetchGrid, queueGridSync]);
 
     const updateBlock = async (id: number, text: string, imageUrl: string, url: string) => {
         if (!connected || !wallet) {
@@ -358,8 +511,24 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             throw new Error("Wallet not connected");
         }
 
+        const safeImageUrl = imageUrl.trim() ? toSafeExternalUrl(imageUrl) : "";
+        const safeUrl = url.trim() ? toSafeExternalUrl(url) : "";
+
+        if (imageUrl.trim() && !safeImageUrl) {
+            toast.error("Invalid image URL.");
+            throw new Error("Invalid image URL");
+        }
+
+        if (url.trim() && !safeUrl) {
+            toast.error("Invalid link URL.");
+            throw new Error("Invalid link URL");
+        }
+
+        const normalizedImageUrl = safeImageUrl || "";
+        const normalizedUrl = safeUrl || "";
+
         // Content Moderation
-        if (!isContentAllowed(text, imageUrl)) {
+        if (!isContentAllowed(text, normalizedImageUrl)) {
             toast.error("Content not allowed.");
             return;
         }
@@ -375,7 +544,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 program.programId
             );
 
-            const tx = await program.methods.updateBlock(id, text, imageUrl, url)
+            const tx = await program.methods.updateBlock(id, text, normalizedImageUrl, normalizedUrl)
                 .accounts({
                     block: blockPda,
                     owner: wallet.publicKey,
@@ -386,29 +555,33 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             setBlocks(prev => prev.map(b => b.id === id ? {
                 ...b,
                 text,
-                imageUrl,
-                url
+                imageUrl: normalizedImageUrl,
+                url: normalizedUrl
             } : b));
 
             await connection.confirmTransaction(tx, "confirmed");
             toast.success("Block updated!", { id: toastId });
-            fetchGrid();
+            queueGridSync();
         } catch (error) {
             console.error(error);
-            fetchGrid(); // Revert/Sync on error
+            queueGridSync(0); // Revert/Sync on error
             toast.error("Update failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
     };
 
-    const sellBlock = async (id: number, price: number) => {
+    const sellBlock = async (id: number, priceInput: string) => {
         if (!connected || !wallet) {
             toast.error("Connect wallet first");
             throw new Error("Wallet not connected");
         }
         const toastId = toast.loading("Listing block...");
         try {
-            const lamports = new BN(price * web3.LAMPORTS_PER_SOL);
+            const lamportsBigInt = parseSolToLamports(priceInput);
+            const lamports = new BN(lamportsBigInt.toString());
+            const normalizedPrice = lamportsBigInt === BigInt(0)
+                ? 0
+                : Number(lamportsBigInt) / web3.LAMPORTS_PER_SOL;
 
             // Derive Block PDA
             const [blockPda] = PublicKey.findProgramAddressSync(
@@ -429,16 +602,16 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             // Optimistic Update
             setBlocks(prev => prev.map(b => b.id === id ? {
                 ...b,
-                price: price,
-                isForSale: price > 0
+                price: normalizedPrice,
+                isForSale: normalizedPrice > 0
             } : b));
 
             await connection.confirmTransaction(tx, "confirmed");
             toast.success("Block listed for sale!", { id: toastId });
-            fetchGrid();
+            queueGridSync();
         } catch (error) {
             console.error(error);
-            fetchGrid(); // Revert/Sync on error
+            queueGridSync(0); // Revert/Sync on error
             toast.error("Listing failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
@@ -458,7 +631,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <ProgramContext.Provider value={{ blocks, buyBlock, updateBlock, sellBlock, refreshBlock, isLoading, openWalletModal }}>
+        <ProgramContext.Provider value={{ blocks, buyBlock, updateBlock, sellBlock, refreshBlock, isLoading, isSyncing, openWalletModal }}>
             {children}
             <WalletSelectorModal
                 isOpen={isWalletModalOpen}

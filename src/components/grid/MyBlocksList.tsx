@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BlockData } from '@/types';
 import styles from './MyBlocksList.module.css';
+import { toSafeExternalUrl } from '@/utils/url';
 
 interface MyBlocksListProps {
     blocks: BlockData[];
@@ -23,7 +24,9 @@ export const MyBlocksList: React.FC<MyBlocksListProps> = ({ blocks, onSelectBloc
 
             {isOpen && (
                 <div className={styles.list}>
-                    {blocks.map(block => (
+                    {blocks.map(block => {
+                        const safeImageUrl = toSafeExternalUrl(block.imageUrl);
+                        return (
                         <div
                             key={block.id}
                             className={styles.item}
@@ -32,9 +35,9 @@ export const MyBlocksList: React.FC<MyBlocksListProps> = ({ blocks, onSelectBloc
                                 // Optional: setIsOpen(false); // Keep open for multi-manage?
                             }}
                         >
-                            {block.imageUrl ? (
+                            {safeImageUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={block.imageUrl} alt="" className={styles.thumbnail} />
+                                <img src={safeImageUrl} alt="" className={styles.thumbnail} />
                             ) : (
                                 <div className={styles.placeholder} style={{ backgroundColor: block.color || '#333' }} />
                             )}
@@ -43,7 +46,8 @@ export const MyBlocksList: React.FC<MyBlocksListProps> = ({ blocks, onSelectBloc
                                 {block.isForSale && <span className={styles.price}>{block.price} SOL</span>}
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>

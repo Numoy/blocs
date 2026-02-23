@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import debounce from 'lodash/debounce';
 
 export interface VisibleBounds {
@@ -59,6 +59,12 @@ export const useGridVisibility = ({ canvasRes, margin }: UseGridVisibilityProps)
     // Re-create debounced function only if updateVisibility changes (which depends on props)
     // This is safe.
     const debouncedUpdate = useMemo(() => debounce(updateVisibility, 100), [updateVisibility]);
+
+    useEffect(() => {
+        return () => {
+            debouncedUpdate.cancel();
+        };
+    }, [debouncedUpdate]);
 
     return {
         visibleBounds,

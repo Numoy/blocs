@@ -7,6 +7,16 @@ import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/context/ProgramContext';
 import { SidebarInput } from './SidebarInput';
 import { toast } from 'sonner';
+import { buildUploadAuthMessage } from '@/utils/uploadAuth';
+import { toSafeExternalUrl } from '@/utils/url';
+import { fitsUtf8Bytes } from '@/utils/text';
+import { parseSolToLamports } from '@/utils/sol';
+import {
+    BLOCK_ACCOUNT_SIZE_BYTES,
+    BLOCK_IMAGE_URL_MAX_BYTES,
+    BLOCK_LINK_URL_MAX_BYTES,
+    BLOCK_TEXT_MAX_BYTES
+} from '@/utils/constants';
 
 interface SidebarProps {
     block: BlockData | null;
@@ -17,7 +27,7 @@ interface SidebarProps {
 
 export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: SidebarProps) => {
     const { connection } = useConnection();
-    const { publicKey } = useWallet();
+    const { publicKey, signMessage } = useWallet();
     const { updateBlock, sellBlock, openWalletModal } = useProgram();
     const [isEditing, setIsEditing] = useState(initialMode === 'edit');
     const [isBuying, setIsBuying] = useState(false);
@@ -27,8 +37,7 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
     useEffect(() => {
         const fetchRent = async () => {
             try {
-                // 376 bytes is the Block account size
-                const rent = await connection.getMinimumBalanceForRentExemption(376);
+                const rent = await connection.getMinimumBalanceForRentExemption(BLOCK_ACCOUNT_SIZE_BYTES);
                 setRentFee(rent / 1e9); // Convert lamports to SOL
             } catch (e) {
                 console.error("Failed to fetch rent", e);
@@ -54,6 +63,9 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
     }, [block]);
 
     const isOwner = publicKey && block && block.owner === publicKey.toBase58();
+    const safeBlockUrl = toSafeExternalUrl(block?.url);
+    const safeBlockImageUrl = toSafeExternalUrl(block?.imageUrl);
+    const safeEditingImageUrl = toSafeExternalUrl(imageUrl);
 
     // Effect to handle mode switching
     useEffect(() => {
@@ -80,6 +92,16 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
         const file = e.target.files?.[0];
         if (!file) return;
 
+        if (!block || !isOwner || !publicKey) {
+            toast.error("You can only upload images to blocks you own.");
+            return;
+        }
+
+        if (!signMessage) {
+            toast.error("Your wallet does not support message signing.");
+            return;
+        }
+
         if (file.size > 5 * 1024 * 1024) { // 5MB limit
             toast.error("File size too large (max 5MB)");
             return;
@@ -90,14 +112,35 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
         formData.append("file", file);
 
         try {
+            const owner = publicKey.toBase58();
+            const timestamp = Date.now();
+            const authMessage = buildUploadAuthMessage({
+                blockId: block.id,
+                owner,
+                timestamp,
+            });
+            const signatureBytes = await signMessage(new TextEncoder().encode(authMessage));
+            const signature = btoa(String.fromCharCode(...signatureBytes));
+
+            formData.append("owner", owner);
+            formData.append("blockId", String(block.id));
+            formData.append("timestamp", String(timestamp));
+            formData.append("signature", signature);
+
             const response = await fetch("/api/upload", {
                 method: "POST",
                 body: formData,
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Upload failed");
+                let errorMessage = "Upload failed";
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                } catch {
+                    // Keep generic upload error fallback when server response is not JSON.
+                }
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
@@ -116,11 +159,90 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
     };
 
     const handleSave = async () => {
-        await updateBlock(block.id, text, imageUrl, url);
-        const priceValue = price === "" ? 0 : parseFloat(price);
-        // Always call sellBlock to update price or delist (0)
-        await sellBlock(block.id, priceValue);
-        setIsEditing(false);
+        const safeUrlForSave = url.trim() ? toSafeExternalUrl(url) : "";
+        if (url.trim() && !safeUrlForSave) {
+            toast.error("Invalid URL. Only http(s) links are allowed.");
+            return;
+        }
+
+        const safeImageUrlForSave = imageUrl.trim() ? toSafeExternalUrl(imageUrl) : "";
+        if (imageUrl.trim() && !safeImageUrlForSave) {
+            toast.error("Invalid image URL. Only http(s) links are allowed.");
+            return;
+        }
+
+        if (!fitsUtf8Bytes(text, BLOCK_TEXT_MAX_BYTES)) {
+            toast.error(`Message is too long (max ${BLOCK_TEXT_MAX_BYTES} UTF-8 bytes).`);
+            return;
+        }
+
+        if (!fitsUtf8Bytes(safeImageUrlForSave || "", BLOCK_IMAGE_URL_MAX_BYTES)) {
+            toast.error(`Image URL is too long (max ${BLOCK_IMAGE_URL_MAX_BYTES} UTF-8 bytes).`);
+            return;
+        }
+
+        if (!fitsUtf8Bytes(safeUrlForSave || "", BLOCK_LINK_URL_MAX_BYTES)) {
+            toast.error(`Link URL is too long (max ${BLOCK_LINK_URL_MAX_BYTES} UTF-8 bytes).`);
+            return;
+        }
+
+        let targetPriceLamports: bigint;
+        try {
+            targetPriceLamports = parseSolToLamports(price);
+        } catch (error) {
+            toast.error((error as Error).message || "Invalid SOL amount format.");
+            return;
+        }
+
+        const currentPriceLamports = BigInt(Math.round((block.price || 0) * 1_000_000_000));
+        const currentText = block.text || "";
+        const currentImageUrl = toSafeExternalUrl(block.imageUrl) || "";
+        const currentUrl = toSafeExternalUrl(block.url) || "";
+
+        const needsContentUpdate =
+            text !== currentText ||
+            (safeImageUrlForSave || "") !== currentImageUrl ||
+            (safeUrlForSave || "") !== currentUrl;
+
+        const needsPriceUpdate =
+            targetPriceLamports !== currentPriceLamports ||
+            (targetPriceLamports > BigInt(0)) !== Boolean(block.isForSale);
+
+        if (!needsContentUpdate && !needsPriceUpdate) {
+            toast.info("No changes to save.");
+            setIsEditing(false);
+            return;
+        }
+
+        let contentUpdated = false;
+        let priceUpdated = false;
+
+        try {
+            if (needsContentUpdate) {
+                await updateBlock(block.id, text, safeImageUrlForSave || "", safeUrlForSave || "");
+                contentUpdated = true;
+            }
+            if (needsPriceUpdate) {
+                await sellBlock(block.id, price);
+                priceUpdated = true;
+            }
+            setIsEditing(false);
+        } catch {
+            if (contentUpdated || priceUpdated) {
+                const savedParts = [
+                    contentUpdated ? "content" : null,
+                    priceUpdated ? "sale settings" : null,
+                ].filter(Boolean).join(" and ");
+                const pendingParts = [
+                    !contentUpdated && needsContentUpdate ? "content" : null,
+                    !priceUpdated && needsPriceUpdate ? "sale settings" : null,
+                ].filter(Boolean).join(" and ");
+
+                toast.error(`Saved ${savedParts}, but failed to update ${pendingParts}. Please retry.`);
+                return;
+            }
+            return;
+        }
     };
 
     return (
@@ -134,11 +256,11 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                 {!isEditing ? (
                     <>
                         {/* View Mode */}
-                        {block.imageUrl && (
+                        {safeBlockImageUrl && (
                             <div className={styles.section}>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
-                                    src={block.imageUrl}
+                                    src={safeBlockImageUrl}
                                     alt={`Block ${block.id} `}
                                     style={{ width: '100%', borderRadius: '8px' }}
                                 />
@@ -162,9 +284,13 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                         {block.url && (
                             <div className={styles.section}>
                                 <span className={styles.label}>Link</span>
-                                <a href={block.url} target="_blank" rel="noopener noreferrer" className={styles.link}>
-                                    {block.url}
-                                </a>
+                                {safeBlockUrl ? (
+                                    <a href={safeBlockUrl} target="_blank" rel="noopener noreferrer" className={styles.link}>
+                                        {block.url}
+                                    </a>
+                                ) : (
+                                    <div className={styles.value}>{block.url}</div>
+                                )}
                             </div>
                         )}
 
@@ -253,7 +379,7 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                         <div className={styles.section}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                                 <span className={styles.label} style={{ marginBottom: 0 }}>Image</span>
-                                <div title="Supported formats: PNG, JPG, GIF, WEBP, SVG" style={{ cursor: 'help', display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                                <div title="Supported formats: PNG, JPG, GIF, WEBP" style={{ cursor: 'help', display: 'flex', alignItems: 'center', opacity: 0.7 }}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <circle cx="12" cy="12" r="10"></circle>
                                         <line x1="12" y1="16" x2="12" y2="12"></line>
@@ -266,19 +392,25 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                 <div style={{ marginBottom: '10px' }}>
                                     {/* Preview */}
                                     <div style={{ position: 'relative', width: '100%', marginBottom: '10px' }}>
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                            src={imageUrl}
-                                            alt="Preview"
-                                            style={{
-                                                width: '100%',
-                                                borderRadius: '8px',
-                                                maxHeight: '200px',
-                                                objectFit: 'contain',
-                                                background: '#333',
-                                                border: '1px solid #444'
-                                            }}
-                                        />
+                                        {safeEditingImageUrl ? (
+                                            <>
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img
+                                                    src={safeEditingImageUrl}
+                                                    alt="Preview"
+                                                    style={{
+                                                        width: '100%',
+                                                        borderRadius: '8px',
+                                                        maxHeight: '200px',
+                                                        objectFit: 'contain',
+                                                        background: '#333',
+                                                        border: '1px solid #444'
+                                                    }}
+                                                />
+                                            </>
+                                        ) : (
+                                            <div className={styles.value}>Invalid image URL format.</div>
+                                        )}
                                     </div>
 
                                     <button
@@ -309,7 +441,7 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                         {isUploading ? "Uploading..." : "Upload New Image"}
                                         <input
                                             type="file"
-                                            accept="image/*"
+                                            accept="image/png,image/jpeg,image/gif,image/webp"
                                             style={{ display: 'none' }}
                                             disabled={isUploading}
                                             onChange={handleFileUpload}
@@ -333,6 +465,8 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                 type="number"
                                 value={price}
                                 onChange={(e) => setPrice(e.target.value)}
+                                min="0"
+                                step="0.000000001"
                             />
                         </div>
 

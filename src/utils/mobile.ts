@@ -5,10 +5,16 @@ export const isMobile = (): boolean => {
 
 export const isWalletBrowser = (): boolean => {
     if (typeof window === 'undefined') return false;
-    // Check for common injected providers
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const win = window as any;
-    return !!(win.solana || win.backpack || win.ethereum || win.phantom);
+
+    type WalletWindow = Window & {
+        solana?: unknown;
+        backpack?: unknown;
+        ethereum?: unknown;
+        phantom?: unknown;
+    };
+
+    const win = window as WalletWindow;
+    return Boolean(win.solana || win.backpack || win.ethereum || win.phantom);
 };
 
 export interface WalletDeepLinks {
@@ -24,8 +30,8 @@ export const generateWalletDeepLinks = (currentUrl: string): WalletDeepLinks => 
     // but the standard universal link format is https://metamask.app.link/dapp/example.com
     const urlNoProtocol = currentUrl.replace(/^https?:\/\//, '');
 
-    // Using window.location.origin as ref if available, otherwise just 'https://blocs.app' (placeholder)
-    const refUrl = typeof window !== 'undefined' ? window.location.origin : 'https://10000-blocks.com';
+    // Use current origin when available; fallback to localhost for deterministic local behavior.
+    const refUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
     const encodedRef = encodeURIComponent(refUrl);
 
     return {

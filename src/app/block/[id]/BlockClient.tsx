@@ -2,13 +2,17 @@
 
 import { useProgram } from "@/context/ProgramContext";
 import { useRouter, useParams } from "next/navigation";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { GRID_SIZE } from "@/utils/constants";
+import { toSafeExternalUrl } from "@/utils/url";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 export default function BlockClient() {
     const params = useParams();
     const router = useRouter();
-    const { blocks, isLoading, buyBlock } = useProgram();
+    const { blocks, isLoading, buyBlock, openWalletModal } = useProgram();
+    const { publicKey } = useWallet();
+    const [isBuying, setIsBuying] = useState(false);
 
     // Parse ID from URL
     const id = typeof params.id === 'string' ? parseInt(params.id, 10) : -1;
@@ -44,6 +48,8 @@ export default function BlockClient() {
 
     // Find Block Data
     const block = blocks.find(b => b.id === id);
+    const safeBlockUrl = toSafeExternalUrl(block?.url);
+    const safeBlockImageUrl = toSafeExternalUrl(block?.imageUrl);
 
     if (isLoading) {
         return (
@@ -98,7 +104,7 @@ export default function BlockClient() {
                 <div style={{
                     width: '100%',
                     aspectRatio: '1/1',
-                    backgroundColor: block.imageUrl ? 'transparent' : (block.color || '#222'),
+                    backgroundColor: safeBlockImageUrl ? 'transparent' : (block.color || '#222'),
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -106,10 +112,10 @@ export default function BlockClient() {
                     overflow: 'hidden',
                     borderBottom: '1px solid rgba(255,255,255,0.05)'
                 }}>
-                    {block.imageUrl ? (
+                    {safeBlockImageUrl ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
-                            src={block.imageUrl}
+                            src={safeBlockImageUrl}
                             alt={`Block ${id}`}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
@@ -132,13 +138,13 @@ export default function BlockClient() {
                     </div>
 
                     {/* Link */}
-                    {block.url && (
+                    {block.url && safeBlockUrl && (
                         <div>
                             <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#666', marginBottom: '4px', fontWeight: '600' }}>
                                 Link
                             </div>
                             <a
-                                href={block.url.startsWith('http') ? block.url : `https://${block.url}`}
+                                href={safeBlockUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{ color: '#9945FF', textDecoration: 'none', wordBreak: 'break-all', display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -173,10 +179,27 @@ export default function BlockClient() {
 
                     {block.isForSale && (
                         <button
-                            onClick={() => buyBlock(block.id, block.price || 0)}
+                            onClick={async () => {
+                                if (!publicKey) {
+                                    openWalletModal();
+                                    return;
+                                }
+                                if (isBuying) {
+                                    return;
+                                }
+                                setIsBuying(true);
+                                try {
+                                    await buyBlock(block.id, block.price || 0);
+                                } catch {
+                                    // buyBlock already handles user-facing errors via toasts.
+                                } finally {
+                                    setIsBuying(false);
+                                }
+                            }}
                             style={primaryButtonStyle}
+                            disabled={isBuying}
                         >
-                            Buy Now
+                            {isBuying ? "Processing..." : "Buy Now"}
                         </button>
                     )}
                 </div>

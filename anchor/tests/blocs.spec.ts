@@ -1,35 +1,164 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { Blocs } from "../target/types/blocs";
 import { PublicKey, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { assert } from "chai";
+import { Blocs } from "../target/types/blocs";
+
+const INITIAL_PRICE_LAMPORTS = 10_000_000; // Must match on-chain constant.
+const RESALE_FEE_BPS = 500; // Must match on-chain constant.
+const TEXT_MAX_LEN = 64; // Must match on-chain [u8; 64].
+const GRID_SIZE = 10_000; // Must match on-chain GRID_SIZE.
+const TEST_BLOCK_ID_START = 7_000;
+const TEST_BLOCK_ID_END = 9_499;
+const EMPTY_PUBKEY = new PublicKey("11111111111111111111111111111111");
+
+interface BlockBoughtEvent {
+    id: number;
+    buyer: PublicKey | string;
+    price: anchor.BN | number;
+}
+
+interface BlockSoldEvent {
+    id: number;
+    price: anchor.BN | number;
+    isForSale?: boolean;
+    is_for_sale?: boolean;
+}
+
+interface BlockResoldEvent {
+    id: number;
+    buyer: PublicKey | string;
+    price: anchor.BN | number;
+}
+
+const decodeFixedString = (value: number[] | Uint8Array): string => {
+    return Buffer.from(value).toString("utf8").replace(/\0/g, "");
+};
+
+const toLamportsNumber = (value: unknown): number => {
+    if (typeof value === "number") {
+        return value;
+    }
+    if (typeof value === "bigint") {
+        return Number(value);
+    }
+    if (value && typeof (value as anchor.BN).toNumber === "function") {
+        return (value as anchor.BN).toNumber();
+    }
+    return Number(value ?? 0);
+};
+
+const toPublicKey = (value: PublicKey | string): PublicKey => {
+    return value instanceof PublicKey ? value : new PublicKey(value);
+};
+
+const expectAnchorError = async (operation: Promise<unknown>, includesText: string) => {
+    try {
+        await operation;
+        assert.fail(`Expected Anchor error including "${includesText}"`);
+    } catch (error) {
+        const message = (error as Error).message || String(error);
+        assert.include(message, includesText);
+    }
+};
+
+const expectAnchorErrorOneOf = async (operation: Promise<unknown>, includesText: string[]) => {
+    try {
+        await operation;
+        assert.fail(`Expected Anchor error including one of: ${includesText.join(", ")}`);
+    } catch (error) {
+        const message = (error as Error).message || String(error);
+        const matched = includesText.some(part => message.includes(part));
+        assert.isTrue(
+            matched,
+            `Expected Anchor error to include one of [${includesText.join(", ")}], but got: ${message}`,
+        );
+    }
+};
+
+const findEventInTransaction = async <T>(
+    provider: anchor.AnchorProvider,
+    program: Program<Blocs>,
+    signature: string,
+    eventName: "BlockBought" | "BlockSold" | "BlockResold",
+): Promise<T> => {
+    const tx = await provider.connection.getTransaction(signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+    });
+    assert.isNotNull(tx, `Missing transaction for signature ${signature}`);
+
+    const logs = tx?.meta?.logMessages ?? [];
+    for (const logLine of logs) {
+        const event = program.coder.events.decode(logLine);
+        if (event && event.name === eventName) {
+            return event.data as T;
+        }
+    }
+
+    assert.fail(`Event ${eventName} not found in transaction ${signature}`);
+    throw new Error(`Event ${eventName} not found in transaction ${signature}`);
+};
 
 describe("blocs", () => {
-    // Configure the client to use the local cluster.
     const provider = anchor.AnchorProvider.env();
     anchor.setProvider(provider);
 
     const program = anchor.workspace.Blocs as Program<Blocs>;
 
-    // PDAs
-    const [gridPubkey, _] = PublicKey.findProgramAddressSync(
+    const [gridPubkey] = PublicKey.findProgramAddressSync(
         [Buffer.from("grid")],
-        program.programId
+        program.programId,
     );
 
-    it("Is initialized!", async () => {
-        // Check if grid is already initialized (e.g. from previous run or deploy script)
-        // If not, we try to initialize it.
+    const user1 = anchor.web3.Keypair.generate();
+    const user2 = anchor.web3.Keypair.generate();
+    let blockId = TEST_BLOCK_ID_START;
+    let secondaryBlockId = TEST_BLOCK_ID_START + 1;
+    let blockPda = EMPTY_PUBKEY;
+    let secondaryBlockPda = EMPTY_PUBKEY;
+    const resalePriceLamports = Math.floor(0.5 * LAMPORTS_PER_SOL);
+    let primaryPriceLamports = INITIAL_PRICE_LAMPORTS + blockId;
+
+    before(async () => {
+        const freeBlocks: Array<{ id: number; pda: PublicKey }> = [];
+
+        for (let candidateId = TEST_BLOCK_ID_START; candidateId <= TEST_BLOCK_ID_END; candidateId++) {
+            const [candidatePda] = PublicKey.findProgramAddressSync(
+                [Buffer.from("block"), new anchor.BN(candidateId).toArrayLike(Buffer, "le", 4)],
+                program.programId,
+            );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const existing = await (program.account as any).block.fetchNullable(candidatePda);
+            if (!existing) {
+                freeBlocks.push({ id: candidateId, pda: candidatePda });
+                if (freeBlocks.length >= 2) {
+                    break;
+                }
+            }
+        }
+
+        if (freeBlocks.length < 2) {
+            throw new Error("No available free block IDs in configured test range.");
+        }
+
+        blockId = freeBlocks[0].id;
+        blockPda = freeBlocks[0].pda;
+        secondaryBlockId = freeBlocks[1].id;
+        secondaryBlockPda = freeBlocks[1].pda;
+        primaryPriceLamports = INITIAL_PRICE_LAMPORTS + blockId;
+    });
+
+    it("initializes grid", async () => {
         try {
             await program.account.gridState.fetch(gridPubkey);
-            console.log("Grid already initialized");
-        } catch (e) {
+        } catch {
             await program.methods.initialize()
                 .accounts({
                     grid: gridPubkey,
                     admin: provider.wallet.publicKey,
                     systemProgram: SystemProgram.programId,
-                })
+                } as any)
                 .rpc();
         }
 
@@ -37,54 +166,122 @@ describe("blocs", () => {
         assert.ok(gridAccount.admin.equals(provider.wallet.publicKey));
     });
 
-    const user1 = anchor.web3.Keypair.generate();
-    const user2 = anchor.web3.Keypair.generate();
-    const blockId = 100;
-    const blockPrice = 0.5 * LAMPORTS_PER_SOL;
+    it("funds test users", async () => {
+        const ensureFunded = async (pubkey: PublicKey) => {
+            const current = await provider.connection.getBalance(pubkey);
+            if (current >= 2 * LAMPORTS_PER_SOL) return;
 
-    const [blockPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("block"), new anchor.BN(blockId).toArrayLike(Buffer, 'le', 4)],
-        program.programId
-    );
+            const sig = await provider.connection.requestAirdrop(pubkey, 10 * LAMPORTS_PER_SOL);
+            await provider.connection.confirmTransaction(sig, "confirmed");
+        };
 
-    it("Fund users", async () => {
-        // AirDrop SOL to users
-        const tx1 = await provider.connection.requestAirdrop(user1.publicKey, 10 * LAMPORTS_PER_SOL);
-        await provider.connection.confirmTransaction(tx1);
-        const tx2 = await provider.connection.requestAirdrop(user2.publicKey, 10 * LAMPORTS_PER_SOL);
-        await provider.connection.confirmTransaction(tx2);
+        await ensureFunded(user1.publicKey);
+        await ensureFunded(user2.publicKey);
     });
 
-    it("User1 can buy a block", async () => {
-        const color = [255, 0, 0]; // Red
+    it("rejects block ids outside the grid range", async () => {
+        const invalidId = GRID_SIZE;
+        const [invalidBlockPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("block"), new anchor.BN(invalidId).toArrayLike(Buffer, "le", 4)],
+            program.programId,
+        );
 
+        await expectAnchorError(
+            program.methods.buyBlock(invalidId, [1, 2, 3])
+                .accounts({
+                    block: invalidBlockPda,
+                    grid: gridPubkey,
+                    buyer: user1.publicKey,
+                    admin: provider.wallet.publicKey,
+                    systemProgram: SystemProgram.programId,
+                } as any)
+                .signers([user1])
+                .rpc(),
+            "Invalid Block ID.",
+        );
+    });
+
+    it("rejects primary buy with an invalid admin account", async () => {
+        await expectAnchorErrorOneOf(
+            program.methods.buyBlock(secondaryBlockId, [10, 20, 30])
+                .accounts({
+                    block: secondaryBlockPda,
+                    grid: gridPubkey,
+                    buyer: user1.publicKey,
+                    admin: user2.publicKey,
+                    systemProgram: SystemProgram.programId,
+                } as any)
+                .signers([user1])
+                .rpc(),
+            ["Invalid Admin Account.", "ConstraintRaw"],
+        );
+    });
+
+    it("user1 buys a new block, emits expected event, and admin receives expected payment", async () => {
         const adminBefore = await provider.connection.getBalance(provider.wallet.publicKey);
 
-        await program.methods.buyBlock(blockId, color)
+        const signature = await program.methods.buyBlock(blockId, [255, 0, 0])
             .accounts({
                 block: blockPda,
                 grid: gridPubkey,
                 buyer: user1.publicKey,
                 admin: provider.wallet.publicKey,
                 systemProgram: SystemProgram.programId,
-            })
+            } as any)
             .signers([user1])
             .rpc();
+
+        const boughtEvent = await findEventInTransaction<BlockBoughtEvent>(
+            provider,
+            program,
+            signature,
+            "BlockBought",
+        );
+
+        assert.equal(boughtEvent.id, blockId);
+        assert.ok(toPublicKey(boughtEvent.buyer).equals(user1.publicKey));
+        assert.equal(toLamportsNumber(boughtEvent.price), primaryPriceLamports);
+
+        const adminAfter = await provider.connection.getBalance(provider.wallet.publicKey);
+        assert.equal(adminAfter - adminBefore, primaryPriceLamports);
 
         const blockAccount = await program.account.block.fetch(blockPda);
         assert.equal(blockAccount.id, blockId);
         assert.ok(blockAccount.owner.equals(user1.publicKey));
-        assert.deepEqual(blockAccount.color, color);
-        assert.ok(blockAccount.isForSale === false);
-
-        // Check Admin received funds (approximate due to rent? No, rent is paid by buyer for account creation)
-        // admin receives price.
-        // Price might be calculated on chain or fixed. 
-        // Assuming defined constant price in contract. 
-        // We should check what the price is. Usually defined in contract constants.
+        assert.deepEqual(blockAccount.color, [255, 0, 0]);
+        assert.ok(!blockAccount.isForSale);
+        assert.ok(blockAccount.price.eq(new anchor.BN(0)));
     });
 
-    it("User1 can update block", async () => {
+    it("rejects unauthorized updates", async () => {
+        await expectAnchorErrorOneOf(
+            program.methods.updateBlock(blockId, "forbidden", "", "")
+                .accounts({
+                    block: blockPda,
+                    owner: user2.publicKey,
+                } as any)
+                .signers([user2])
+                .rpc(),
+            ["You are not the owner of this block.", "ConstraintHasOne", "has one constraint was violated"],
+        );
+    });
+
+    it("rejects over-length text updates", async () => {
+        const tooLongText = "x".repeat(TEXT_MAX_LEN + 1);
+
+        await expectAnchorError(
+            program.methods.updateBlock(blockId, tooLongText, "", "")
+                .accounts({
+                    block: blockPda,
+                    owner: user1.publicKey,
+                } as any)
+                .signers([user1])
+                .rpc(),
+            "String is too long.",
+        );
+    });
+
+    it("updates block content for owner", async () => {
         const newText = "Hello Solana";
         const newUrl = "https://solana.com";
         const newImage = "https://example.com/image.png";
@@ -93,40 +290,96 @@ describe("blocs", () => {
             .accounts({
                 block: blockPda,
                 owner: user1.publicKey,
-            })
+            } as any)
             .signers([user1])
             .rpc();
 
         const blockAccount = await program.account.block.fetch(blockPda);
-        // Needed to strip null bytes if handled as byte arrays, but Anchor strings are standard
-        // If contract uses `[u8; N]`, we need to decode. Assuming String for now based on context usage in frontend.
-        // Frontend used `parseString` suggesting `[u8]` arrays. 
-        // Let's verify standard Anchor types usage in `lib.rs` later if this fails.
-        // For now, assuming they align with frontend's `TextDecoder` expectations if they are raw bytes,
-        // OR they are strings. Ideally contract uses `String`.
-        // If tests fail on type mismatch, we adjust.
+        assert.equal(decodeFixedString(blockAccount.text), newText);
+        assert.equal(decodeFixedString(blockAccount.imageUrl), newImage);
+        assert.equal(decodeFixedString(blockAccount.url), newUrl);
     });
 
-    it("User1 can sell block", async () => {
-        const salePrice = new anchor.BN(blockPrice);
+    it("lists and delists block for sale while emitting expected events", async () => {
+        const salePrice = new anchor.BN(resalePriceLamports);
+
+        const listSignature = await program.methods.sellBlock(blockId, salePrice)
+            .accounts({
+                block: blockPda,
+                owner: user1.publicKey,
+            } as any)
+            .signers([user1])
+            .rpc();
+
+        const listedEvent = await findEventInTransaction<BlockSoldEvent>(
+            provider,
+            program,
+            listSignature,
+            "BlockSold",
+        );
+        assert.equal(listedEvent.id, blockId);
+        assert.equal(toLamportsNumber(listedEvent.price), resalePriceLamports);
+        assert.equal(Boolean(listedEvent.isForSale ?? listedEvent.is_for_sale), true);
+
+        const listedBlock = await program.account.block.fetch(blockPda);
+        assert.ok(listedBlock.isForSale);
+        assert.ok(listedBlock.price.eq(salePrice));
+
+        const delistSignature = await program.methods.sellBlock(blockId, new anchor.BN(0))
+            .accounts({
+                block: blockPda,
+                owner: user1.publicKey,
+            } as any)
+            .signers([user1])
+            .rpc();
+
+        const delistedEvent = await findEventInTransaction<BlockSoldEvent>(
+            provider,
+            program,
+            delistSignature,
+            "BlockSold",
+        );
+        assert.equal(delistedEvent.id, blockId);
+        assert.equal(toLamportsNumber(delistedEvent.price), 0);
+        assert.equal(Boolean(delistedEvent.isForSale ?? delistedEvent.is_for_sale), false);
+
+        const delistedBlock = await program.account.block.fetch(blockPda);
+        assert.ok(!delistedBlock.isForSale);
+        assert.ok(delistedBlock.price.eq(new anchor.BN(0)));
+    });
+
+    it("rejects resale when block is not listed", async () => {
+        await expectAnchorError(
+            program.methods.buyResale(blockId)
+                .accounts({
+                    block: blockPda,
+                    grid: gridPubkey,
+                    buyer: user2.publicKey,
+                    seller: user1.publicKey,
+                    admin: provider.wallet.publicKey,
+                    systemProgram: SystemProgram.programId,
+                } as any)
+                .signers([user2])
+                .rpc(),
+            "This block is not for sale.",
+        );
+    });
+
+    it("executes resale, emits expected event, and splits funds correctly", async () => {
+        const salePrice = new anchor.BN(resalePriceLamports);
 
         await program.methods.sellBlock(blockId, salePrice)
             .accounts({
                 block: blockPda,
                 owner: user1.publicKey,
-            })
+            } as any)
             .signers([user1])
             .rpc();
 
-        const blockAccount = await program.account.block.fetch(blockPda);
-        assert.ok(blockAccount.isForSale);
-        assert.ok(blockAccount.price.eq(salePrice));
-    });
+        const sellerBefore = await provider.connection.getBalance(user1.publicKey);
+        const adminBefore = await provider.connection.getBalance(provider.wallet.publicKey);
 
-    it("User2 can buy resale block", async () => {
-        const user1BalanceBefore = await provider.connection.getBalance(user1.publicKey);
-
-        await program.methods.buyResale(blockId)
+        const resaleSignature = await program.methods.buyResale(blockId)
             .accounts({
                 block: blockPda,
                 grid: gridPubkey,
@@ -134,15 +387,33 @@ describe("blocs", () => {
                 seller: user1.publicKey,
                 admin: provider.wallet.publicKey,
                 systemProgram: SystemProgram.programId,
-            })
+            } as any)
             .signers([user2])
             .rpc();
+
+        const resoldEvent = await findEventInTransaction<BlockResoldEvent>(
+            provider,
+            program,
+            resaleSignature,
+            "BlockResold",
+        );
+
+        assert.equal(resoldEvent.id, blockId);
+        assert.ok(toPublicKey(resoldEvent.buyer).equals(user2.publicKey));
+        assert.equal(toLamportsNumber(resoldEvent.price), resalePriceLamports);
+
+        const sellerAfter = await provider.connection.getBalance(user1.publicKey);
+        const adminAfter = await provider.connection.getBalance(provider.wallet.publicKey);
+
+        const expectedFee = Math.floor((resalePriceLamports * RESALE_FEE_BPS) / 10_000);
+        const expectedSellerAmount = resalePriceLamports - expectedFee;
+
+        assert.equal(sellerAfter - sellerBefore, expectedSellerAmount);
+        assert.equal(adminAfter - adminBefore, expectedFee);
 
         const blockAccount = await program.account.block.fetch(blockPda);
         assert.ok(blockAccount.owner.equals(user2.publicKey));
         assert.ok(!blockAccount.isForSale);
-
-        const user1BalanceAfter = await provider.connection.getBalance(user1.publicKey);
-        assert.ok(user1BalanceAfter > user1BalanceBefore); // User1 got paid
+        assert.ok(blockAccount.price.eq(new anchor.BN(0)));
     });
 });
