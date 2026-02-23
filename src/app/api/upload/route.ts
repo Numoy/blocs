@@ -3,7 +3,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createHash, createPublicKey, randomUUID, verify } from "crypto";
 import sharp from "sharp";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { BUCKET_NAME, getPublicObjectUrl, s3Client } from "@/utils/s3";
+import { getBucketName, getPublicObjectUrl, getS3Client } from "@/utils/s3";
 import {
     BLOCK_ACCOUNT_SIZE_BYTES,
     BLOCK_OWNER_OFFSET_BYTES,
@@ -11,7 +11,6 @@ import {
     PROGRAM_ID
 } from "@/utils/constants";
 import { buildUploadAuthMessage, UPLOAD_AUTH_MAX_AGE_MS } from "@/utils/uploadAuth";
-import { env } from "@/env";
 
 export const runtime = "nodejs";
 
@@ -27,10 +26,13 @@ const RATE_LIMIT_MAX_BY_WALLET = 12;
 const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const MAX_INPUT_PIXELS = 16_777_216; // 4096x4096 upper bound
-const SOLANA_RPC_URL = env.SOLANA_RPC_URL || env.NEXT_PUBLIC_SOLANA_RPC_URL;
+const SOLANA_RPC_URL =
+    process.env.SOLANA_RPC_URL ||
+    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+    "https://api.devnet.solana.com";
 const solanaConnection = new Connection(SOLANA_RPC_URL, "confirmed");
-const UPSTASH_REDIS_REST_URL = env.UPSTASH_REDIS_REST_URL?.replace(/\/+$/, "");
-const UPSTASH_REDIS_REST_TOKEN = env.UPSTASH_REDIS_REST_TOKEN;
+const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL?.replace(/\/+$/, "");
+const UPSTASH_REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const hasSharedUploadGuards = Boolean(UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN);
 
 const rateLimitStore = globalThis.__blocsUploadRateLimitStore ?? new Map<string, { count: number; resetAt: number }>();
@@ -250,6 +252,17 @@ export async function POST(request: Request) {
     }
 
     try {
+        getBucketName();
+        getS3Client();
+    } catch (error) {
+        console.error("Upload configuration error:", error);
+        return NextResponse.json(
+            { error: "Upload service is not configured." },
+            { status: 503 }
+        );
+    }
+
+    try {
         const formData = await request.formData();
         const file = formData.get("file");
         const owner = formData.get("owner");
@@ -361,7 +374,7 @@ export async function POST(request: Request) {
         // -----------------------------
 
         const command = new PutObjectCommand({
-            Bucket: BUCKET_NAME,
+            Bucket: getBucketName(),
             Key: filename,
             Body: optimizedBuffer,
             ContentType: "image/webp",
@@ -372,7 +385,7 @@ export async function POST(request: Request) {
             },
         });
 
-        await s3Client.send(command);
+        await getS3Client().send(command);
 
         const fileUrl = getPublicObjectUrl(filename);
 

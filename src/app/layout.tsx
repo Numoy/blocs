@@ -3,7 +3,6 @@ import { Toaster } from 'sonner';
 import Script from "next/script";
 import PlausibleProvider from "next-plausible";
 import "./globals.css";
-import "./env-init";
 // import { Inter } from "next/font/google";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import { WalletContextProvider } from "@/components/providers/WalletContextProvider";
