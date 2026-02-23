@@ -7,7 +7,7 @@ import { BlockData } from "@/types";
 import { isContentAllowed } from "@/utils/moderation";
 import { toast } from 'sonner';
 import { Program, AnchorProvider, Idl, web3, BN } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
+import { Connection, PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
 import { GRID_PUBKEY, GRID_SIZE, getPrimaryBlockPriceSol } from "@/utils/constants";
 import { isMobile, isWalletBrowser } from "@/utils/mobile";
@@ -44,8 +44,38 @@ interface RawBlockAccount {
 
 const ProgramContext = createContext<ProgramContextState | null>(null);
 const PRICE_EPSILON_SOL = 1e-9;
+const GRID_READ_TIMEOUT_MS = 18_000;
+const GRID_LOAD_TIMEOUT_MS = 40_000;
+const DEVNET_RPC_ENDPOINT = "https://api.devnet.solana.com";
+const MAINNET_RPC_ENDPOINT = "https://api.mainnet-beta.solana.com";
 export type BuySource = "grid_sidebar" | "block_detail" | "unknown";
 export type WalletModalSource = "sidebar_buy" | "block_detail_buy" | "unknown";
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+
+    try {
+        return await Promise.race([promise, timeoutPromise]);
+    } finally {
+        if (timeoutId !== null) {
+            clearTimeout(timeoutId);
+        }
+    }
+}
+
+const getFallbackRpcEndpoints = (primaryEndpoint: string): string[] => {
+    const lower = primaryEndpoint.toLowerCase();
+    const sameClusterFallbacks = lower.includes("mainnet")
+        ? [MAINNET_RPC_ENDPOINT]
+        : lower.includes("devnet")
+            ? [DEVNET_RPC_ENDPOINT]
+            : [DEVNET_RPC_ENDPOINT, MAINNET_RPC_ENDPOINT];
+
+    return sameClusterFallbacks.filter((endpoint) => endpoint !== primaryEndpoint);
+};
 
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
@@ -66,25 +96,27 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const isMountedRef = useRef(true);
     const hasLoadedOnceRef = useRef(false);
 
-    const program = useMemo(() => {
-        const providerWallet = wallet || {
+    const providerWallet = useMemo(() => (
+        wallet || {
             publicKey: new PublicKey("11111111111111111111111111111111"),
             signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T): Promise<T> => tx,
             signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> => txs,
-        };
+        }
+    ), [wallet]);
 
+    const program = useMemo(() => {
         const provider = new AnchorProvider(connection, providerWallet, { preflightCommitment: "confirmed" });
         return new Program(idl as Idl, provider);
-    }, [connection, wallet]);
+    }, [connection, providerWallet]);
 
 
-    const parseString = (arr: number[]): string => {
+    const parseString = useCallback((arr: number[]): string => {
         // Use TextDecoder for browser compatibility (calls to Buffer will fail)
         const uint8 = new Uint8Array(arr);
         const decoder = new TextDecoder("utf-8");
         // Decode and strip null bytes
         return decoder.decode(uint8).replace(/\0/g, "");
-    };
+    }, []);
 
     useEffect(() => {
         isMountedRef.current = true;
@@ -98,8 +130,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
 
     const fetchGrid = useCallback(async () => {
-        if (!program) return;
-
         if (fetchGridInFlightRef.current) {
             await fetchGridInFlightRef.current;
             return;
@@ -115,74 +145,114 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                     setIsSyncing(true);
                 }
 
-                // Fetch Global Config (for Admin key)
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const gridAccount = await (program.account as any).gridState.fetchNullable(GRID_PUBKEY);
-                if (gridAccount && isMountedRef.current) {
-                    setGridAdmin(gridAccount.admin);
-                }
+                const primaryEndpoint = connection.rpcEndpoint;
+                const rpcCandidates = [primaryEndpoint, ...getFallbackRpcEndpoints(primaryEndpoint)];
+                let loadedGrid = false;
+                let lastError: unknown = null;
 
-                // Fetch All Blocks (Lazy Init = Fetch Multiple Accounts)
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const allBlocks = await (program.account as any).block.all();
+                for (const endpoint of rpcCandidates) {
+                    try {
+                        const readConnection = endpoint === primaryEndpoint
+                            ? connection
+                            : new Connection(endpoint, "confirmed");
+                        const readProvider = new AnchorProvider(readConnection, providerWallet, { preflightCommitment: "confirmed" });
+                        const readProgram = new Program(idl as Idl, readProvider);
 
-                // Map existing blocks to a lookup map
-                const blockMap = new Map();
-                 
-                allBlocks.forEach((b: { account: RawBlockAccount }) => {
-                    const data = b.account;
-                    const id = data.id;
+                        // Fetch Global Config (for Admin key)
+                        const gridAccount = await withTimeout(
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            (readProgram.account as any).gridState.fetchNullable(GRID_PUBKEY),
+                            GRID_READ_TIMEOUT_MS,
+                            `gridState fetch via ${endpoint}`,
+                        ) as { admin: PublicKey } | null;
+                        if (gridAccount && isMountedRef.current) {
+                            setGridAdmin(gridAccount.admin);
+                        }
 
-                    const colorRaw = data.color ?? [];
-                    const textRaw = data.text ?? [];
-                    const imageUrlRaw = data.imageUrl ?? [];
-                    const urlRaw = data.url ?? [];
-                    const parsedImageUrl = toSafeExternalUrl(parseString(imageUrlRaw));
+                        // Fetch All Blocks (Lazy Init = Fetch Multiple Accounts)
+                        const allBlocks = await withTimeout(
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            (readProgram.account as any).block.all(),
+                            GRID_READ_TIMEOUT_MS,
+                            `block.all via ${endpoint}`,
+                        ) as Array<{ account: RawBlockAccount }>;
 
-                    blockMap.set(id, {
-                        id: id,
-                        owner: data.owner.toBase58(),
-                        price: data.price.toNumber() / web3.LAMPORTS_PER_SOL,
-                        isForSale: data.isForSale,
-                        color: parseColor(colorRaw),
-                        text: parseString(textRaw),
-                        imageUrl: parsedImageUrl || "",
-                        url: parseString(urlRaw),
-                        image: null
-                    });
-                });
+                        const blockMap = new Map<number, BlockData>();
+                        allBlocks.forEach((b: { account: RawBlockAccount }) => {
+                            const data = b.account;
+                            const id = data.id;
 
-                // Reconstruct full grid (0 to GRID_SIZE - 1)
-                const fullGrid: BlockData[] = [];
-                for (let i = 0; i < GRID_SIZE; i++) {
-                    if (blockMap.has(i)) {
-                        fullGrid.push(blockMap.get(i));
-                    } else {
-                        // Empty Block
-                        fullGrid.push({
-                            id: i,
-                            owner: null, // Unowned
-                            price: getPrimaryBlockPriceSol(i),
-                            isForSale: true,
-                            color: "#222222",
-                            text: "",
-                            imageUrl: "",
-                            url: "",
-                            image: null
+                            const colorRaw = data.color ?? [];
+                            const textRaw = data.text ?? [];
+                            const imageUrlRaw = data.imageUrl ?? [];
+                            const urlRaw = data.url ?? [];
+                            const parsedImageUrl = toSafeExternalUrl(parseString(imageUrlRaw));
+
+                            blockMap.set(id, {
+                                id: id,
+                                owner: data.owner.toBase58(),
+                                price: data.price.toNumber() / web3.LAMPORTS_PER_SOL,
+                                isForSale: data.isForSale,
+                                color: parseColor(colorRaw),
+                                text: parseString(textRaw),
+                                imageUrl: parsedImageUrl || "",
+                                url: parseString(urlRaw),
+                                image: null
+                            });
                         });
+
+                        const fullGrid: BlockData[] = [];
+                        for (let i = 0; i < GRID_SIZE; i++) {
+                            if (blockMap.has(i)) {
+                                fullGrid.push(blockMap.get(i)!);
+                            } else {
+                                fullGrid.push({
+                                    id: i,
+                                    owner: null,
+                                    price: getPrimaryBlockPriceSol(i),
+                                    isForSale: true,
+                                    color: "#222222",
+                                    text: "",
+                                    imageUrl: "",
+                                    url: "",
+                                    image: null
+                                });
+                            }
+                        }
+
+                        if (isMountedRef.current) {
+                            setBlocks(fullGrid);
+                        }
+                        hasLoadedOnceRef.current = true;
+                        loadedGrid = true;
+
+                        if (endpoint !== primaryEndpoint) {
+                            trackPlausibleEvent("grid_fetch_fallback_endpoint_used", {
+                                primary_rpc: primaryEndpoint,
+                                fallback_rpc: endpoint,
+                                blocks_loaded: fullGrid.length,
+                            });
+                        }
+                        break;
+                    } catch (error) {
+                        lastError = error;
+                        console.error(`Failed to fetch grid using RPC ${endpoint}:`, error);
                     }
                 }
 
-                if (isMountedRef.current) {
-                    setBlocks(fullGrid);
+                if (!loadedGrid) {
+                    throw lastError || new Error("All RPC endpoints failed.");
                 }
-                hasLoadedOnceRef.current = true;
             } catch (err) {
                 console.error("Failed to fetch grid:", err);
+                trackPlausibleEvent("grid_fetch_failed", {
+                    rpc_endpoint: connection.rpcEndpoint,
+                    error_category: toErrorCategory(err),
+                });
                 if (isMountedRef.current) {
                     toast.error("Failed to fetch grid: " + ((err as Error).message || "Unknown error"));
                 }
-                throw err; // Re-throw so fetchGridWithTimeout can catch it if needed, or just let it bubble
+                throw err;
             } finally {
                 if (isMountedRef.current && isInitialLoad) {
                     setIsLoading(false);
@@ -201,7 +271,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         } finally {
             fetchGridInFlightRef.current = null;
         }
-    }, [program]);
+    }, [connection, parseString, providerWallet]);
 
     const queueGridSync = useCallback((delayMs = 500) => {
         const boundedDelay = Math.max(delayMs, 0);
@@ -232,15 +302,19 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const fetchGridWithTimeout = useCallback(async () => {
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
         const timeout = new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error("RPC Timeout")), 15000);
+            timeoutId = setTimeout(() => reject(new Error("RPC Timeout")), GRID_LOAD_TIMEOUT_MS);
         });
 
         try {
             await Promise.race([fetchGrid(), timeout]);
         } catch (err) {
             console.error("Grid Load Timeout/Error:", err);
+            trackPlausibleEvent("grid_load_timeout_or_error", {
+                rpc_endpoint: connection.rpcEndpoint,
+                error_category: toErrorCategory(err),
+            });
             if (isMountedRef.current) {
-                toast.error("Failed to load grid. Network congested.");
+                toast.error("Failed to load grid. Please check RPC endpoint or network.");
                 if (!hasLoadedOnceRef.current) {
                     setIsLoading(false); // Force stop loading on first load
                 } else {
@@ -252,7 +326,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 clearTimeout(timeoutId);
             }
         }
-    }, [fetchGrid]);
+    }, [connection.rpcEndpoint, fetchGrid]);
 
     useEffect(() => {
         if (!program) return;

@@ -5,12 +5,14 @@ import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-
+const DEFAULT_RPC_ENDPOINT = "https://api.devnet.solana.com";
 
 export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
-    // Use environment variable for RPC endpoint, fallback to Devnet
     const endpoint = useMemo(() => {
-        return process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
+        const configuredEndpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_URL?.trim();
+        return configuredEndpoint && configuredEndpoint.length > 0
+            ? configuredEndpoint
+            : DEFAULT_RPC_ENDPOINT;
     }, []);
 
 

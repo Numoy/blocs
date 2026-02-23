@@ -23,7 +23,8 @@ const assetOrigins = new Set<string>([
 assetOrigins.delete("");
 
 const analyticsOrigin = "https://analytics.marvinmaerz.com";
-const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com", analyticsOrigin];
+// Allow secure RPC backends that may be injected at build/runtime without hardcoding every provider domain.
+const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com", "https:", "wss:", analyticsOrigin];
 const imgSrc = ["'self'", "data:", "blob:", ...assetOrigins, "https:"];
 const scriptSrc = [
   "'self'",
