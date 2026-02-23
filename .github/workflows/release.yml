@@ -70,8 +70,8 @@ jobs:
             # Restart containers
             if docker compose version >/dev/null 2>&1; then
               docker compose down
-              docker compose up -d
+              docker compose up -d --no-build
             else
               docker-compose down
-              docker-compose up -d
+              docker-compose up -d --no-build
             fi
