@@ -22,16 +22,25 @@ const assetOrigins = new Set<string>([
 ]);
 assetOrigins.delete("");
 
-const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com"];
+const analyticsOrigin = "https://analytics.marvinmaerz.com";
+const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com", analyticsOrigin];
 const imgSrc = ["'self'", "data:", "blob:", ...assetOrigins, "https:"];
+const scriptSrc = [
+  "'self'",
+  "'unsafe-inline'",
+  analyticsOrigin,
+];
 const isDev = process.env.NODE_ENV !== "production";
+if (isDev) {
+  scriptSrc.push("'unsafe-eval'");
+}
 
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  isDev ? "script-src 'self' 'unsafe-eval'" : "script-src 'self'",
+  `script-src ${scriptSrc.join(" ")}`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   `img-src ${imgSrc.join(" ")}`,

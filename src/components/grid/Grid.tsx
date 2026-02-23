@@ -17,6 +17,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useSearchParams } from 'next/navigation';
 import { GRID_SIZE, GRID_WIDTH } from '@/utils/constants';
 import { toSafeExternalUrl } from '@/utils/url';
+import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
 
 export const Grid = () => {
     const { blocks, buyBlock, isLoading, isSyncing } = useProgram();
@@ -100,10 +101,20 @@ export const Grid = () => {
 
     const handleBuyBlock = useCallback(async (block: BlockData) => {
         if (!block.price) return;
+        trackPlausibleEvent("buy_flow_requested", {
+            block_id: block.id,
+            ui_source: "grid_sidebar",
+            price_sol: block.price,
+        });
         try {
-            await buyBlock(block.id, block.price);
+            await buyBlock(block.id, block.price, undefined, "grid_sidebar");
             setSuccessBlock(block);
         } catch (error) {
+            trackPlausibleEvent("buy_flow_failed", {
+                block_id: block.id,
+                ui_source: "grid_sidebar",
+                error_category: toErrorCategory(error),
+            });
             console.error("Failed to buy block:", error);
         }
     }, [buyBlock]);
@@ -227,6 +238,11 @@ export const Grid = () => {
             <MyBlocksList
                 blocks={ownedBlocks}
                 onSelectBlock={(block) => {
+                    trackPlausibleEvent("owned_block_selected", {
+                        block_id: block.id,
+                        ui_source: "my_blocks_list",
+                        is_for_sale: block.isForSale,
+                    });
                     setSelectedBlock(block);
                     setSidebarMode('edit');
                 }}

@@ -2,10 +2,11 @@
 
 import { useProgram } from "@/context/ProgramContext";
 import { useRouter, useParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GRID_SIZE } from "@/utils/constants";
 import { toSafeExternalUrl } from "@/utils/url";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
 
 export default function BlockClient() {
     const params = useParams();
@@ -13,6 +14,7 @@ export default function BlockClient() {
     const { blocks, isLoading, buyBlock, openWalletModal } = useProgram();
     const { publicKey } = useWallet();
     const [isBuying, setIsBuying] = useState(false);
+    const lastTrackedViewBlockId = useRef<number | null>(null);
 
     // Parse ID from URL
     const id = typeof params.id === 'string' ? parseInt(params.id, 10) : -1;
@@ -23,11 +25,23 @@ export default function BlockClient() {
     // Navigation
     const handlePrev = () => {
         const prevId = id > 0 ? id - 1 : GRID_SIZE - 1;
+        trackPlausibleEvent("block_navigation_clicked", {
+            from_block_id: id,
+            to_block_id: prevId,
+            direction: "prev",
+            ui_source: "block_detail",
+        });
         router.push(`/block/${prevId}`);
     };
 
     const handleNext = () => {
         const nextId = id < GRID_SIZE - 1 ? id + 1 : 0;
+        trackPlausibleEvent("block_navigation_clicked", {
+            from_block_id: id,
+            to_block_id: nextId,
+            direction: "next",
+            ui_source: "block_detail",
+        });
         router.push(`/block/${nextId}`);
     };
 
@@ -50,6 +64,26 @@ export default function BlockClient() {
     const block = blocks.find(b => b.id === id);
     const safeBlockUrl = toSafeExternalUrl(block?.url);
     const safeBlockImageUrl = toSafeExternalUrl(block?.imageUrl);
+
+    useEffect(() => {
+        if (isLoading || !block) {
+            return;
+        }
+
+        if (lastTrackedViewBlockId.current === block.id) {
+            return;
+        }
+        lastTrackedViewBlockId.current = block.id;
+
+        trackPlausibleEvent("block_detail_viewed", {
+            block_id: block.id,
+            is_for_sale: block.isForSale,
+            has_owner: Boolean(block.owner),
+            has_text: Boolean(block.text),
+            has_image: Boolean(block.imageUrl),
+            has_link: Boolean(block.url),
+        });
+    }, [isLoading, block]);
 
     if (isLoading) {
         return (
@@ -180,8 +214,14 @@ export default function BlockClient() {
                     {block.isForSale && (
                         <button
                             onClick={async () => {
+                                trackPlausibleEvent("buy_cta_clicked", {
+                                    block_id: block.id,
+                                    ui_source: "block_detail",
+                                    wallet_connected: Boolean(publicKey),
+                                    price_sol: block.price || 0,
+                                });
                                 if (!publicKey) {
-                                    openWalletModal();
+                                    openWalletModal("block_detail_buy");
                                     return;
                                 }
                                 if (isBuying) {
@@ -189,8 +229,13 @@ export default function BlockClient() {
                                 }
                                 setIsBuying(true);
                                 try {
-                                    await buyBlock(block.id, block.price || 0);
-                                } catch {
+                                    await buyBlock(block.id, block.price || 0, undefined, "block_detail");
+                                } catch (error) {
+                                    trackPlausibleEvent("buy_flow_failed", {
+                                        block_id: block.id,
+                                        ui_source: "block_detail",
+                                        error_category: toErrorCategory(error),
+                                    });
                                     // buyBlock already handles user-facing errors via toasts.
                                 } finally {
                                     setIsBuying(false);
@@ -206,7 +251,13 @@ export default function BlockClient() {
             </div>
 
             <button
-                onClick={() => router.push('/')}
+                onClick={() => {
+                    trackPlausibleEvent("close_block_detail_clicked", {
+                        block_id: block.id,
+                        ui_source: "block_detail",
+                    });
+                    router.push('/');
+                }}
                 style={{
                     marginTop: '32px',
                     background: 'transparent',

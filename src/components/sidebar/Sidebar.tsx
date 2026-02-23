@@ -11,6 +11,7 @@ import { buildUploadAuthMessage } from '@/utils/uploadAuth';
 import { toSafeExternalUrl } from '@/utils/url';
 import { fitsUtf8Bytes } from '@/utils/text';
 import { parseSolToLamports } from '@/utils/sol';
+import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
 import {
     BLOCK_ACCOUNT_SIZE_BYTES,
     BLOCK_IMAGE_URL_MAX_BYTES,
@@ -93,20 +94,38 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
         if (!file) return;
 
         if (!block || !isOwner || !publicKey) {
+            trackPlausibleEvent("upload_image_blocked", {
+                block_id: block?.id,
+                reason: "not_owner_or_wallet_missing",
+            });
             toast.error("You can only upload images to blocks you own.");
             return;
         }
 
         if (!signMessage) {
+            trackPlausibleEvent("upload_image_blocked", {
+                block_id: block.id,
+                reason: "wallet_no_sign_message",
+            });
             toast.error("Your wallet does not support message signing.");
             return;
         }
 
         if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            trackPlausibleEvent("upload_image_blocked", {
+                block_id: block.id,
+                reason: "file_too_large",
+                file_size_kb: Math.round(file.size / 1024),
+            });
             toast.error("File size too large (max 5MB)");
             return;
         }
 
+        trackPlausibleEvent("upload_image_started", {
+            block_id: block.id,
+            file_type: file.type || "unknown",
+            file_size_kb: Math.round(file.size / 1024),
+        });
         setIsUploading(true);
         const formData = new FormData();
         formData.append("file", file);
@@ -146,10 +165,21 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
             const data = await response.json();
             if (data.url) {
                 setImageUrl(data.url);
+                trackPlausibleEvent("upload_image_succeeded", {
+                    block_id: block.id,
+                    file_type: file.type || "unknown",
+                    file_size_kb: Math.round(file.size / 1024),
+                });
                 toast.success("Image uploaded!");
             }
         } catch (error) {
             console.error(error);
+            trackPlausibleEvent("upload_image_failed", {
+                block_id: block.id,
+                file_type: file.type || "unknown",
+                file_size_kb: Math.round(file.size / 1024),
+                error_category: toErrorCategory(error),
+            });
             toast.error("Upload failed: " + ((error as Error).message));
         } finally {
             setIsUploading(false);
@@ -209,11 +239,21 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
             (targetPriceLamports > BigInt(0)) !== Boolean(block.isForSale);
 
         if (!needsContentUpdate && !needsPriceUpdate) {
+            trackPlausibleEvent("save_block_skipped", {
+                block_id: block.id,
+                reason: "no_changes",
+            });
             toast.info("No changes to save.");
             setIsEditing(false);
             return;
         }
 
+        trackPlausibleEvent("save_block_started", {
+            block_id: block.id,
+            updates_content: needsContentUpdate,
+            updates_sale: needsPriceUpdate,
+            target_for_sale: targetPriceLamports > BigInt(0),
+        });
         let contentUpdated = false;
         let priceUpdated = false;
 
@@ -226,8 +266,19 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                 await sellBlock(block.id, price);
                 priceUpdated = true;
             }
+            trackPlausibleEvent("save_block_succeeded", {
+                block_id: block.id,
+                updated_content: contentUpdated,
+                updated_sale: priceUpdated,
+            });
             setIsEditing(false);
-        } catch {
+        } catch (error) {
+            trackPlausibleEvent("save_block_failed", {
+                block_id: block.id,
+                updated_content: contentUpdated,
+                updated_sale: priceUpdated,
+                error_category: toErrorCategory(error),
+            });
             if (contentUpdated || priceUpdated) {
                 const savedParts = [
                     contentUpdated ? "content" : null,
@@ -321,8 +372,14 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                 <button
                                     className={`${styles.button} ${styles.buyButton} `}
                                     onClick={async () => {
+                                        trackPlausibleEvent("buy_cta_clicked", {
+                                            block_id: block.id,
+                                            ui_source: "sidebar",
+                                            wallet_connected: Boolean(publicKey),
+                                            price_sol: block.price || 0,
+                                        });
                                         if (!publicKey) {
-                                            openWalletModal();
+                                            openWalletModal("sidebar_buy");
                                             return;
                                         }
                                         setIsBuying(true);
@@ -359,6 +416,10 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                             onClick={() => {
                                 const url = `${window.location.origin}/block/${block.id}`;
                                 navigator.clipboard.writeText(url);
+                                trackPlausibleEvent("share_block_link_clicked", {
+                                    block_id: block.id,
+                                    ui_source: "sidebar",
+                                });
                                 toast.success("Link copied to clipboard!");
                             }}
                         >

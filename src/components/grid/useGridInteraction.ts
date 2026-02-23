@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { BlockData } from '@/types';
 import { GRID_WIDTH } from '@/utils/constants';
+import { trackPlausibleEvent } from '@/utils/analytics';
 
 interface UseGridInteractionProps {
     canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -59,6 +60,12 @@ export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES }: UseGridInt
 
         const block = getBlockFromEvent(e);
         if (block) {
+            trackPlausibleEvent("grid_block_selected", {
+                block_id: block.id,
+                ui_source: "canvas_click",
+                is_for_sale: block.isForSale,
+                has_owner: Boolean(block.owner),
+            });
             setSelectedBlockId(block.id);
             setSidebarMode('view');
             setHoveredBlockId(null);
@@ -112,6 +119,15 @@ export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES }: UseGridInt
                 }
 
                 if (newId !== selectedBlockId && newId >= 0 && newId < blocks.length) {
+                    const selected = blocks[newId];
+                    if (selected) {
+                        trackPlausibleEvent("grid_block_selected", {
+                            block_id: selected.id,
+                            ui_source: "keyboard_nav",
+                            is_for_sale: selected.isForSale,
+                            has_owner: Boolean(selected.owner),
+                        });
+                    }
                     setSelectedBlockId(newId);
                     setSidebarMode('view');
                 }

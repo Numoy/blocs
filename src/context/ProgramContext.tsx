@@ -15,19 +15,20 @@ import { parseColor, hexToRgb } from "@/utils/colors";
 import { WalletSelectorModal } from "@/components/modals";
 import { parseSolToLamports } from "@/utils/sol";
 import { toSafeExternalUrl } from "@/utils/url";
+import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
 
 // Program ID used for IDL type matching, though we use the instance from constants mainly
 // export const PROGRAM_ID = ... imported from constants
 
 interface ProgramContextState {
     blocks: BlockData[];
-    buyBlock: (id: number, price: number, color?: string) => Promise<void>;
+    buyBlock: (id: number, price: number, color?: string, source?: BuySource) => Promise<void>;
     updateBlock: (id: number, text: string, imageUrl: string, url: string) => Promise<void>;
     sellBlock: (id: number, priceInput: string) => Promise<void>;
     refreshBlock: () => Promise<void>;
     isLoading: boolean;
     isSyncing: boolean;
-    openWalletModal: () => void;
+    openWalletModal: (source?: WalletModalSource) => void;
 }
 
 interface RawBlockAccount {
@@ -43,6 +44,8 @@ interface RawBlockAccount {
 
 const ProgramContext = createContext<ProgramContextState | null>(null);
 const PRICE_EPSILON_SOL = 1e-9;
+export type BuySource = "grid_sidebar" | "block_detail" | "unknown";
+export type WalletModalSource = "sidebar_buy" | "block_detail_buy" | "unknown";
 
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
@@ -341,14 +344,25 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         };
     }, [program, fetchGridWithTimeout, queueGridSync]);
 
-    const buyBlock = useCallback(async (id: number, price: number, color: string = "#9945FF") => {
+    const buyBlock = useCallback(async (
+        id: number,
+        price: number,
+        color: string = "#9945FF",
+        source: BuySource = "unknown"
+    ) => {
 
         if (!connected || !publicKey) {
+            trackPlausibleEvent("buy_block_wallet_missing", {
+                block_id: id,
+                ui_source: source,
+            });
             toast.error("Connect wallet first");
             throw new Error("Wallet not connected");
         }
 
         const toastId = toast.loading("Buying block...");
+        let saleType: "primary" | "resale" | "unknown" = "unknown";
+
         try {
             const gridPubkey = GRID_PUBKEY;
 
@@ -362,6 +376,14 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const isResale = targetBlock.owner !== null;
+            saleType = isResale ? "resale" : "primary";
+            trackPlausibleEvent("buy_block_started", {
+                block_id: id,
+                sale_type: saleType,
+                ui_source: source,
+                price_sol: price,
+            });
+
             if (isResale && (!targetBlock.isForSale || !targetBlock.price || targetBlock.price <= 0)) {
                 toast.error("This block is no longer for sale.");
                 await fetchGrid();
@@ -447,11 +469,17 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 maxRetries: 3
             });
 
+            trackPlausibleEvent("buy_block_submitted", {
+                block_id: id,
+                sale_type: saleType,
+                ui_source: source,
+                tx_signature: signature,
+            });
+
             // Optimistic Update
-            // const previousBlocks = [...blocks]; // (Unused)
             setBlocks(prev => prev.map(b => b.id === id ? {
                 ...b,
-                owner: publicKey!.toBase58(),
+                owner: publicKey.toBase58(),
                 price: 0,
                 isForSale: false,
                 color: color
@@ -463,14 +491,16 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 signature
             }, "confirmed");
 
+            trackPlausibleEvent("buy_block_succeeded", {
+                block_id: id,
+                sale_type: saleType,
+                ui_source: source,
+                price_sol: price,
+            });
             toast.success("Block purchased!", { id: toastId });
             queueGridSync(); // Eventual consistency
         } catch (error) {
             console.error("Purchase Error:", error);
-            // Revert Optimistic Update (if needed, but we used setBlocks callback, so we might need to restore)
-            // Since we don't have the explicit previous state easily accessible in the catch block without capturing it before
-            // We can just re-fetch grid to ensure correctness or rely on the previousBlocks capture if we used it.
-            // Simplified: Just re-fetch grid on error to sync.
             queueGridSync(0);
 
             // Handle User Rejection (Phantom, Solflare, etc)
@@ -483,10 +513,14 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 msg.includes("cancelled") ||
                 err.name === "WalletSignTransactionError"
             ) {
+                trackPlausibleEvent("buy_block_cancelled", {
+                    block_id: id,
+                    sale_type: saleType,
+                    ui_source: source,
+                });
                 toast.info("Transaction cancelled", { id: toastId });
                 throw new Error("User cancelled");
             }
-
 
             // detailed logs
             if (err.logs) {
@@ -497,9 +531,20 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 toast.dismiss(toastId);
                 setWalletModalUrl(window.location.href);
                 setIsWalletModalOpen(true);
+                trackPlausibleEvent("wallet_modal_opened", {
+                    source,
+                    is_mobile: true,
+                    is_wallet_browser: false,
+                });
                 throw error;
             }
 
+            trackPlausibleEvent("buy_block_failed", {
+                block_id: id,
+                sale_type: saleType,
+                ui_source: source,
+                error_category: toErrorCategory(error),
+            });
             toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
             throw error;
         }
@@ -507,6 +552,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
     const updateBlock = async (id: number, text: string, imageUrl: string, url: string) => {
         if (!connected || !wallet) {
+            trackPlausibleEvent("update_block_wallet_missing", { block_id: id });
             toast.error("Connect wallet first");
             throw new Error("Wallet not connected");
         }
@@ -515,11 +561,19 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         const safeUrl = url.trim() ? toSafeExternalUrl(url) : "";
 
         if (imageUrl.trim() && !safeImageUrl) {
+            trackPlausibleEvent("update_block_failed", {
+                block_id: id,
+                error_category: "invalid_image_url",
+            });
             toast.error("Invalid image URL.");
             throw new Error("Invalid image URL");
         }
 
         if (url.trim() && !safeUrl) {
+            trackPlausibleEvent("update_block_failed", {
+                block_id: id,
+                error_category: "invalid_link_url",
+            });
             toast.error("Invalid link URL.");
             throw new Error("Invalid link URL");
         }
@@ -529,10 +583,20 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
         // Content Moderation
         if (!isContentAllowed(text, normalizedImageUrl)) {
+            trackPlausibleEvent("update_block_blocked", {
+                block_id: id,
+                reason: "content_not_allowed",
+            });
             toast.error("Content not allowed.");
             return;
         }
 
+        trackPlausibleEvent("update_block_started", {
+            block_id: id,
+            has_text: Boolean(text.trim()),
+            has_image: Boolean(normalizedImageUrl),
+            has_link: Boolean(normalizedUrl),
+        });
         const toastId = toast.loading("Updating block...");
         try {
             // Derive Block PDA
@@ -560,11 +624,21 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             } : b));
 
             await connection.confirmTransaction(tx, "confirmed");
+            trackPlausibleEvent("update_block_succeeded", {
+                block_id: id,
+                has_text: Boolean(text.trim()),
+                has_image: Boolean(normalizedImageUrl),
+                has_link: Boolean(normalizedUrl),
+            });
             toast.success("Block updated!", { id: toastId });
             queueGridSync();
         } catch (error) {
             console.error(error);
             queueGridSync(0); // Revert/Sync on error
+            trackPlausibleEvent("update_block_failed", {
+                block_id: id,
+                error_category: toErrorCategory(error),
+            });
             toast.error("Update failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
@@ -572,16 +646,25 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
     const sellBlock = async (id: number, priceInput: string) => {
         if (!connected || !wallet) {
+            trackPlausibleEvent("set_sale_wallet_missing", { block_id: id });
             toast.error("Connect wallet first");
             throw new Error("Wallet not connected");
         }
+        let normalizedPrice = 0;
+        let saleAction: "list" | "delist" = "list";
         const toastId = toast.loading("Listing block...");
         try {
             const lamportsBigInt = parseSolToLamports(priceInput);
             const lamports = new BN(lamportsBigInt.toString());
-            const normalizedPrice = lamportsBigInt === BigInt(0)
+            normalizedPrice = lamportsBigInt === BigInt(0)
                 ? 0
                 : Number(lamportsBigInt) / web3.LAMPORTS_PER_SOL;
+            saleAction = normalizedPrice > 0 ? "list" : "delist";
+            trackPlausibleEvent("set_sale_started", {
+                block_id: id,
+                action: saleAction,
+                price_sol: normalizedPrice,
+            });
 
             // Derive Block PDA
             const [blockPda] = PublicKey.findProgramAddressSync(
@@ -607,11 +690,22 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             } : b));
 
             await connection.confirmTransaction(tx, "confirmed");
-            toast.success("Block listed for sale!", { id: toastId });
+            trackPlausibleEvent("set_sale_succeeded", {
+                block_id: id,
+                action: saleAction,
+                price_sol: normalizedPrice,
+            });
+            toast.success(saleAction === "list" ? "Block listed for sale!" : "Block removed from sale.", { id: toastId });
             queueGridSync();
         } catch (error) {
             console.error(error);
             queueGridSync(0); // Revert/Sync on error
+            trackPlausibleEvent("set_sale_failed", {
+                block_id: id,
+                action: saleAction,
+                price_sol: normalizedPrice,
+                error_category: toErrorCategory(error),
+            });
             toast.error("Listing failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
@@ -621,7 +715,12 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         await fetchGrid();
     };
 
-    const openWalletModal = () => {
+    const openWalletModal = (source: WalletModalSource = "unknown") => {
+        trackPlausibleEvent("wallet_modal_opened", {
+            source,
+            is_mobile: isMobile(),
+            is_wallet_browser: isWalletBrowser(),
+        });
         if (isMobile() && !isWalletBrowser()) {
             setWalletModalUrl(window.location.href);
             setIsWalletModalOpen(true);
