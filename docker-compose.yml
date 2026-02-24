@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   blocs:
     container_name: blocs
