@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-deploy:
@@ -20,6 +19,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Normalize image repository name
+        id: image_repo
+        run: |
+          set -euo pipefail
+          repo="$(printf '%s' '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "value=${repo}" >> "$GITHUB_OUTPUT"
 
       - name: Validate deployment configuration
         id: validate_config
@@ -127,7 +133,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ steps.image_repo.outputs.value }}
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest
@@ -158,7 +164,7 @@ jobs:
           HETZNER_PUBLIC_BASE_URL: ${{ vars.HETZNER_PUBLIC_BASE_URL || secrets.HETZNER_PUBLIC_BASE_URL }}
           UPSTASH_REDIS_REST_URL: ${{ vars.UPSTASH_REDIS_REST_URL || secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-          BLOCS_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build_image.outputs.digest }}
+          BLOCS_IMAGE: ${{ env.REGISTRY }}/${{ steps.image_repo.outputs.value }}@${{ steps.build_image.outputs.digest }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: root
