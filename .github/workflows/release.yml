@@ -59,7 +59,7 @@ jobs:
               undefined|null|false|true|nan|none) return 1 ;;
             esac
 
-            if [[ "$raw" == *'${{'* ]]; then
+            if printf '%s' "$raw" | grep -Fq '$''{{'; then
               return 1
             fi
 
