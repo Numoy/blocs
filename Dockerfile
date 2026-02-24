@@ -4,10 +4,11 @@ FROM node:24-alpine AS base
 FROM base AS deps
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
+ENV HUSKY=0
 
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
 # Rebuild the source code only when needed
 FROM base AS builder

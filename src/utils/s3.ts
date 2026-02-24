@@ -12,20 +12,87 @@ type S3RuntimeConfig = {
 let cachedConfig: S3RuntimeConfig | null = null;
 let cachedClient: S3Client | null = null;
 
+const INVALID_LITERAL_VALUES = new Set([
+    "undefined",
+    "null",
+    "false",
+    "true",
+    "nan",
+    "none",
+]);
+
+const stripWrappingQuotes = (value: string): string => {
+    const trimmed = value.trim();
+    if (trimmed.length < 2) {
+        return trimmed;
+    }
+
+    const first = trimmed[0];
+    const last = trimmed[trimmed.length - 1];
+    if ((first === "'" && last === "'") || (first === "\"" && last === "\"") || (first === "`" && last === "`")) {
+        return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+};
+
+const getNormalizedEnv = (name: string): string | null => {
+    const rawValue = process.env[name];
+    if (!rawValue) {
+        return null;
+    }
+
+    const value = stripWrappingQuotes(rawValue);
+    if (!value) {
+        return null;
+    }
+
+    const lowerValue = value.toLowerCase();
+    if (INVALID_LITERAL_VALUES.has(lowerValue) || value.includes("${{")) {
+        return null;
+    }
+
+    return value;
+};
+
 const getRequiredEnv = (name: string): string => {
-    const value = process.env[name];
+    const value = getNormalizedEnv(name);
     if (!value) {
         throw new Error(`Missing required environment variable: ${name}`);
     }
     return value;
 };
 
+const normalizeHttpUrl = (rawValue: string, envName: string): string => {
+    let candidate = rawValue.trim();
+
+    if (candidate.startsWith("//")) {
+        candidate = `https:${candidate}`;
+    } else if (!/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(candidate)) {
+        candidate = `https://${candidate}`;
+    }
+
+    try {
+        const parsed = new URL(candidate);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            throw new Error(`Invalid protocol for ${envName}.`);
+        }
+        return parsed.toString();
+    } catch {
+        throw new Error(`Invalid URL in environment variable: ${envName}`);
+    }
+};
+
 const resolveS3Config = (): S3RuntimeConfig => {
-    const region = process.env.HETZNER_REGION || "fsn1";
-    const endpoint = process.env.HETZNER_ENDPOINT || `https://${region}.your-objectstorage.com`;
+    const region = getNormalizedEnv("HETZNER_REGION") || "fsn1";
+    const endpoint = normalizeHttpUrl(
+        getNormalizedEnv("HETZNER_ENDPOINT") || `https://${region}.your-objectstorage.com`,
+        "HETZNER_ENDPOINT",
+    );
     const bucketName = getRequiredEnv("HETZNER_BUCKET_NAME");
-    const publicBaseUrl = (process.env.HETZNER_PUBLIC_BASE_URL || `${endpoint.replace(/\/+$/, "")}/${bucketName}`)
-        .replace(/\/+$/, "");
+    const publicBaseUrl = normalizeHttpUrl(
+        getNormalizedEnv("HETZNER_PUBLIC_BASE_URL") || `${endpoint.replace(/\/+$/, "")}/${bucketName}`,
+        "HETZNER_PUBLIC_BASE_URL",
+    ).replace(/\/+$/, "");
 
     return {
         accessKeyId: getRequiredEnv("HETZNER_ACCESS_KEY_ID"),

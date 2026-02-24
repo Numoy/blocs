@@ -49,6 +49,12 @@ The smart contract is deployed on Solana Devnet (and Mainnet soon). You can veri
 -   `HETZNER_*` object storage credentials/settings
 -   `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (optional shared upload guards for multi-instance deploys)
 
+    RPC values must be valid HTTP(S) URLs (for example `https://api.devnet.solana.com`).
+    After deployment, verify runtime configuration with:
+    ```bash
+    curl -sS https://10000-blocks.com/api/health
+    ```
+
 2.  **Smart Contract**:
     ```bash
     cd anchor

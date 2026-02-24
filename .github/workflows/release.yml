@@ -21,6 +21,101 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate deployment configuration
+        id: validate_config
+        env:
+          RAW_NEXT_PUBLIC_SOLANA_RPC_URL: ${{ vars.NEXT_PUBLIC_SOLANA_RPC_URL || secrets.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com' }}
+          RAW_SOLANA_RPC_URL: ${{ vars.SOLANA_RPC_URL || secrets.SOLANA_RPC_URL }}
+          HETZNER_ACCESS_KEY_ID: ${{ secrets.HETZNER_ACCESS_KEY_ID }}
+          HETZNER_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_SECRET_ACCESS_KEY }}
+          HETZNER_BUCKET_NAME: ${{ secrets.HETZNER_BUCKET_NAME }}
+          RAW_HETZNER_ENDPOINT: ${{ vars.HETZNER_ENDPOINT || secrets.HETZNER_ENDPOINT }}
+          RAW_HETZNER_PUBLIC_BASE_URL: ${{ vars.HETZNER_PUBLIC_BASE_URL || secrets.HETZNER_PUBLIC_BASE_URL }}
+        run: |
+          set -euo pipefail
+
+          normalize_url() {
+            local raw="${1:-}"
+            raw="$(printf '%s' "$raw" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+            if [ -z "$raw" ]; then
+              return 1
+            fi
+
+            if [ "${raw:0:1}" = "'" ] && [ "${raw: -1}" = "'" ]; then
+              raw="${raw:1:${#raw}-2}"
+            elif [ "${raw:0:1}" = "\"" ] && [ "${raw: -1}" = "\"" ]; then
+              raw="${raw:1:${#raw}-2}"
+            fi
+
+            raw="$(printf '%s' "$raw" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            if [ -z "$raw" ]; then
+              return 1
+            fi
+
+            local lower
+            lower="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+            case "$lower" in
+              undefined|null|false|true|nan|none) return 1 ;;
+            esac
+
+            if [[ "$raw" == *'${{'* ]]; then
+              return 1
+            fi
+
+            if [[ "$raw" == //* ]]; then
+              raw="https:${raw}"
+            elif [[ ! "$raw" =~ ^[a-zA-Z][a-zA-Z0-9+.-]*: ]]; then
+              raw="https://${raw}"
+            fi
+
+            if [[ ! "$raw" =~ ^https?:// ]]; then
+              return 1
+            fi
+
+            printf '%s' "$raw"
+          }
+
+          require_non_empty() {
+            local name="$1"
+            local value="${2:-}"
+            if [ -z "$value" ]; then
+              echo "::error::Missing required secret: ${name}"
+              exit 1
+            fi
+          }
+
+          require_non_empty "HETZNER_ACCESS_KEY_ID" "${HETZNER_ACCESS_KEY_ID:-}"
+          require_non_empty "HETZNER_SECRET_ACCESS_KEY" "${HETZNER_SECRET_ACCESS_KEY:-}"
+          require_non_empty "HETZNER_BUCKET_NAME" "${HETZNER_BUCKET_NAME:-}"
+
+          if ! next_public_rpc="$(normalize_url "${RAW_NEXT_PUBLIC_SOLANA_RPC_URL:-}")"; then
+            echo "::error::NEXT_PUBLIC_SOLANA_RPC_URL is missing or invalid. Example: https://api.devnet.solana.com"
+            exit 1
+          fi
+
+          if [ -n "${RAW_SOLANA_RPC_URL:-}" ]; then
+            if ! solana_rpc="$(normalize_url "${RAW_SOLANA_RPC_URL}")"; then
+              echo "::error::SOLANA_RPC_URL is invalid. Example: https://api.devnet.solana.com"
+              exit 1
+            fi
+          else
+            solana_rpc="$next_public_rpc"
+          fi
+
+          if [ -n "${RAW_HETZNER_ENDPOINT:-}" ] && ! normalize_url "${RAW_HETZNER_ENDPOINT}" >/dev/null; then
+            echo "::error::HETZNER_ENDPOINT is invalid. Example: https://fsn1.your-objectstorage.com"
+            exit 1
+          fi
+
+          if [ -n "${RAW_HETZNER_PUBLIC_BASE_URL:-}" ] && ! normalize_url "${RAW_HETZNER_PUBLIC_BASE_URL}" >/dev/null; then
+            echo "::error::HETZNER_PUBLIC_BASE_URL is invalid. Example: https://fsn1.your-objectstorage.com/blocs-storage"
+            exit 1
+          fi
+
+          echo "next_public_solana_rpc_url=${next_public_rpc}" >> "$GITHUB_OUTPUT"
+          echo "solana_rpc_url=${solana_rpc}" >> "$GITHUB_OUTPUT"
+
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
@@ -44,7 +139,7 @@ jobs:
           context: .
           push: true
           build-args: |
-            NEXT_PUBLIC_SOLANA_RPC_URL=${{ vars.NEXT_PUBLIC_SOLANA_RPC_URL || secrets.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com' }}
+            NEXT_PUBLIC_SOLANA_RPC_URL=${{ steps.validate_config.outputs.next_public_solana_rpc_url }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
@@ -53,8 +148,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
-          NEXT_PUBLIC_SOLANA_RPC_URL: ${{ vars.NEXT_PUBLIC_SOLANA_RPC_URL || secrets.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com' }}
-          SOLANA_RPC_URL: ${{ vars.SOLANA_RPC_URL || secrets.SOLANA_RPC_URL }}
+          NEXT_PUBLIC_SOLANA_RPC_URL: ${{ steps.validate_config.outputs.next_public_solana_rpc_url }}
+          SOLANA_RPC_URL: ${{ steps.validate_config.outputs.solana_rpc_url }}
           HETZNER_ACCESS_KEY_ID: ${{ secrets.HETZNER_ACCESS_KEY_ID }}
           HETZNER_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_SECRET_ACCESS_KEY }}
           HETZNER_BUCKET_NAME: ${{ secrets.HETZNER_BUCKET_NAME }}
@@ -81,13 +176,11 @@ jobs:
             # Pull the latest image
             docker compose pull
             
-            # Restart containers
+            # Restart containers without an explicit down to reduce downtime.
             if docker compose version >/dev/null 2>&1; then
-              docker compose down
-              docker compose up -d --no-build
+              docker compose up -d --no-build --remove-orphans
             else
-              docker-compose down
-              docker-compose up -d --no-build
+              docker-compose up -d --no-build --remove-orphans
             fi
 
             echo "Running smoke checks..."
@@ -96,6 +189,19 @@ jobs:
             if [ "$HOME_STATUS" -ne 200 ]; then
               echo "Homepage smoke check failed with status $HOME_STATUS"
               cat /tmp/blocs_home_probe.txt
+              exit 1
+            fi
+
+            HEALTH_STATUS=$(curl -sS -o /tmp/blocs_health_probe.json -w "%{http_code}" https://10000-blocks.com/api/health)
+            if [ "$HEALTH_STATUS" -ne 200 ]; then
+              echo "Health smoke check failed with status $HEALTH_STATUS"
+              cat /tmp/blocs_health_probe.json
+              exit 1
+            fi
+
+            if ! grep -q '"configured":true' /tmp/blocs_health_probe.json; then
+              echo "Health smoke check indicates upload/runtime configuration is incomplete"
+              cat /tmp/blocs_health_probe.json
               exit 1
             fi
 
