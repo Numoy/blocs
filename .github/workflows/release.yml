@@ -38,6 +38,7 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push Docker image
+        id: build_image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -62,12 +63,15 @@ jobs:
           HETZNER_PUBLIC_BASE_URL: ${{ vars.HETZNER_PUBLIC_BASE_URL || secrets.HETZNER_PUBLIC_BASE_URL }}
           UPSTASH_REDIS_REST_URL: ${{ vars.UPSTASH_REDIS_REST_URL || secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          BLOCS_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build_image.outputs.digest }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GITHUB_TOKEN,GITHUB_ACTOR,NEXT_PUBLIC_SOLANA_RPC_URL,SOLANA_RPC_URL,HETZNER_ACCESS_KEY_ID,HETZNER_SECRET_ACCESS_KEY,HETZNER_BUCKET_NAME,HETZNER_REGION,HETZNER_ENDPOINT,HETZNER_PUBLIC_BASE_URL,UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN
+          envs: GITHUB_TOKEN,GITHUB_ACTOR,NEXT_PUBLIC_SOLANA_RPC_URL,SOLANA_RPC_URL,HETZNER_ACCESS_KEY_ID,HETZNER_SECRET_ACCESS_KEY,HETZNER_BUCKET_NAME,HETZNER_REGION,HETZNER_ENDPOINT,HETZNER_PUBLIC_BASE_URL,UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN,BLOCS_IMAGE
           script: |
+            set -euo pipefail
+
             # Login to GHCR
             echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
@@ -85,3 +89,33 @@ jobs:
               docker-compose down
               docker-compose up -d --no-build
             fi
+
+            echo "Running smoke checks..."
+
+            HOME_STATUS=$(curl -sS -o /tmp/blocs_home_probe.txt -w "%{http_code}" https://10000-blocks.com/)
+            if [ "$HOME_STATUS" -ne 200 ]; then
+              echo "Homepage smoke check failed with status $HOME_STATUS"
+              cat /tmp/blocs_home_probe.txt
+              exit 1
+            fi
+
+            UPLOAD_STATUS=$(curl -sS -o /tmp/blocs_upload_probe.json -w "%{http_code}" -X POST \
+              -F owner=test \
+              -F blockId=1 \
+              -F timestamp=1 \
+              -F signature=test \
+              https://10000-blocks.com/api/upload)
+
+            if [ "$UPLOAD_STATUS" -ne 400 ]; then
+              echo "Upload smoke check failed with status $UPLOAD_STATUS"
+              cat /tmp/blocs_upload_probe.json
+              exit 1
+            fi
+
+            if grep -q "Upload service is not configured" /tmp/blocs_upload_probe.json; then
+              echo "Upload smoke check detected missing runtime config"
+              cat /tmp/blocs_upload_probe.json
+              exit 1
+            fi
+
+            echo "Smoke checks passed."
