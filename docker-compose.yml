@@ -6,6 +6,17 @@ services:
     image: ghcr.io/maerz/blocs:latest
     build: .
     restart: always
+    environment:
+      NEXT_PUBLIC_SOLANA_RPC_URL: ${NEXT_PUBLIC_SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-}
+      HETZNER_ACCESS_KEY_ID: ${HETZNER_ACCESS_KEY_ID:-}
+      HETZNER_SECRET_ACCESS_KEY: ${HETZNER_SECRET_ACCESS_KEY:-}
+      HETZNER_BUCKET_NAME: ${HETZNER_BUCKET_NAME:-}
+      HETZNER_REGION: ${HETZNER_REGION:-fsn1}
+      HETZNER_ENDPOINT: ${HETZNER_ENDPOINT:-}
+      HETZNER_PUBLIC_BASE_URL: ${HETZNER_PUBLIC_BASE_URL:-}
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
     networks:
       - app-net
 

@@ -52,11 +52,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
+          NEXT_PUBLIC_SOLANA_RPC_URL: ${{ vars.NEXT_PUBLIC_SOLANA_RPC_URL || secrets.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com' }}
+          SOLANA_RPC_URL: ${{ vars.SOLANA_RPC_URL || secrets.SOLANA_RPC_URL }}
+          HETZNER_ACCESS_KEY_ID: ${{ secrets.HETZNER_ACCESS_KEY_ID }}
+          HETZNER_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_SECRET_ACCESS_KEY }}
+          HETZNER_BUCKET_NAME: ${{ secrets.HETZNER_BUCKET_NAME }}
+          HETZNER_REGION: ${{ vars.HETZNER_REGION || secrets.HETZNER_REGION || 'fsn1' }}
+          HETZNER_ENDPOINT: ${{ vars.HETZNER_ENDPOINT || secrets.HETZNER_ENDPOINT }}
+          HETZNER_PUBLIC_BASE_URL: ${{ vars.HETZNER_PUBLIC_BASE_URL || secrets.HETZNER_PUBLIC_BASE_URL }}
+          UPSTASH_REDIS_REST_URL: ${{ vars.UPSTASH_REDIS_REST_URL || secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GITHUB_TOKEN,GITHUB_ACTOR
+          envs: GITHUB_TOKEN,GITHUB_ACTOR,NEXT_PUBLIC_SOLANA_RPC_URL,SOLANA_RPC_URL,HETZNER_ACCESS_KEY_ID,HETZNER_SECRET_ACCESS_KEY,HETZNER_BUCKET_NAME,HETZNER_REGION,HETZNER_ENDPOINT,HETZNER_PUBLIC_BASE_URL,UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN
           script: |
             # Login to GHCR
             echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
