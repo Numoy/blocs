@@ -5,7 +5,6 @@ import sharp from "sharp";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { getBucketName, getPublicObjectUrl, getS3Client } from "@/utils/s3";
 import {
-    BLOCK_ACCOUNT_SIZE_BYTES,
     BLOCK_OWNER_OFFSET_BYTES,
     GRID_SIZE,
     PROGRAM_ID
@@ -303,10 +302,10 @@ const verifyBlockOwnership = async (blockId: number, owner: string): Promise<boo
         return false;
     }
 
-    if (
-        accountInfo.data.length < BLOCK_ACCOUNT_SIZE_BYTES ||
-        accountInfo.data.length < BLOCK_OWNER_OFFSET_BYTES + 32
-    ) {
+    // We only need the owner field (32 bytes) after the fixed owner offset.
+    // Avoid coupling ownership checks to a single full account-size constant,
+    // because deployed account layouts can vary across program versions.
+    if (accountInfo.data.length < BLOCK_OWNER_OFFSET_BYTES + 32) {
         return false;
     }
 

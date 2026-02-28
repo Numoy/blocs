@@ -42,6 +42,22 @@ export const InfoModal = ({ isOpen, onClose }: InfoModalProps) => {
                         <li><strong>Bridge:</strong> Bridge assets from other chains using tools like <a href="https://jup.ag" target="_blank" rel="noreferrer" className={styles.link}>Jupiter</a> or <a href="https://portalbridge.com" target="_blank" rel="noreferrer" className={styles.link}>Portal</a>.</li>
                     </ul>
 
+                    <h3 className={styles.subtitle}>Open source</h3>
+                    <div className={styles.githubCard}>
+                        <p className={styles.githubText}>
+                            Browse the code, track issues, and contribute on GitHub.
+                        </p>
+                        <a
+                            href="https://github.com/Numoy/blocs"
+                            target="_blank"
+                            rel="noreferrer"
+                            className={styles.githubButton}
+                            aria-label="Open the Blocs GitHub repository"
+                        >
+                            View on GitHub
+                        </a>
+                    </div>
+
                     <p className={styles.footer}>
                         Powered by Solana. Built for the community.
                     </p>
