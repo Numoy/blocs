@@ -13,7 +13,7 @@ Required staging secrets/vars:
 - `SOLANA_RPC_URL` (optional override; falls back to `NEXT_PUBLIC_SOLANA_RPC_URL`)
 - `HETZNER_ACCESS_KEY_ID`
 - `HETZNER_SECRET_ACCESS_KEY`
-- `HETZNER_BUCKET_NAME` (environment variable or secret)
+- `HETZNER_BUCKET_NAME` (environment variable)
 - `SERVER_HOST` (environment variable or secret)
 - `SSH_PRIVATE_KEY` (secret)
 

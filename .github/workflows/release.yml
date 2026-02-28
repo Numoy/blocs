@@ -94,7 +94,7 @@ jobs:
           RAW_SOLANA_RPC_URL: ${{ vars.SOLANA_RPC_URL || secrets.SOLANA_RPC_URL }}
           HETZNER_ACCESS_KEY_ID: ${{ secrets.HETZNER_ACCESS_KEY_ID }}
           HETZNER_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_SECRET_ACCESS_KEY }}
-          HETZNER_BUCKET_NAME: ${{ vars.HETZNER_BUCKET_NAME || secrets.HETZNER_BUCKET_NAME }}
+          HETZNER_BUCKET_NAME: ${{ vars.HETZNER_BUCKET_NAME }}
           RAW_HETZNER_ENDPOINT: ${{ vars.HETZNER_ENDPOINT || secrets.HETZNER_ENDPOINT }}
           RAW_HETZNER_PUBLIC_BASE_URL: ${{ vars.HETZNER_PUBLIC_BASE_URL || secrets.HETZNER_PUBLIC_BASE_URL }}
         run: |
@@ -260,7 +260,7 @@ jobs:
           SOLANA_RPC_URL: ${{ steps.validate_config.outputs.solana_rpc_url }}
           HETZNER_ACCESS_KEY_ID: ${{ secrets.HETZNER_ACCESS_KEY_ID }}
           HETZNER_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_SECRET_ACCESS_KEY }}
-          HETZNER_BUCKET_NAME: ${{ vars.HETZNER_BUCKET_NAME || secrets.HETZNER_BUCKET_NAME }}
+          HETZNER_BUCKET_NAME: ${{ vars.HETZNER_BUCKET_NAME }}
           HETZNER_REGION: ${{ vars.HETZNER_REGION || secrets.HETZNER_REGION || 'fsn1' }}
           HETZNER_ENDPOINT: ${{ vars.HETZNER_ENDPOINT || secrets.HETZNER_ENDPOINT }}
           HETZNER_PUBLIC_BASE_URL: ${{ vars.HETZNER_PUBLIC_BASE_URL || secrets.HETZNER_PUBLIC_BASE_URL }}
