@@ -16,6 +16,8 @@ Required staging secrets/vars:
 - `HETZNER_BUCKET_NAME` (environment variable)
 - `SERVER_HOST` (environment variable or secret)
 - `SSH_PRIVATE_KEY` (secret)
+- Optional for staging upload guard fallback: `ALLOW_IN_MEMORY_UPLOAD_GUARDS=true`
+- Optional shared guards: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`
 
 ## Production Releases
 
@@ -29,6 +31,8 @@ Required staging secrets/vars:
   - `SOLANA_RPC_URL` should also be a mainnet endpoint (optional override; falls back to `NEXT_PUBLIC_SOLANA_RPC_URL`).
   - `SERVER_HOST` (environment variable or secret)
   - `SSH_PRIVATE_KEY` (secret)
+  - `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (recommended/expected for upload guards)
+  - Keep `ALLOW_IN_MEMORY_UPLOAD_GUARDS=false` in production.
 
 ### Create a Release Tag
 
