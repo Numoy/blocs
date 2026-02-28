@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: Resolve staging tag commit
         id: staging_ref
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const owner = context.repo.owner;
@@ -91,7 +91,7 @@ jobs:
             core.info(`Resolved staging tag ${tagName} -> ${commitSha}`);
 
       - name: Checkout repository at staging tag commit
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ steps.staging_ref.outputs.commit_sha }}
 
@@ -224,7 +224,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build_image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
           push: true
@@ -244,7 +244,7 @@ jobs:
           cosign sign --yes "$IMAGE_REF"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.image_repo.outputs.value }}
           subject-digest: ${{ steps.build_image.outputs.digest }}
@@ -258,14 +258,14 @@ jobs:
           output-file: sbom.spdx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: sbom-staging-${{ steps.staging_ref.outputs.tag_name }}
           path: sbom.spdx.json
           if-no-files-found: error
 
       - name: Deploy to Hetzner
-        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2
         env:
           SITE_BASE_URL: ${{ steps.validate_config.outputs.site_base_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

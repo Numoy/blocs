@@ -14,10 +14,10 @@ jobs:
       NEXT_PUBLIC_SOLANA_RPC_URL: https://api.devnet.solana.com
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
         with:
           node-version: '22'
           cache: 'npm'
@@ -45,10 +45,10 @@ jobs:
         working-directory: ./anchor
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
         with:
           node-version: '22'
           cache: 'yarn'
@@ -62,7 +62,7 @@ jobs:
 
       # Cache Cargo Registry (Speeds up Rust builds)
       - name: Cache Cargo registry + index
-        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
         with:
           path: |
             ~/.cargo/registry
@@ -73,7 +73,7 @@ jobs:
       # Cache Solana CLI (Restored and fixed)
       - name: Cache Solana CLI
         id: cache-solana
-        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
         with:
           path: |
             ~/solana-release
@@ -82,7 +82,7 @@ jobs:
       # Cache Anchor CLI
       - name: Cache Anchor CLI
         id: cache-anchor
-        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
         with:
           path: ~/.cargo/bin/anchor
           key: anchor-${{ runner.os }}-v0.32.1
