@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Toaster } from 'sonner';
-import Script from "next/script";
 import PlausibleProvider from "next-plausible";
+import "./env-init";
 import "./globals.css";
 // import { Inter } from "next/font/google";
 import "@solana/wallet-adapter-react-ui/styles.css";
@@ -22,15 +22,17 @@ const parseMetadataBase = () => {
 };
 
 const parsePlausibleDomain = () => parseMetadataBase().hostname;
+const metadataBase = parseMetadataBase();
+const siteUrl = metadataBase.toString().replace(/\/$/, "");
 
 export const metadata: Metadata = {
-  metadataBase: parseMetadataBase(),
+  metadataBase,
   title: "Blocs - 10,000 Blocks on Solana",
   description: "A decentralized 100x100 grid. Buy, trade, and own blocks on the Solana blockchain. Permanently.",
   openGraph: {
     title: "Blocs on Solana",
     description: "Own a piece of the grid. 10,000 blocks, fully decentralized.",
-    url: "https://blocs.solana", // Placeholder
+    url: siteUrl,
     siteName: "Blocs",
     images: [
       {
@@ -65,13 +67,6 @@ export default function RootLayout({
             src: "https://analytics.marvinmaerz.com/js/pa-3HPsBPc6MtBPaeuGOplYw.js",
           }}
         >
-          <Script
-            id="plausible-v3-init"
-            strategy="afterInteractive"
-            dangerouslySetInnerHTML={{
-              __html: "window.plausible=window.plausible||function(){(window.plausible.q=window.plausible.q||[]).push(arguments)};window.plausible.init=window.plausible.init||function(i){window.plausible.o=i||{}};window.plausible.init();",
-            }}
-          />
           <WalletContextProvider>
             <ProgramProvider>
               <ErrorBoundary>

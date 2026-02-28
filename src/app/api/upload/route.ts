@@ -12,6 +12,14 @@ import {
 } from "@/utils/constants";
 import { buildUploadAuthMessage, UPLOAD_AUTH_MAX_AGE_MS } from "@/utils/uploadAuth";
 import { resolveSolanaRpcEndpoint } from "@/utils/rpc";
+import { buildClientRateLimitKey } from "@/utils/requestIdentity";
+import { normalizeSolanaPublicKey } from "@/utils/publicKey";
+import { consumeReplayTokenFromStore } from "@/utils/replayProtection";
+import {
+    doesMimeMatchDetectedFormat,
+    isAllowedDetectedImageFormat,
+    isAllowedUploadMimeType,
+} from "@/utils/uploadValidation";
 
 export const runtime = "nodejs";
 
@@ -25,24 +33,29 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_BY_IP = 30;
 const RATE_LIMIT_MAX_BY_WALLET = 12;
 const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
-const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+const MAX_MULTIPART_BODY_BYTES = MAX_SIZE_BYTES + 512 * 1024; // Allow multipart/form-data overhead.
 const MAX_INPUT_PIXELS = 16_777_216; // 4096x4096 upper bound
 const SOLANA_RPC_URL = resolveSolanaRpcEndpoint(process.env.SOLANA_RPC_URL, process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
 const solanaConnection = new Connection(SOLANA_RPC_URL, "confirmed");
+const EXPECTED_REQUEST_ORIGIN = (() => {
+    const raw = process.env.NEXT_PUBLIC_SITE_URL;
+    if (!raw) return null;
+    try {
+        return new URL(raw).origin;
+    } catch {
+        return null;
+    }
+})();
 const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL?.replace(/\/+$/, "");
 const UPSTASH_REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const hasSharedUploadGuards = Boolean(UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN);
+const requireSharedUploadGuardsInProduction =
+    process.env.NODE_ENV === "production" && process.env.ALLOW_IN_MEMORY_UPLOAD_GUARDS !== "true";
 
 const rateLimitStore = globalThis.__blocsUploadRateLimitStore ?? new Map<string, { count: number; resetAt: number }>();
 globalThis.__blocsUploadRateLimitStore = rateLimitStore;
 const replayStore = globalThis.__blocsUploadReplayStore ?? new Map<string, number>();
 globalThis.__blocsUploadReplayStore = replayStore;
-
-const getClientIp = (request: Request): string => {
-    const xff = request.headers.get("x-forwarded-for");
-    if (xff) return xff.split(",")[0].trim();
-    return request.headers.get("x-real-ip") || "unknown";
-};
 
 const applyRateLimitInMemory = (key: string, maxRequests: number, now = Date.now()): { allowed: boolean; retryAfterSec: number } => {
     if (rateLimitStore.size > 5_000) {
@@ -70,22 +83,75 @@ const applyRateLimitInMemory = (key: string, maxRequests: number, now = Date.now
     return { allowed: true, retryAfterSec: 0 };
 };
 
-const consumeReplayTokenInMemory = (token: string, now = Date.now()): boolean => {
-    if (replayStore.size > 10_000) {
-        for (const [entryKey, expiresAt] of replayStore.entries()) {
-            if (expiresAt <= now) {
-                replayStore.delete(entryKey);
-            }
-        }
+const getContentLength = (request: Request): number | null => {
+    const raw = request.headers.get("content-length");
+    if (!raw) {
+        return null;
     }
 
-    const existing = replayStore.get(token);
-    if (existing && existing > now) {
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+        return null;
+    }
+
+    return parsed;
+};
+
+const isAllowedRequestOrigin = (request: Request): boolean => {
+    const origin = request.headers.get("origin");
+    if (!origin || !EXPECTED_REQUEST_ORIGIN) {
+        return true;
+    }
+
+    try {
+        return new URL(origin).origin === EXPECTED_REQUEST_ORIGIN;
+    } catch {
+        return false;
+    }
+};
+
+const isRequestBodyTooLarge = async (request: Request, maxBytes: number): Promise<boolean> => {
+    const declaredLength = getContentLength(request);
+    if (declaredLength !== null) {
+        return declaredLength > maxBytes;
+    }
+
+    const body = request.clone().body;
+    if (!body) {
         return false;
     }
 
-    replayStore.set(token, now + UPLOAD_AUTH_MAX_AGE_MS);
-    return true;
+    const reader = body.getReader();
+    let totalBytes = 0;
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                break;
+            }
+
+            totalBytes += value?.byteLength ?? 0;
+            if (totalBytes > maxBytes) {
+                try {
+                    await reader.cancel("request body too large");
+                } catch {
+                    // Best effort.
+                }
+                return true;
+            }
+        }
+    } catch {
+        return true;
+    } finally {
+        reader.releaseLock();
+    }
+
+    return false;
+};
+
+const consumeReplayTokenInMemory = (token: string, now = Date.now()): boolean => {
+    return consumeReplayTokenFromStore(replayStore, token, UPLOAD_AUTH_MAX_AGE_MS, now);
 };
 
 const runRedisCommand = async <T = unknown>(...args: string[]): Promise<T> => {
@@ -165,6 +231,10 @@ const applyRateLimit = async (
     try {
         return await applyRateLimitShared(key, maxRequests, now);
     } catch (error) {
+        if (requireSharedUploadGuardsInProduction) {
+            console.error("Shared upload guard unavailable for rate limit; failing closed:", error);
+            throw error;
+        }
         console.error("Falling back to in-memory rate limit:", error);
         return applyRateLimitInMemory(key, maxRequests, now);
     }
@@ -178,6 +248,10 @@ const consumeReplayToken = async (token: string, now = Date.now()): Promise<bool
     try {
         return await consumeReplayTokenShared(token);
     } catch (error) {
+        if (requireSharedUploadGuardsInProduction) {
+            console.error("Shared upload guard unavailable for replay protection; failing closed:", error);
+            throw error;
+        }
         console.error("Falling back to in-memory replay protection:", error);
         return consumeReplayTokenInMemory(token, now);
     }
@@ -240,12 +314,42 @@ const verifyBlockOwnership = async (blockId: number, owner: string): Promise<boo
 };
 
 export async function POST(request: Request) {
-    const ip = getClientIp(request);
-    const ipRate = await applyRateLimit(`ip:${ip}`, RATE_LIMIT_MAX_BY_IP);
+    if (!isAllowedRequestOrigin(request)) {
+        return NextResponse.json(
+            { error: "Invalid request origin." },
+            { status: 403 }
+        );
+    }
+
+    if (requireSharedUploadGuardsInProduction && !hasSharedUploadGuards) {
+        return NextResponse.json(
+            { error: "Upload shared guards must be configured in production." },
+            { status: 503 }
+        );
+    }
+
+    const clientRateKey = buildClientRateLimitKey(request);
+    let ipRate: { allowed: boolean; retryAfterSec: number };
+    try {
+        ipRate = await applyRateLimit(clientRateKey, RATE_LIMIT_MAX_BY_IP);
+    } catch (error) {
+        console.error("Upload guard service unavailable for IP rate limit:", error);
+        return NextResponse.json(
+            { error: "Upload guard service is temporarily unavailable. Please retry shortly." },
+            { status: 503 }
+        );
+    }
     if (!ipRate.allowed) {
         return NextResponse.json(
             { error: "Too many upload attempts. Please retry shortly." },
             { status: 429, headers: { "Retry-After": String(ipRate.retryAfterSec) } }
+        );
+    }
+
+    if (await isRequestBodyTooLarge(request, MAX_MULTIPART_BODY_BYTES)) {
+        return NextResponse.json(
+            { error: "Request body too large." },
+            { status: 413 }
         );
     }
 
@@ -287,7 +391,24 @@ export async function POST(request: Request) {
             );
         }
 
-        const walletRate = await applyRateLimit(`wallet:${owner}`, RATE_LIMIT_MAX_BY_WALLET);
+        const normalizedOwner = normalizeSolanaPublicKey(owner);
+        if (!normalizedOwner) {
+            return NextResponse.json(
+                { error: "Invalid owner public key." },
+                { status: 400 }
+            );
+        }
+
+        let walletRate: { allowed: boolean; retryAfterSec: number };
+        try {
+            walletRate = await applyRateLimit(`wallet:${normalizedOwner}`, RATE_LIMIT_MAX_BY_WALLET);
+        } catch (error) {
+            console.error("Upload guard service unavailable for wallet rate limit:", error);
+            return NextResponse.json(
+                { error: "Upload guard service is temporarily unavailable. Please retry shortly." },
+                { status: 503 }
+            );
+        }
         if (!walletRate.allowed) {
             return NextResponse.json(
                 { error: "Wallet upload rate limit reached. Please retry shortly." },
@@ -318,29 +439,40 @@ export async function POST(request: Request) {
             );
         }
 
-        if (!verifyWalletSignature({ blockId, owner, timestamp, signatureBase64 })) {
+        if (!verifyWalletSignature({ blockId, owner: normalizedOwner, timestamp, signatureBase64 })) {
             return NextResponse.json(
                 { error: "Invalid upload signature." },
                 { status: 401 }
             );
         }
 
-        const replayToken = `${owner}:${blockId}:${timestamp}:${signatureBase64}`;
-        if (!(await consumeReplayToken(replayToken))) {
+        const replayToken = `${normalizedOwner}:${blockId}:${timestamp}:${signatureBase64}`;
+        let replayAccepted: boolean;
+        try {
+            replayAccepted = await consumeReplayToken(replayToken);
+        } catch (error) {
+            console.error("Upload guard service unavailable for replay protection:", error);
+            return NextResponse.json(
+                { error: "Upload guard service is temporarily unavailable. Please retry shortly." },
+                { status: 503 }
+            );
+        }
+
+        if (!replayAccepted) {
             return NextResponse.json(
                 { error: "Upload signature already used. Please sign a new request." },
                 { status: 409 }
             );
         }
 
-        if (!(await verifyBlockOwnership(blockId, owner))) {
+        if (!(await verifyBlockOwnership(blockId, normalizedOwner))) {
             return NextResponse.json(
                 { error: "You do not own this block." },
                 { status: 403 }
             );
         }
 
-        if (!ALLOWED_TYPES.has(file.type)) {
+        if (!isAllowedUploadMimeType(file.type)) {
             return NextResponse.json(
                 { error: "Invalid file type. Only PNG, JPEG, GIF, and WEBP are allowed." },
                 { status: 400 }
@@ -356,18 +488,49 @@ export async function POST(request: Request) {
         // ------------------
 
         const buffer = Buffer.from(await file.arrayBuffer());
+        const imageTransformer = sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS, failOnError: true });
 
-        // --- OPTIMIZATION (Sharp) ---
-        const optimizedBuffer = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS })
+        let detectedFormat: string | undefined;
+        try {
+            const metadata = await imageTransformer.metadata();
+            detectedFormat = metadata.format?.toLowerCase();
+            if (!detectedFormat || !isAllowedDetectedImageFormat(detectedFormat)) {
+                return NextResponse.json(
+                    { error: "Unsupported or invalid image payload." },
+                    { status: 400 }
+                );
+            }
+
+            if (!metadata.width || !metadata.height) {
+                return NextResponse.json(
+                    { error: "Could not determine image dimensions." },
+                    { status: 400 }
+                );
+            }
+        } catch {
+            return NextResponse.json(
+                { error: "Uploaded file is not a valid image." },
+                { status: 400 }
+            );
+        }
+
+        if (!doesMimeMatchDetectedFormat(file.type, detectedFormat)) {
+            return NextResponse.json(
+                { error: "File MIME type does not match its actual content." },
+                { status: 400 }
+            );
+        }
+
+        const optimizedBuffer = await imageTransformer
             .rotate()
-            .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+            .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
             .webp({ quality: 80 })
             .toBuffer();
 
         // Sanitize filename & change extension to webp
         const originalName = file.name.replace(/\.[^/.]+$/, ""); // remove extension
         const sanitizedName = originalName.replace(/[^a-zA-Z0-9.-]/g, "_").slice(0, 64) || "image";
-        const safeOwnerPrefix = owner.slice(0, 8);
+        const safeOwnerPrefix = normalizedOwner.slice(0, 8);
         const filename = `${blockId}_${safeOwnerPrefix}_${Date.now()}_${randomUUID().slice(0, 8)}_${sanitizedName}.webp`;
         // -----------------------------
 
@@ -378,7 +541,7 @@ export async function POST(request: Request) {
             ContentType: "image/webp",
             CacheControl: "public, max-age=31536000, immutable",
             Metadata: {
-                owner,
+                owner: normalizedOwner,
                 blockId: String(blockId),
             },
         });

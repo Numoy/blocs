@@ -24,8 +24,10 @@ assetOrigins.delete("");
 
 const analyticsOrigin = "https://analytics.marvinmaerz.com";
 // Allow secure RPC backends that may be injected at build/runtime without hardcoding every provider domain.
-const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com", "https:", "wss:", analyticsOrigin];
+const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com", analyticsOrigin];
 const imgSrc = ["'self'", "data:", "blob:", ...assetOrigins, "https:"];
+const mediaSrc = ["'self'", "data:", "blob:"];
+const workerSrc = ["'self'", "blob:"];
 const styleSrc = ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"];
 const fontSrc = ["'self'", "data:", "https://fonts.gstatic.com"];
 const scriptSrc = [
@@ -43,12 +45,18 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
+  "frame-src 'none'",
   `script-src ${scriptSrc.join(" ")}`,
+  "script-src-attr 'none'",
   `style-src ${styleSrc.join(" ")}`,
   `font-src ${fontSrc.join(" ")}`,
   `img-src ${imgSrc.join(" ")}`,
+  `media-src ${mediaSrc.join(" ")}`,
+  `worker-src ${workerSrc.join(" ")}`,
   `connect-src ${[...connectSrc, ...(isDev ? ["ws://localhost:*"] : [])].join(" ")}`,
+  "manifest-src 'self'",
   "form-action 'self'",
+  ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
 
 const nextConfig: NextConfig = {
@@ -60,7 +68,12 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-DNS-Prefetch-Control", value: "off" },
+          { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+          { key: "Origin-Agent-Cluster", value: "?1" },
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           { key: "Content-Security-Policy", value: contentSecurityPolicy },
         ],

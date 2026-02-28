@@ -2,6 +2,7 @@
 name = "blocs"
 version = "0.1.0"
 description = "Created with Anchor"
+license = "MIT"
 edition = "2021"
 
 [lib]

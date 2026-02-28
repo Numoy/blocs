@@ -1,0 +1,83 @@
+name: Signature Policy
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  verify-signed-commits:
+    name: Verify Signed Commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check commit signature verification
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const formatFailure = (commit) => {
+              const sha = (commit.sha || "").slice(0, 12);
+              const verification = commit.commit?.verification;
+              const reason = verification?.reason || "unknown";
+              return `${sha}: ${reason}`;
+            };
+
+            let commits = [];
+
+            if (context.eventName === "pull_request") {
+              commits = await github.paginate(github.rest.pulls.listCommits, {
+                owner,
+                repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+            } else if (context.eventName === "push") {
+              const before = context.payload.before;
+              const after = context.payload.after;
+              if (!after) {
+                core.setFailed("Push event is missing the target commit SHA.");
+                return;
+              }
+
+              if (!before || /^0+$/.test(before)) {
+                const single = await github.rest.repos.getCommit({ owner, repo, ref: after });
+                commits = [single.data];
+              } else {
+                const comparison = await github.request(
+                  "GET /repos/{owner}/{repo}/compare/{basehead}",
+                  {
+                    owner,
+                    repo,
+                    basehead: `${before}...${after}`,
+                  },
+                );
+                commits = comparison.data.commits || [];
+              }
+            } else {
+              core.setFailed(`Unsupported event: ${context.eventName}`);
+              return;
+            }
+
+            if (commits.length === 0) {
+              core.setFailed("No commits were found to validate.");
+              return;
+            }
+
+            const unverified = commits.filter((commit) => !commit.commit?.verification?.verified);
+            if (unverified.length > 0) {
+              core.setFailed(
+                `Found ${unverified.length} unverified commit(s):\n${unverified
+                  .map(formatFailure)
+                  .join("\n")}`,
+              );
+              return;
+            }
+
+            core.info(`All ${commits.length} commit(s) are verified.`);

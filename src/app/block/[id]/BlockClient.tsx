@@ -61,7 +61,7 @@ export default function BlockClient() {
     };
 
     // Find Block Data
-    const block = blocks.find(b => b.id === id);
+    const block = id >= 0 && id < blocks.length ? blocks[id] : undefined;
     const safeBlockUrl = toSafeExternalUrl(block?.url);
     const safeBlockImageUrl = toSafeExternalUrl(block?.imageUrl);
 

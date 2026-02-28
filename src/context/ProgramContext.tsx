@@ -1,82 +1,25 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo, useRef } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { BlockData } from "@/types";
-import { isContentAllowed } from "@/utils/moderation";
-import { toast } from 'sonner';
-import { Program, AnchorProvider, Idl, web3, BN } from "@coral-xyz/anchor";
-import { Connection, PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
+import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
+import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
-import { GRID_PUBKEY, GRID_SIZE, getPrimaryBlockPriceSol } from "@/utils/constants";
 import { isMobile, isWalletBrowser } from "@/utils/mobile";
-import { parseColor, hexToRgb } from "@/utils/colors";
+import { trackPlausibleEvent } from "@/utils/analytics";
 import { WalletSelectorModal } from "@/components/modals";
-import { parseSolToLamports } from "@/utils/sol";
-import { toSafeExternalUrl } from "@/utils/url";
-import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
-import { resolveSolanaRpcEndpoint } from "@/utils/rpc";
-
-// Program ID used for IDL type matching, though we use the instance from constants mainly
-// export const PROGRAM_ID = ... imported from constants
-
-interface ProgramContextState {
-    blocks: BlockData[];
-    buyBlock: (id: number, price: number, color?: string, source?: BuySource) => Promise<void>;
-    updateBlock: (id: number, text: string, imageUrl: string, url: string) => Promise<void>;
-    sellBlock: (id: number, priceInput: string) => Promise<void>;
-    refreshBlock: () => Promise<void>;
-    isLoading: boolean;
-    isSyncing: boolean;
-    openWalletModal: (source?: WalletModalSource) => void;
-}
-
-interface RawBlockAccount {
-    id: number;
-    owner: PublicKey;
-    price: BN;
-    isForSale: boolean;
-    color: number[];
-    text: number[];
-    imageUrl: number[];
-    url: number[];
-}
+import { asBlocsProgram } from "@/utils/programTypes";
+import {
+    type BuySource,
+    type ProgramContextState,
+    type WalletModalSource,
+} from "@/context/program/shared";
+import { useGridSync } from "@/context/program/useGridSync";
+import { useBlockActions } from "@/context/program/useBlockActions";
 
 const ProgramContext = createContext<ProgramContextState | null>(null);
-const PRICE_EPSILON_SOL = 1e-9;
-const GRID_READ_TIMEOUT_MS = 18_000;
-const GRID_LOAD_TIMEOUT_MS = 40_000;
-const DEVNET_RPC_ENDPOINT = "https://api.devnet.solana.com";
-const MAINNET_RPC_ENDPOINT = "https://api.mainnet-beta.solana.com";
-export type BuySource = "grid_sidebar" | "block_detail" | "unknown";
-export type WalletModalSource = "sidebar_buy" | "block_detail_buy" | "unknown";
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
-    });
-
-    try {
-        return await Promise.race([promise, timeoutPromise]);
-    } finally {
-        if (timeoutId !== null) {
-            clearTimeout(timeoutId);
-        }
-    }
-}
-
-const getFallbackRpcEndpoints = (primaryEndpoint: string): string[] => {
-    const lower = primaryEndpoint.toLowerCase();
-    const sameClusterFallbacks = lower.includes("mainnet")
-        ? [MAINNET_RPC_ENDPOINT]
-        : lower.includes("devnet")
-            ? [DEVNET_RPC_ENDPOINT]
-            : [DEVNET_RPC_ENDPOINT, MAINNET_RPC_ENDPOINT];
-
-    return sameClusterFallbacks.filter((endpoint) => endpoint !== primaryEndpoint);
-};
+export type { BuySource, WalletModalSource };
 
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
@@ -84,18 +27,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { sendTransaction, publicKey, connected } = useWallet();
     const { setVisible } = useWalletModal();
 
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [blocks, setBlocks] = useState<BlockData[]>([]);
-    const [gridAdmin, setGridAdmin] = useState<PublicKey | null>(null);
-
     const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
     const [walletModalUrl, setWalletModalUrl] = useState("");
-    const fetchGridInFlightRef = useRef<Promise<void> | null>(null);
-    const scheduledSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const scheduledSyncAtRef = useRef<number | null>(null);
-    const isMountedRef = useRef(true);
-    const hasLoadedOnceRef = useRef(false);
 
     const providerWallet = useMemo(() => (
         wallet || {
@@ -107,705 +40,75 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
 
     const program = useMemo(() => {
         const provider = new AnchorProvider(connection, providerWallet, { preflightCommitment: "confirmed" });
-        return new Program(idl as Idl, provider);
+        return asBlocsProgram(new Program(idl as Idl, provider));
     }, [connection, providerWallet]);
 
-
-    const parseString = useCallback((arr: number[]): string => {
-        // Use TextDecoder for browser compatibility (calls to Buffer will fail)
-        const uint8 = new Uint8Array(arr);
-        const decoder = new TextDecoder("utf-8");
-        // Decode and strip null bytes
-        return decoder.decode(uint8).replace(/\0/g, "");
+    const openWalletSelectorModal = useCallback((currentUrl: string) => {
+        setWalletModalUrl(currentUrl);
+        setIsWalletModalOpen(true);
     }, []);
 
-    useEffect(() => {
-        isMountedRef.current = true;
-        return () => {
-            isMountedRef.current = false;
-        };
-    }, []);
+    const {
+        blocks,
+        isLoading,
+        isSyncing,
+        gridAdmin,
+        fetchGrid,
+        queueGridSync,
+        updateBlockInState,
+    } = useGridSync({
+        connection,
+        providerWallet,
+        program,
+    });
 
+    const { buyBlock, updateBlock, sellBlock } = useBlockActions({
+        connected,
+        publicKey,
+        wallet: wallet ?? null,
+        sendTransaction,
+        connection,
+        program,
+        blocks,
+        gridAdmin,
+        fetchGrid,
+        queueGridSync,
+        updateBlockInState,
+        openWalletSelectorModal,
+    });
 
-
-
-
-    const fetchGrid = useCallback(async () => {
-        if (fetchGridInFlightRef.current) {
-            await fetchGridInFlightRef.current;
-            return;
-        }
-
-        const run = async () => {
-            const isInitialLoad = !hasLoadedOnceRef.current;
-            try {
-                if (isMountedRef.current && isInitialLoad) {
-                    setIsLoading(true);
-                }
-                if (isMountedRef.current && !isInitialLoad) {
-                    setIsSyncing(true);
-                }
-
-                const primaryEndpoint = resolveSolanaRpcEndpoint(connection.rpcEndpoint);
-                const rpcCandidates = [primaryEndpoint, ...getFallbackRpcEndpoints(primaryEndpoint)];
-                let loadedGrid = false;
-                let lastError: unknown = null;
-
-                for (const endpoint of rpcCandidates) {
-                    try {
-                        const readConnection = endpoint === primaryEndpoint
-                            ? connection
-                            : new Connection(endpoint, "confirmed");
-                        const readProvider = new AnchorProvider(readConnection, providerWallet, { preflightCommitment: "confirmed" });
-                        const readProgram = new Program(idl as Idl, readProvider);
-
-                        // Fetch Global Config (for Admin key)
-                        const gridAccount = await withTimeout(
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            (readProgram.account as any).gridState.fetchNullable(GRID_PUBKEY),
-                            GRID_READ_TIMEOUT_MS,
-                            `gridState fetch via ${endpoint}`,
-                        ) as { admin: PublicKey } | null;
-                        if (gridAccount && isMountedRef.current) {
-                            setGridAdmin(gridAccount.admin);
-                        }
-
-                        // Fetch All Blocks (Lazy Init = Fetch Multiple Accounts)
-                        const allBlocks = await withTimeout(
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            (readProgram.account as any).block.all(),
-                            GRID_READ_TIMEOUT_MS,
-                            `block.all via ${endpoint}`,
-                        ) as Array<{ account: RawBlockAccount }>;
-
-                        const blockMap = new Map<number, BlockData>();
-                        allBlocks.forEach((b: { account: RawBlockAccount }) => {
-                            const data = b.account;
-                            const id = data.id;
-
-                            const colorRaw = data.color ?? [];
-                            const textRaw = data.text ?? [];
-                            const imageUrlRaw = data.imageUrl ?? [];
-                            const urlRaw = data.url ?? [];
-                            const parsedImageUrl = toSafeExternalUrl(parseString(imageUrlRaw));
-
-                            blockMap.set(id, {
-                                id: id,
-                                owner: data.owner.toBase58(),
-                                price: data.price.toNumber() / web3.LAMPORTS_PER_SOL,
-                                isForSale: data.isForSale,
-                                color: parseColor(colorRaw),
-                                text: parseString(textRaw),
-                                imageUrl: parsedImageUrl || "",
-                                url: parseString(urlRaw),
-                                image: null
-                            });
-                        });
-
-                        const fullGrid: BlockData[] = [];
-                        for (let i = 0; i < GRID_SIZE; i++) {
-                            if (blockMap.has(i)) {
-                                fullGrid.push(blockMap.get(i)!);
-                            } else {
-                                fullGrid.push({
-                                    id: i,
-                                    owner: null,
-                                    price: getPrimaryBlockPriceSol(i),
-                                    isForSale: true,
-                                    color: "#222222",
-                                    text: "",
-                                    imageUrl: "",
-                                    url: "",
-                                    image: null
-                                });
-                            }
-                        }
-
-                        if (isMountedRef.current) {
-                            setBlocks(fullGrid);
-                        }
-                        hasLoadedOnceRef.current = true;
-                        loadedGrid = true;
-
-                        if (endpoint !== primaryEndpoint) {
-                            trackPlausibleEvent("grid_fetch_fallback_endpoint_used", {
-                                primary_rpc: primaryEndpoint,
-                                fallback_rpc: endpoint,
-                                blocks_loaded: fullGrid.length,
-                            });
-                        }
-                        break;
-                    } catch (error) {
-                        lastError = error;
-                        console.error(`Failed to fetch grid using RPC ${endpoint}:`, error);
-                    }
-                }
-
-                if (!loadedGrid) {
-                    throw lastError || new Error("All RPC endpoints failed.");
-                }
-            } catch (err) {
-                console.error("Failed to fetch grid:", err);
-                trackPlausibleEvent("grid_fetch_failed", {
-                    rpc_endpoint: connection.rpcEndpoint,
-                    error_category: toErrorCategory(err),
-                });
-                if (isMountedRef.current) {
-                    toast.error("Failed to fetch grid: " + ((err as Error).message || "Unknown error"));
-                }
-                throw err;
-            } finally {
-                if (isMountedRef.current && isInitialLoad) {
-                    setIsLoading(false);
-                }
-                if (isMountedRef.current && !isInitialLoad) {
-                    setIsSyncing(false);
-                }
-            }
-        };
-
-        const runPromise = run();
-        fetchGridInFlightRef.current = runPromise;
-
-        try {
-            await runPromise;
-        } finally {
-            fetchGridInFlightRef.current = null;
-        }
-    }, [connection, parseString, providerWallet]);
-
-    const queueGridSync = useCallback((delayMs = 500) => {
-        const boundedDelay = Math.max(delayMs, 0);
-        const now = Date.now();
-        const nextRunAt = now + boundedDelay;
-        const existingRunAt = scheduledSyncAtRef.current;
-
-        if (
-            scheduledSyncRef.current !== null &&
-            existingRunAt !== null &&
-            existingRunAt <= nextRunAt
-        ) {
-            return;
-        }
-
-        if (scheduledSyncRef.current !== null) {
-            clearTimeout(scheduledSyncRef.current);
-        }
-
-        scheduledSyncAtRef.current = nextRunAt;
-        scheduledSyncRef.current = setTimeout(() => {
-            scheduledSyncRef.current = null;
-            scheduledSyncAtRef.current = null;
-            void fetchGrid();
-        }, boundedDelay);
+    const refreshBlock = useCallback(async () => {
+        await fetchGrid();
     }, [fetchGrid]);
 
-    const fetchGridWithTimeout = useCallback(async () => {
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
-        const timeout = new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error("RPC Timeout")), GRID_LOAD_TIMEOUT_MS);
-        });
-
-        try {
-            await Promise.race([fetchGrid(), timeout]);
-        } catch (err) {
-            console.error("Grid Load Timeout/Error:", err);
-            trackPlausibleEvent("grid_load_timeout_or_error", {
-                rpc_endpoint: connection.rpcEndpoint,
-                error_category: toErrorCategory(err),
-            });
-            if (isMountedRef.current) {
-                toast.error("Failed to load grid. Please check RPC endpoint or network.");
-                if (!hasLoadedOnceRef.current) {
-                    setIsLoading(false); // Force stop loading on first load
-                } else {
-                    setIsSyncing(false);
-                }
-            }
-        } finally {
-            if (timeoutId !== null) {
-                clearTimeout(timeoutId);
-            }
-        }
-    }, [connection.rpcEndpoint, fetchGrid]);
-
-    useEffect(() => {
-        if (!program) return;
-
-        void fetchGridWithTimeout();
-
-        // --- REAL-TIME UPDATES ---
-        let disposed = false;
-        const listenerIds: number[] = [];
-
-        const registerListener = async (
-            eventName: "BlockBought" | "BlockSold" | "BlockResold",
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            handler: (event: any) => void
-        ) => {
-            try {
-                const listenerId = await program.addEventListener(eventName, handler);
-                if (disposed) {
-                    await program.removeEventListener(listenerId);
-                    return;
-                }
-                listenerIds.push(listenerId);
-            } catch (error) {
-                console.error(`Failed to subscribe to ${eventName}:`, error);
-            }
-        };
-
-        const setupListener = async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await registerListener("BlockBought", (event: any) => {
-                const id = event.id;
-                const buyer = event.buyer.toBase58();
-
-                setBlocks(prev => prev.map(b => b.id === id ? {
-                    ...b,
-                    owner: buyer,
-                    price: 0,
-                    isForSale: false,
-                } : b));
-                toast.info(`Block #${id} was just bought!`);
-                queueGridSync(200);
-            });
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await registerListener("BlockSold", (event: any) => {
-                const id = event.id;
-                const isForSale = Boolean(event.isForSale ?? event.is_for_sale);
-                const priceLamports = typeof event.price?.toNumber === "function"
-                    ? event.price.toNumber()
-                    : Number(event.price || 0);
-                const priceSol = isForSale ? priceLamports / web3.LAMPORTS_PER_SOL : 0;
-
-                setBlocks(prev => prev.map(b => b.id === id ? {
-                    ...b,
-                    isForSale,
-                    price: priceSol,
-                } : b));
-                queueGridSync(200);
-            });
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await registerListener("BlockResold", (event: any) => {
-                const id = event.id;
-                const buyer = event.buyer.toBase58();
-
-                setBlocks(prev => prev.map(b => b.id === id ? {
-                    ...b,
-                    owner: buyer,
-                    price: 0,
-                    isForSale: false,
-                } : b));
-                toast.info(`Block #${id} was resold.`);
-                queueGridSync(200);
-            });
-        };
-
-        void setupListener();
-
-        return () => {
-            disposed = true;
-            for (const listenerId of listenerIds) {
-                void program.removeEventListener(listenerId);
-            }
-            if (scheduledSyncRef.current !== null) {
-                clearTimeout(scheduledSyncRef.current);
-                scheduledSyncRef.current = null;
-                scheduledSyncAtRef.current = null;
-            }
-        };
-    }, [program, fetchGridWithTimeout, queueGridSync]);
-
-    const buyBlock = useCallback(async (
-        id: number,
-        price: number,
-        color: string = "#9945FF",
-        source: BuySource = "unknown"
-    ) => {
-
-        if (!connected || !publicKey) {
-            trackPlausibleEvent("buy_block_wallet_missing", {
-                block_id: id,
-                ui_source: source,
-            });
-            toast.error("Connect wallet first");
-            throw new Error("Wallet not connected");
-        }
-
-        const toastId = toast.loading("Buying block...");
-        let saleType: "primary" | "resale" | "unknown" = "unknown";
-
-        try {
-            const gridPubkey = GRID_PUBKEY;
-
-            const rgb = hexToRgb(color);
-
-            // Determine if New or Resale
-            const targetBlock = blocks.find(b => b.id === id);
-            if (!targetBlock) {
-                await fetchGrid();
-                throw new Error("Block data unavailable. Please retry.");
-            }
-
-            const isResale = targetBlock.owner !== null;
-            saleType = isResale ? "resale" : "primary";
-            trackPlausibleEvent("buy_block_started", {
-                block_id: id,
-                sale_type: saleType,
-                ui_source: source,
-                price_sol: price,
-            });
-
-            if (isResale && (!targetBlock.isForSale || !targetBlock.price || targetBlock.price <= 0)) {
-                toast.error("This block is no longer for sale.");
-                await fetchGrid();
-                throw new Error("Block is not for sale");
-            }
-
-            if (isResale && Math.abs((targetBlock.price || 0) - price) > PRICE_EPSILON_SOL) {
-                toast.error("Price changed. Grid refreshed.");
-                await fetchGrid();
-                throw new Error("Price changed");
-            }
-
-            // Derive Block PDA
-            const [blockPda] = PublicKey.findProgramAddressSync(
-                [
-                    new TextEncoder().encode("block"),
-                    new Uint8Array(new BN(id).toArray("le", 4))
-                ],
-                program.programId
-            );
-
-            let ix;
-
-            if (isResale) {
-                // SECONDARY SALE (buy_resale)
-                const sellerPubkey = new PublicKey(targetBlock.owner!);
-                let adminKey = gridAdmin;
-
-                // Fallback for admin key if not loaded
-                if (!adminKey) {
-                    // Try to fetch it on the fly or just fail
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const gridAcc = await (program.account as any).gridState.fetch(gridPubkey);
-                    adminKey = gridAcc.admin;
-                }
-
-                if (!adminKey) throw new Error("Grid admin not found");
-
-                ix = await program.methods.buyResale(id)
-                    .accounts({
-                        block: blockPda,
-                        grid: gridPubkey,
-                        buyer: publicKey,
-                        seller: sellerPubkey,
-                        admin: adminKey,
-                        systemProgram: SystemProgram.programId,
-                    })
-                    .instruction();
-            } else {
-                // PRIMARY SALE (buy_block)
-                // Needs Admin key for payment
-                let adminKey = gridAdmin;
-                if (!adminKey) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const gridAcc = await (program.account as any).gridState.fetch(gridPubkey);
-                    adminKey = gridAcc.admin;
-                }
-
-                if (!adminKey) throw new Error("Grid admin not found");
-
-                ix = await program.methods.buyBlock(id, rgb)
-                    .accounts({
-                        block: blockPda,
-                        grid: gridPubkey,
-                        buyer: publicKey,
-                        admin: adminKey,
-                        systemProgram: SystemProgram.programId,
-                    })
-                    .instruction();
-            }
-
-            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-
-            const transaction = new Transaction({
-                feePayer: publicKey,
-                blockhash,
-                lastValidBlockHeight,
-            })
-                .add(ix);
-
-            const signature = await sendTransaction(transaction, connection, {
-                skipPreflight: false,
-                maxRetries: 3
-            });
-
-            trackPlausibleEvent("buy_block_submitted", {
-                block_id: id,
-                sale_type: saleType,
-                ui_source: source,
-                tx_signature: signature,
-            });
-
-            // Optimistic Update
-            setBlocks(prev => prev.map(b => b.id === id ? {
-                ...b,
-                owner: publicKey.toBase58(),
-                price: 0,
-                isForSale: false,
-                color: color
-            } : b));
-
-            await connection.confirmTransaction({
-                blockhash,
-                lastValidBlockHeight,
-                signature
-            }, "confirmed");
-
-            trackPlausibleEvent("buy_block_succeeded", {
-                block_id: id,
-                sale_type: saleType,
-                ui_source: source,
-                price_sol: price,
-            });
-            toast.success("Block purchased!", { id: toastId });
-            queueGridSync(); // Eventual consistency
-        } catch (error) {
-            console.error("Purchase Error:", error);
-            queueGridSync(0);
-
-            // Handle User Rejection (Phantom, Solflare, etc)
-            const err = error as { message?: string, name?: string, logs?: string[] };
-            const msg = (err.message || JSON.stringify(error)).toLowerCase();
-            if (
-                msg.includes("user rejected") ||
-                msg.includes("rejected the request") ||
-                msg.includes("stopped") ||
-                msg.includes("cancelled") ||
-                err.name === "WalletSignTransactionError"
-            ) {
-                trackPlausibleEvent("buy_block_cancelled", {
-                    block_id: id,
-                    sale_type: saleType,
-                    ui_source: source,
-                });
-                toast.info("Transaction cancelled", { id: toastId });
-                throw new Error("User cancelled");
-            }
-
-            // detailed logs
-            if (err.logs) {
-                console.error("Sim Logs:", err.logs);
-            }
-
-            if (isMobile() && !isWalletBrowser()) {
-                toast.dismiss(toastId);
-                setWalletModalUrl(window.location.href);
-                setIsWalletModalOpen(true);
-                trackPlausibleEvent("wallet_modal_opened", {
-                    source,
-                    is_mobile: true,
-                    is_wallet_browser: false,
-                });
-                throw error;
-            }
-
-            trackPlausibleEvent("buy_block_failed", {
-                block_id: id,
-                sale_type: saleType,
-                ui_source: source,
-                error_category: toErrorCategory(error),
-            });
-            toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
-            throw error;
-        }
-    }, [connected, publicKey, blocks, gridAdmin, program, connection, sendTransaction, fetchGrid, queueGridSync]);
-
-    const updateBlock = async (id: number, text: string, imageUrl: string, url: string) => {
-        if (!connected || !wallet) {
-            trackPlausibleEvent("update_block_wallet_missing", { block_id: id });
-            toast.error("Connect wallet first");
-            throw new Error("Wallet not connected");
-        }
-
-        const safeImageUrl = imageUrl.trim() ? toSafeExternalUrl(imageUrl) : "";
-        const safeUrl = url.trim() ? toSafeExternalUrl(url) : "";
-
-        if (imageUrl.trim() && !safeImageUrl) {
-            trackPlausibleEvent("update_block_failed", {
-                block_id: id,
-                error_category: "invalid_image_url",
-            });
-            toast.error("Invalid image URL.");
-            throw new Error("Invalid image URL");
-        }
-
-        if (url.trim() && !safeUrl) {
-            trackPlausibleEvent("update_block_failed", {
-                block_id: id,
-                error_category: "invalid_link_url",
-            });
-            toast.error("Invalid link URL.");
-            throw new Error("Invalid link URL");
-        }
-
-        const normalizedImageUrl = safeImageUrl || "";
-        const normalizedUrl = safeUrl || "";
-
-        // Content Moderation
-        if (!isContentAllowed(text, normalizedImageUrl)) {
-            trackPlausibleEvent("update_block_blocked", {
-                block_id: id,
-                reason: "content_not_allowed",
-            });
-            toast.error("Content not allowed.");
-            return;
-        }
-
-        trackPlausibleEvent("update_block_started", {
-            block_id: id,
-            has_text: Boolean(text.trim()),
-            has_image: Boolean(normalizedImageUrl),
-            has_link: Boolean(normalizedUrl),
-        });
-        const toastId = toast.loading("Updating block...");
-        try {
-            // Derive Block PDA
-            const [blockPda] = PublicKey.findProgramAddressSync(
-                [
-                    new TextEncoder().encode("block"),
-                    new Uint8Array(new BN(id).toArray("le", 4))
-                ],
-                program.programId
-            );
-
-            const tx = await program.methods.updateBlock(id, text, normalizedImageUrl, normalizedUrl)
-                .accounts({
-                    block: blockPda,
-                    owner: wallet.publicKey,
-                })
-                .rpc();
-
-            // Optimistic Update
-            setBlocks(prev => prev.map(b => b.id === id ? {
-                ...b,
-                text,
-                imageUrl: normalizedImageUrl,
-                url: normalizedUrl
-            } : b));
-
-            await connection.confirmTransaction(tx, "confirmed");
-            trackPlausibleEvent("update_block_succeeded", {
-                block_id: id,
-                has_text: Boolean(text.trim()),
-                has_image: Boolean(normalizedImageUrl),
-                has_link: Boolean(normalizedUrl),
-            });
-            toast.success("Block updated!", { id: toastId });
-            queueGridSync();
-        } catch (error) {
-            console.error(error);
-            queueGridSync(0); // Revert/Sync on error
-            trackPlausibleEvent("update_block_failed", {
-                block_id: id,
-                error_category: toErrorCategory(error),
-            });
-            toast.error("Update failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
-            throw error;
-        }
-    };
-
-    const sellBlock = async (id: number, priceInput: string) => {
-        if (!connected || !wallet) {
-            trackPlausibleEvent("set_sale_wallet_missing", { block_id: id });
-            toast.error("Connect wallet first");
-            throw new Error("Wallet not connected");
-        }
-        let normalizedPrice = 0;
-        let saleAction: "list" | "delist" = "list";
-        const toastId = toast.loading("Listing block...");
-        try {
-            const lamportsBigInt = parseSolToLamports(priceInput);
-            const lamports = new BN(lamportsBigInt.toString());
-            normalizedPrice = lamportsBigInt === BigInt(0)
-                ? 0
-                : Number(lamportsBigInt) / web3.LAMPORTS_PER_SOL;
-            saleAction = normalizedPrice > 0 ? "list" : "delist";
-            trackPlausibleEvent("set_sale_started", {
-                block_id: id,
-                action: saleAction,
-                price_sol: normalizedPrice,
-            });
-
-            // Derive Block PDA
-            const [blockPda] = PublicKey.findProgramAddressSync(
-                [
-                    new TextEncoder().encode("block"),
-                    new Uint8Array(new BN(id).toArray("le", 4))
-                ],
-                program.programId
-            );
-
-            const tx = await program.methods.sellBlock(id, lamports)
-                .accounts({
-                    block: blockPda,
-                    owner: wallet.publicKey,
-                })
-                .rpc();
-
-            // Optimistic Update
-            setBlocks(prev => prev.map(b => b.id === id ? {
-                ...b,
-                price: normalizedPrice,
-                isForSale: normalizedPrice > 0
-            } : b));
-
-            await connection.confirmTransaction(tx, "confirmed");
-            trackPlausibleEvent("set_sale_succeeded", {
-                block_id: id,
-                action: saleAction,
-                price_sol: normalizedPrice,
-            });
-            toast.success(saleAction === "list" ? "Block listed for sale!" : "Block removed from sale.", { id: toastId });
-            queueGridSync();
-        } catch (error) {
-            console.error(error);
-            queueGridSync(0); // Revert/Sync on error
-            trackPlausibleEvent("set_sale_failed", {
-                block_id: id,
-                action: saleAction,
-                price_sol: normalizedPrice,
-                error_category: toErrorCategory(error),
-            });
-            toast.error("Listing failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
-            throw error;
-        }
-    };
-
-    const refreshBlock = async () => {
-        await fetchGrid();
-    };
-
-    const openWalletModal = (source: WalletModalSource = "unknown") => {
+    const openWalletModal = useCallback((source: WalletModalSource = "unknown") => {
         trackPlausibleEvent("wallet_modal_opened", {
             source,
             is_mobile: isMobile(),
             is_wallet_browser: isWalletBrowser(),
         });
+
         if (isMobile() && !isWalletBrowser()) {
-            setWalletModalUrl(window.location.href);
-            setIsWalletModalOpen(true);
-        } else {
-            setVisible(true);
+            openWalletSelectorModal(window.location.href);
+            return;
         }
-    };
+
+        setVisible(true);
+    }, [openWalletSelectorModal, setVisible]);
 
     return (
-        <ProgramContext.Provider value={{ blocks, buyBlock, updateBlock, sellBlock, refreshBlock, isLoading, isSyncing, openWalletModal }}>
+        <ProgramContext.Provider
+            value={{
+                blocks,
+                buyBlock,
+                updateBlock,
+                sellBlock,
+                refreshBlock,
+                isLoading,
+                isSyncing,
+                openWalletModal,
+            }}
+        >
             {children}
             <WalletSelectorModal
                 isOpen={isWalletModalOpen}

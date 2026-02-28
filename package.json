@@ -55,5 +55,6 @@
       "eslint --fix",
       "vitest related --run"
     ]
-  }
+  },
+  "license": "MIT"
 }

@@ -7,6 +7,10 @@ const INVALID_LITERAL_VALUES = new Set([
     "none",
 ]);
 
+export const DEVNET_RPC_ENDPOINT = "https://api.devnet.solana.com";
+export const MAINNET_RPC_ENDPOINT = "https://api.mainnet-beta.solana.com";
+export type RpcCluster = "devnet" | "mainnet" | "unknown";
+
 const stripWrappingQuotes = (value: string): string => {
     const trimmed = value.trim();
     if (trimmed.length < 2) {
@@ -56,6 +60,50 @@ export const normalizeRpcEndpoint = (value?: string | null): string | null => {
     }
 };
 
+export const inferRpcCluster = (endpoint: string): RpcCluster => {
+    const lower = endpoint.toLowerCase();
+    if (lower.includes("devnet")) {
+        return "devnet";
+    }
+    if (lower.includes("mainnet")) {
+        return "mainnet";
+    }
+    return "unknown";
+};
+
+export const getFallbackRpcEndpoints = (
+    primaryEndpoint: string,
+    explicitCandidates: Array<string | null | undefined> = [],
+): string[] => {
+    const normalizedPrimary = normalizeRpcEndpoint(primaryEndpoint);
+    if (!normalizedPrimary) {
+        return [];
+    }
+
+    const explicit = explicitCandidates
+        .map((candidate) => normalizeRpcEndpoint(candidate))
+        .filter((candidate): candidate is string => Boolean(candidate));
+
+    const cluster = inferRpcCluster(normalizedPrimary);
+    const automaticSameClusterFallbacks = cluster === "mainnet"
+        ? [MAINNET_RPC_ENDPOINT]
+        : cluster === "devnet"
+            ? [DEVNET_RPC_ENDPOINT]
+            : [];
+
+    const result: string[] = [];
+    const seen = new Set<string>();
+    for (const candidate of [...explicit, ...automaticSameClusterFallbacks]) {
+        if (candidate === normalizedPrimary || seen.has(candidate)) {
+            continue;
+        }
+        seen.add(candidate);
+        result.push(candidate);
+    }
+
+    return result;
+};
+
 export const resolveSolanaRpcEndpoint = (
     ...candidates: Array<string | null | undefined>
 ): string => {
@@ -66,5 +114,5 @@ export const resolveSolanaRpcEndpoint = (
         }
     }
 
-    return "https://api.devnet.solana.com";
+    return DEVNET_RPC_ENDPOINT;
 };

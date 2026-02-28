@@ -1,7 +1,7 @@
 services:
   blocs:
     container_name: blocs
-    image: ${BLOCS_IMAGE:-ghcr.io/maerz/blocs:latest}
+    image: ${BLOCS_IMAGE:-ghcr.io/Numoy/blocs:latest}
     restart: always
     environment:
       NEXT_PUBLIC_SOLANA_RPC_URL: ${NEXT_PUBLIC_SOLANA_RPC_URL:-https://api.devnet.solana.com}

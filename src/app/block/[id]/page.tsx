@@ -1,5 +1,5 @@
 import { BN, Program, AnchorProvider, Idl } from "@coral-xyz/anchor";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import BlockClient from "./BlockClient";
 import idl from "@/utils/idl.json";
 import { GRID_SIZE, PROGRAM_ID } from "@/utils/constants";
@@ -7,15 +7,19 @@ import { Metadata } from 'next';
 import { toSafeExternalUrl } from "@/utils/url";
 import { unstable_cache } from "next/cache";
 import { resolveSolanaRpcEndpoint } from "@/utils/rpc";
+import { asBlocsProgram } from "@/utils/programTypes";
 
 // This is a Server Component
 
 const rpcUrl = resolveSolanaRpcEndpoint(process.env.SOLANA_RPC_URL, process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
 const connection = new Connection(rpcUrl, "confirmed");
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const provider = new AnchorProvider(connection, { publicKey: PublicKey.default } as any, {});
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const program = new Program(idl as Idl, provider) as any;
+const readonlyWallet = {
+    publicKey: PublicKey.default,
+    signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T): Promise<T> => tx,
+    signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> => txs,
+};
+const provider = new AnchorProvider(connection, readonlyWallet, {});
+const program = asBlocsProgram(new Program(idl as Idl, provider));
 
 const parseString = (arr: number[]) => {
     const uint8 = new Uint8Array(arr);
@@ -39,8 +43,7 @@ const fetchBlockDataFromChain = async (id: number) => {
 
     try {
         // 4. Fetch Account
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const account: any = await program.account.block.fetch(blockPda);
+        const account = await program.account.block.fetch(blockPda);
 
         return {
             id: account.id,
@@ -101,13 +104,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         openGraph: {
             title: title,
             description: description,
-            images: safeImageUrl ? [safeImageUrl] : [], // TODO: Add default OG image if none
+            images: safeImageUrl ? [safeImageUrl] : ["/og-image.png"],
         },
         twitter: {
             card: "summary_large_image",
             title: title,
             description: description,
-            images: safeImageUrl ? [safeImageUrl] : [],
+            images: safeImageUrl ? [safeImageUrl] : ["/og-image.png"],
         }
     };
 }

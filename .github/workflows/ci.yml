@@ -10,19 +10,14 @@ jobs:
   frontend:
     name: Frontend Check
     runs-on: ubuntu-latest
-    environment: staging
     env:
       NEXT_PUBLIC_SOLANA_RPC_URL: https://api.devnet.solana.com
-      HETZNER_ACCESS_KEY_ID: ${{ secrets.HETZNER_ACCESS_KEY_ID }}
-      HETZNER_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_SECRET_ACCESS_KEY }}
-      HETZNER_BUCKET_NAME: ${{ secrets.HETZNER_BUCKET_NAME }}
-      HETZNER_REGION: fsn1
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
           cache: 'npm'
@@ -32,6 +27,12 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit Tests
+        run: npm run test -- --run
 
       - name: Build
         run: npm run build
@@ -44,10 +45,10 @@ jobs:
         working-directory: ./anchor
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
           cache: 'yarn'
@@ -57,11 +58,11 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
 
       # Cache Cargo Registry (Speeds up Rust builds)
       - name: Cache Cargo registry + index
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
         with:
           path: |
             ~/.cargo/registry
@@ -72,7 +73,7 @@ jobs:
       # Cache Solana CLI (Restored and fixed)
       - name: Cache Solana CLI
         id: cache-solana
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
         with:
           path: |
             ~/solana-release
@@ -81,7 +82,7 @@ jobs:
       # Cache Anchor CLI
       - name: Cache Anchor CLI
         id: cache-anchor
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
         with:
           path: ~/.cargo/bin/anchor
           key: anchor-${{ runner.os }}-v0.32.1
@@ -120,4 +121,4 @@ jobs:
         run: anchor build
 
       - name: Run Tests
-        run: anchor test
+        run: yarn test

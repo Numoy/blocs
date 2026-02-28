@@ -1,68 +1,80 @@
-# Blocs - 10,000 Blocks on Solana
+# Blocs
 
-Blocs is a decentralized experiment on the Solana blockchain. A 100x100 grid of 10,000 blocks, fully customizable and ownable by the community.
+Blocs is a 100x100 on-chain grid on Solana.
+Each cell is a tradable block that can hold color, text, image URL, and link metadata.
 
-## Overview
+## Why Blocs
 
--   **Total Supply**: 10,000 Blocks (Fixed).
--   **Grid Size**: 100x100.
--   **On-Chain Data**: Color, Text, Image URL, Website URL.
--   **Economy**: Buy, Sell, Trade. 5% Royalty on secondary sales to the creator.
+- Ownable digital space with transparent on-chain state.
+- Fixed supply (10,000 blocks) with simple market mechanics.
+- Lightweight way to publish identity, art, links, or community campaigns.
 
-## Project Structure
+## How It Works
 
--   `src/`: Next.js Frontend (React, TypeScript, CSS Modules).
--   `anchor/`: Solana Smart Contract (Rust, Anchor Framework).
+1. Unowned blocks are bought from the protocol at deterministic primary pricing.
+2. Owners can update their block metadata.
+3. Owners can list blocks for resale.
+4. Secondary sales apply a 5% royalty to the admin address.
 
-## Verification
+## Network + Program
 
-The smart contract is deployed on Solana Devnet (and Mainnet soon). You can verify the code matches the on-chain program.
+- Current deployment target: Solana Devnet
+- Program ID: `C4MgCjSCzHPnxaFHqTPFH7ur67rKHeunEQAzGRSMDKDM`
 
-**Program ID**: `C4MgCjSCzHPnxaFHqTPFH7ur67rKHeunEQAzGRSMDKDM`
+To verify a local build against on-chain artifacts:
 
-### Build & Verify
-1.  Navigate to `anchor/`
-2.  Run `anchor build`
-3.  Compare the checksum of `anchor/target/deploy/blocs.so` with the on-chain program data.
+1. Go to `anchor/`
+2. Run `anchor build`
+3. Compare `anchor/target/deploy/blocs.so` checksum with the deployed program artifact
 
-## Running Locally
+## Project Layout
+
+- `src/`: Next.js app (frontend + API routes)
+- `anchor/`: Solana smart contract (Rust + Anchor)
+
+## Local Development
 
 ### Prerequisites
--   Node.js 22+
--   Rust & Cargo
--   Solana CLI
--   Anchor CLI
 
-### Steps
-1.  **Frontend**:
-    ```bash
-    cp .env.example .env
-    npm install
-    npm run dev
-    ```
-    Open `http://localhost:3000`.
+- Node.js 22+
+- Rust + Cargo
+- Solana CLI
+- Anchor CLI
 
-    Required environment variables are documented in `.env.example`, including:
--   `NEXT_PUBLIC_SOLANA_RPC_URL`
--   `NEXT_PUBLIC_SITE_URL`
--   `SOLANA_RPC_URL` (optional server-side override)
--   `HETZNER_*` object storage credentials/settings
--   `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (optional shared upload guards for multi-instance deploys)
+### Run Frontend
 
-    RPC values must be valid HTTP(S) URLs (for example `https://api.devnet.solana.com`).
-    After deployment, verify runtime configuration with:
-    ```bash
-    curl -sS https://10000-blocks.com/api/health
-    ```
+```bash
+cp .env.example .env
+npm install
+npm run dev
+```
 
-2.  **Smart Contract**:
-    ```bash
-    cd anchor
-    anchor build
-    anchor test
-    ```
+Open [http://localhost:3000](http://localhost:3000).
 
-### Quality Checks
+### Environment Variables
+
+See [`.env.example`](./.env.example). Important variables include:
+
+- `NEXT_PUBLIC_SOLANA_RPC_URL`
+- `NEXT_PUBLIC_SITE_URL`
+- `SOLANA_RPC_URL` (optional server-side override)
+- `NEXT_PUBLIC_SOLANA_RPC_FALLBACK_URLS` (optional comma-separated fallback RPC endpoints)
+- `HETZNER_*` object storage settings
+- `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (optional shared upload guards)
+- `ALLOW_IN_MEMORY_UPLOAD_GUARDS` (default `false`; production upload route expects shared guards unless explicitly allowed)
+- `ERROR_REPORT_WEBHOOK_URL` (optional client error forwarding target)
+
+RPC values must be valid HTTP(S) URLs (for example `https://api.devnet.solana.com`).
+
+### Run Smart Contract Tests
+
+```bash
+cd anchor
+anchor build
+anchor test
+```
+
+## Quality Checks
 
 ```bash
 npm run lint
@@ -70,6 +82,23 @@ npm run typecheck
 npm run test -- --run
 ```
 
+Health endpoint check after deploy:
+
+```bash
+curl -sS https://10000-blocks.com/api/health
+```
+
+## Trust + Governance
+
+- Security policy: [`SECURITY.md`](./SECURITY.md)
+- Contribution guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- Code of conduct: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
+- Changelog: [`CHANGELOG.md`](./CHANGELOG.md)
+- Privacy notice: [`PRIVACY.md`](./PRIVACY.md)
+- Support policy: [`SUPPORT.md`](./SUPPORT.md)
+- Release process: [`RELEASE.md`](./RELEASE.md)
+- Threat model: [`THREAT_MODEL.md`](./THREAT_MODEL.md)
+
 ## License
 
-MIT License.
+[MIT](./LICENSE)

@@ -1,31 +1,23 @@
 # Blocs - Solana Grid Protocol
 
-Blocs is a decentralized 100x100 grid stored on the Solana blockchain. Users can buy blocks, set their color, and update metadata (URL, Image, Text). The state is managed in a single large "Zero Copy" account for efficiency.
+Blocs is a decentralized 100x100 grid on Solana. Users can buy blocks, update color/text/image/link metadata, and list blocks for resale.
 
-## 🏗 Architecture
+## Architecture
 
-The project is built using:
-- **Solana** for the blockchain layer.
-- **Anchor Framework** for smart contract development.
-- **Zero Copy Deserialization** to handle the large 10,000 block grid state within Solana's account limits.
+The program uses one PDA per block instead of a single giant grid account:
+- `GridState` PDA (`["grid"]`): global admin/config account.
+- `Block` PDA (`["block", id_le_bytes]`): block ownership, pricing, and metadata for each block id.
 
-### Smart Contract
+Core instruction set:
+1. `initialize`: creates `GridState` and sets the admin.
+2. `buy_block`: primary sale for an uninitialized block PDA at `INITIAL_PRICE + id`.
+3. `buy_resale`: secondary sale with a 5% royalty to admin.
+4. `update_block`: owner-only metadata updates (text/image URL/link URL).
+5. `sell_block`: owner-only list/delist with lamport price.
+6. `update_admin`: admin rotation.
+7. `close_block`: owner closes block PDA and recovers rent.
 
-- **Program ID**: `C4MgCjSCzHPnxaFHqTPFH7ur67rKHeunEQAzGRSMDKDM` (Devnet)
-- **Account Structure**: 
-  - `GridState`: The main account holding admin info and the 10,000 blocks.
-  - `BlockInfo`: Struct representing a single block (Owner, Price, Color, Content).
-
-### Instructions
-
-1.  **`initialize`**: Sets up the grid. Can only be run once by the admin.
-2.  **`buy_block`**: Purchasing a block.
-    -   If owned by System (default), buy from Admin for 0.01 SOL.
-    -   If owned by User, buy from User (if for sale). Includes 5% royalty to Admin.
-3.  **`update_block`**: Update content strings (Text, Image URL, Link URL).
-4.  **`sell_block`**: List or delist a block for sale.
-
-## 🚀 Setup & Development
+## Setup & Development
 
 ### Prerequisites
 
@@ -54,15 +46,18 @@ The project is built using:
 
 4.  Run tests:
     ```bash
-    anchor test
+    yarn test
     ```
 
-## 🔒 Security
+`yarn test` wraps `anchor test` and auto-selects free validator ports to avoid local port collisions.
 
-- **Re-initialization Prevention**: The `initialize` instruction checks for an existing discriminator to prevent overwriting the grid.
-- **Access Control**: Only the block owner can update content or list for sale.
-- **Zero Copy**: We use `#[account(zero_copy)]` and `load_mut()` to safely handle the large data structure without blowing the stack.
+## Security Notes
 
-## 📄 License
+- PDA seed constraints enforce deterministic account ownership (`grid` and per-block `block` PDAs).
+- Ownership checks (`has_one = owner`) gate updates, listing, and closure.
+- Admin validation is required for primary sale payout and royalty payout in resale flow.
+- Fixed-size metadata arrays enforce strict max lengths on-chain.
 
-MIT
+## License
+
+[MIT](../LICENSE)
