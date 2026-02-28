@@ -72,11 +72,12 @@ const getBlockData = async (id: number) => {
 };
 
 type Props = {
-    params: { id: string };
+    params: Promise<{ id: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-    const id = parseInt(params.id, 10);
+    const { id: rawId } = await params;
+    const id = parseInt(rawId, 10);
     if (!Number.isInteger(id) || id < 0 || id >= GRID_SIZE) {
         return {
             title: "Blocs",

@@ -258,6 +258,18 @@ const consumeReplayToken = async (token: string, now = Date.now()): Promise<bool
     }
 };
 
+const isAclUnsupportedError = (error: unknown): boolean => {
+    const candidate = error as { name?: string; code?: string; Code?: string; message?: string } | null;
+    const code = String(candidate?.code || candidate?.Code || candidate?.name || "").toLowerCase();
+    const message = String(candidate?.message || "").toLowerCase();
+
+    return (
+        code.includes("accesscontrollistnotsupported") ||
+        (code.includes("invalidrequest") && message.includes("acl")) ||
+        message.includes("accesscontrollistnotsupported")
+    );
+};
+
 const verifyWalletSignature = ({
     blockId,
     owner,
@@ -535,7 +547,7 @@ export async function POST(request: Request) {
         const filename = `${blockId}_${safeOwnerPrefix}_${Date.now()}_${randomUUID().slice(0, 8)}_${sanitizedName}.webp`;
         // -----------------------------
 
-        const command = new PutObjectCommand({
+        const basePutObjectParams = {
             Bucket: getBucketName(),
             Key: filename,
             Body: optimizedBuffer,
@@ -545,9 +557,23 @@ export async function POST(request: Request) {
                 owner: normalizedOwner,
                 blockId: String(blockId),
             },
-        });
+        };
 
-        await getS3Client().send(command);
+        try {
+            await getS3Client().send(
+                new PutObjectCommand({
+                    ...basePutObjectParams,
+                    ACL: "public-read",
+                })
+            );
+        } catch (error) {
+            if (!isAclUnsupportedError(error)) {
+                throw error;
+            }
+
+            console.warn("Object storage rejected ACL header; retrying upload without ACL:", error);
+            await getS3Client().send(new PutObjectCommand(basePutObjectParams));
+        }
 
         const fileUrl = getPublicObjectUrl(filename);
 
