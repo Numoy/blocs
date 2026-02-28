@@ -18,7 +18,7 @@ const isUploadConfigured = (): boolean => {
 export async function GET() {
     const publicRpc = normalizeRpcEndpoint(process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
     const serverRpc = normalizeRpcEndpoint(process.env.SOLANA_RPC_URL);
-    const resolvedRpc = resolveSolanaRpcEndpoint(serverRpc, publicRpc);
+    const resolvedRpc = resolveSolanaRpcEndpoint(publicRpc, serverRpc);
     const inferredCluster = inferRpcCluster(resolvedRpc);
     const resolvedCluster = inferredCluster === "unknown" ? "custom" : inferredCluster;
 
@@ -44,7 +44,7 @@ export async function GET() {
                     cluster: resolvedCluster,
                     publicConfigured: Boolean(publicRpc),
                     serverOverrideConfigured: Boolean(serverRpc),
-                    usingServerOverride: Boolean(serverRpc),
+                    usingServerOverride: Boolean(serverRpc) && resolvedRpc === serverRpc,
                 },
                 upload: {
                     configured: uploadConfigured,

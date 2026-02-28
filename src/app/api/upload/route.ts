@@ -35,7 +35,9 @@ const RATE_LIMIT_MAX_BY_WALLET = 12;
 const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_MULTIPART_BODY_BYTES = MAX_SIZE_BYTES + 512 * 1024; // Allow multipart/form-data overhead.
 const MAX_INPUT_PIXELS = 16_777_216; // 4096x4096 upper bound
-const SOLANA_RPC_URL = resolveSolanaRpcEndpoint(process.env.SOLANA_RPC_URL, process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
+// Prefer the public RPC endpoint first so server-side upload ownership checks
+// use the same cluster as wallet-driven client transactions.
+const SOLANA_RPC_URL = resolveSolanaRpcEndpoint(process.env.NEXT_PUBLIC_SOLANA_RPC_URL, process.env.SOLANA_RPC_URL);
 const solanaConnection = new Connection(SOLANA_RPC_URL, "confirmed");
 const EXPECTED_REQUEST_ORIGIN = (() => {
     const raw = process.env.NEXT_PUBLIC_SITE_URL;
