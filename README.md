@@ -2,6 +2,8 @@
 
 Blocs is a 100x100 on-chain grid on Solana.
 Each cell is a tradable block that can hold color, text, image URL, and link metadata.
+Live app: [https://10000-blocks.com](https://10000-blocks.com)
+This repository is the public transparency surface for that live deployment.
 
 ## Why Blocs
 
@@ -88,6 +90,16 @@ Health endpoint check after deploy:
 curl -sS https://10000-blocks.com/api/health
 ```
 
+## Verify The Live App
+
+Use the build metadata exposed at:
+
+```bash
+curl -fsS https://10000-blocks.com/api/health | jq .
+```
+
+Then verify tag, commit, image digest, and signature/provenance using [`VERIFICATION.md`](./VERIFICATION.md).
+
 ## Trust + Governance
 
 - Security policy: [`SECURITY.md`](./SECURITY.md)
@@ -98,6 +110,7 @@ curl -sS https://10000-blocks.com/api/health
 - Support policy: [`SUPPORT.md`](./SUPPORT.md)
 - Release process: [`RELEASE.md`](./RELEASE.md)
 - Threat model: [`THREAT_MODEL.md`](./THREAT_MODEL.md)
+- Verification guide: [`VERIFICATION.md`](./VERIFICATION.md)
 
 ## License
 

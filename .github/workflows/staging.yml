@@ -1,12 +1,9 @@
-name: Release to Production
+name: Deploy to Staging
 
 on:
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "Signed annotated release tag (e.g. v1.0.0)"
-        required: true
-        type: string
+  push:
+    tags:
+      - "v*.*.*"
 
 env:
   REGISTRY: ghcr.io
@@ -14,7 +11,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: production
+    environment: staging
     permissions:
       contents: read
       packages: write
@@ -22,18 +19,23 @@ jobs:
       attestations: write
 
     steps:
-      - name: Resolve and verify signed annotated release tag
-        id: release_ref
+      - name: Resolve and verify signed annotated staging tag
+        id: staging_ref
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const tagName = `${{ inputs.release_tag }}`.trim();
+            const ref = context.ref || "";
+            if (!ref.startsWith("refs/tags/")) {
+              core.setFailed(`Expected a tag ref, got ${ref}`);
+              return;
+            }
 
+            const tagName = ref.replace("refs/tags/", "").trim();
             if (!/^v\d+\.\d+\.\d+$/.test(tagName)) {
               core.setFailed(
-                `Invalid release_tag '${tagName}'. Expected strict semver tag format like v1.0.0.`,
+                `Invalid staging tag '${tagName}'. Expected strict semver tag format like v1.0.0.`,
               );
               return;
             }
@@ -46,7 +48,7 @@ jobs:
 
             if (refResponse.data.object.type !== "tag") {
               core.setFailed(
-                `Release tag ${tagName} must be an annotated and signed tag (lightweight tags are rejected).`,
+                `Staging tag ${tagName} must be an annotated and signed tag (lightweight tags are rejected).`,
               );
               return;
             }
@@ -73,12 +75,12 @@ jobs:
 
             core.setOutput("tag_name", tagName);
             core.setOutput("commit_sha", taggedObject.sha);
-            core.info(`Verified signed release tag: ${tagName} -> ${taggedObject.sha}`);
+            core.info(`Verified signed staging tag: ${tagName} -> ${taggedObject.sha}`);
 
-      - name: Checkout repository at release commit
+      - name: Checkout repository at staging tag commit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ steps.release_ref.outputs.commit_sha }}
+          ref: ${{ steps.staging_ref.outputs.commit_sha }}
 
       - name: Normalize image repository name
         id: image_repo
@@ -90,7 +92,8 @@ jobs:
       - name: Validate deployment configuration
         id: validate_config
         env:
-          RAW_NEXT_PUBLIC_SOLANA_RPC_URL: ${{ vars.NEXT_PUBLIC_SOLANA_RPC_URL || secrets.NEXT_PUBLIC_SOLANA_RPC_URL }}
+          RAW_SITE_BASE_URL: ${{ vars.SITE_BASE_URL || secrets.SITE_BASE_URL }}
+          RAW_NEXT_PUBLIC_SOLANA_RPC_URL: ${{ vars.NEXT_PUBLIC_SOLANA_RPC_URL || secrets.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com' }}
           RAW_SOLANA_RPC_URL: ${{ vars.SOLANA_RPC_URL || secrets.SOLANA_RPC_URL }}
           HETZNER_ACCESS_KEY_ID: ${{ secrets.HETZNER_ACCESS_KEY_ID }}
           HETZNER_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_SECRET_ACCESS_KEY }}
@@ -110,7 +113,7 @@ jobs:
 
             if [ "${raw:0:1}" = "'" ] && [ "${raw: -1}" = "'" ]; then
               raw="${raw:1:${#raw}-2}"
-            elif [ "${raw:0:1}" = "\"" ] && [ "${raw: -1}" = "\"" ]; then
+            elif [ "${raw:0:1}" = '"' ] && [ "${raw: -1}" = '"' ]; then
               raw="${raw:1:${#raw}-2}"
             fi
 
@@ -151,33 +154,29 @@ jobs:
             fi
           }
 
+          require_non_empty "SITE_BASE_URL" "${RAW_SITE_BASE_URL:-}"
           require_non_empty "HETZNER_ACCESS_KEY_ID" "${HETZNER_ACCESS_KEY_ID:-}"
           require_non_empty "HETZNER_SECRET_ACCESS_KEY" "${HETZNER_SECRET_ACCESS_KEY:-}"
           require_non_empty "HETZNER_BUCKET_NAME" "${HETZNER_BUCKET_NAME:-}"
-          require_non_empty "NEXT_PUBLIC_SOLANA_RPC_URL" "${RAW_NEXT_PUBLIC_SOLANA_RPC_URL:-}"
+
+          if ! site_base_url="$(normalize_url "${RAW_SITE_BASE_URL:-}")"; then
+            echo "::error::SITE_BASE_URL is missing or invalid. Example: https://staging.10000-blocks.com"
+            exit 1
+          fi
+          site_base_url="${site_base_url%/}"
 
           if ! next_public_rpc="$(normalize_url "${RAW_NEXT_PUBLIC_SOLANA_RPC_URL:-}")"; then
-            echo "::error::NEXT_PUBLIC_SOLANA_RPC_URL is missing or invalid. Example: https://api.mainnet-beta.solana.com"
+            echo "::error::NEXT_PUBLIC_SOLANA_RPC_URL is invalid. Example: https://api.devnet.solana.com"
             exit 1
           fi
 
           if [ -n "${RAW_SOLANA_RPC_URL:-}" ]; then
             if ! solana_rpc="$(normalize_url "${RAW_SOLANA_RPC_URL}")"; then
-              echo "::error::SOLANA_RPC_URL is invalid. Example: https://api.mainnet-beta.solana.com"
+              echo "::error::SOLANA_RPC_URL is invalid. Example: https://api.devnet.solana.com"
               exit 1
             fi
           else
             solana_rpc="$next_public_rpc"
-          fi
-
-          if printf '%s' "$next_public_rpc" | grep -qiE 'devnet|testnet'; then
-            echo "::error::NEXT_PUBLIC_SOLANA_RPC_URL must target mainnet in production."
-            exit 1
-          fi
-
-          if printf '%s' "$solana_rpc" | grep -qiE 'devnet|testnet'; then
-            echo "::error::SOLANA_RPC_URL must target mainnet in production."
-            exit 1
           fi
 
           if [ -n "${RAW_HETZNER_ENDPOINT:-}" ] && ! normalize_url "${RAW_HETZNER_ENDPOINT}" >/dev/null; then
@@ -190,6 +189,7 @@ jobs:
             exit 1
           fi
 
+          echo "site_base_url=${site_base_url}" >> "$GITHUB_OUTPUT"
           echo "next_public_solana_rpc_url=${next_public_rpc}" >> "$GITHUB_OUTPUT"
           echo "solana_rpc_url=${solana_rpc}" >> "$GITHUB_OUTPUT"
 
@@ -206,8 +206,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ steps.image_repo.outputs.value }}
           tags: |
-            type=raw,value=${{ steps.release_ref.outputs.tag_name }}
-            type=raw,value=latest
+            type=raw,value=staging-${{ steps.staging_ref.outputs.tag_name }}
+            type=raw,value=staging-latest
 
       - name: Build and push Docker image
         id: build_image
@@ -247,13 +247,14 @@ jobs:
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: sbom-${{ steps.release_ref.outputs.tag_name }}
+          name: sbom-staging-${{ steps.staging_ref.outputs.tag_name }}
           path: sbom.spdx.json
           if-no-files-found: error
 
       - name: Deploy to Hetzner
         uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262
         env:
+          SITE_BASE_URL: ${{ steps.validate_config.outputs.site_base_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           NEXT_PUBLIC_SOLANA_RPC_URL: ${{ steps.validate_config.outputs.next_public_solana_rpc_url }}
@@ -267,14 +268,14 @@ jobs:
           UPSTASH_REDIS_REST_URL: ${{ vars.UPSTASH_REDIS_REST_URL || secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
           BLOCS_IMAGE: ${{ env.REGISTRY }}/${{ steps.image_repo.outputs.value }}@${{ steps.build_image.outputs.digest }}
-          BLOCS_BUILD_COMMIT_SHA: ${{ steps.release_ref.outputs.commit_sha }}
-          BLOCS_BUILD_TAG: ${{ steps.release_ref.outputs.tag_name }}
+          BLOCS_BUILD_COMMIT_SHA: ${{ steps.staging_ref.outputs.commit_sha }}
+          BLOCS_BUILD_TAG: ${{ steps.staging_ref.outputs.tag_name }}
           BLOCS_IMAGE_DIGEST: ${{ steps.build_image.outputs.digest }}
         with:
           host: ${{ vars.SERVER_HOST || secrets.SERVER_HOST }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GITHUB_TOKEN,GITHUB_ACTOR,NEXT_PUBLIC_SOLANA_RPC_URL,SOLANA_RPC_URL,HETZNER_ACCESS_KEY_ID,HETZNER_SECRET_ACCESS_KEY,HETZNER_BUCKET_NAME,HETZNER_REGION,HETZNER_ENDPOINT,HETZNER_PUBLIC_BASE_URL,UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN,BLOCS_IMAGE,BLOCS_BUILD_COMMIT_SHA,BLOCS_BUILD_TAG,BLOCS_IMAGE_DIGEST
+          envs: SITE_BASE_URL,GITHUB_TOKEN,GITHUB_ACTOR,NEXT_PUBLIC_SOLANA_RPC_URL,SOLANA_RPC_URL,HETZNER_ACCESS_KEY_ID,HETZNER_SECRET_ACCESS_KEY,HETZNER_BUCKET_NAME,HETZNER_REGION,HETZNER_ENDPOINT,HETZNER_PUBLIC_BASE_URL,UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN,BLOCS_IMAGE,BLOCS_BUILD_COMMIT_SHA,BLOCS_BUILD_TAG,BLOCS_IMAGE_DIGEST
           script: |
             set -euo pipefail
 
@@ -325,27 +326,16 @@ jobs:
             echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
             cd ~/blocs
-            git fetch --tags --prune origin
+            git fetch --prune origin
 
             if ! git cat-file -e "${BLOCS_BUILD_COMMIT_SHA}^{commit}" 2>/dev/null; then
-              echo "Release commit ${BLOCS_BUILD_COMMIT_SHA} is not available after fetch."
-              exit 1
-            fi
-
-            if ! tag_commit="$(git rev-list -n 1 "${BLOCS_BUILD_TAG}^{commit}" 2>/dev/null)"; then
-              echo "Release tag ${BLOCS_BUILD_TAG} is missing on the deployment host."
-              exit 1
-            fi
-
-            if [ "$tag_commit" != "$BLOCS_BUILD_COMMIT_SHA" ]; then
-              echo "Release tag ${BLOCS_BUILD_TAG} does not match commit ${BLOCS_BUILD_COMMIT_SHA}."
-              echo "Resolved tag commit: ${tag_commit}"
+              echo "Commit ${BLOCS_BUILD_COMMIT_SHA} is not available after fetch."
               exit 1
             fi
 
             git checkout --detach "${BLOCS_BUILD_COMMIT_SHA}"
-            echo "Checked out signed release commit ${BLOCS_BUILD_COMMIT_SHA} (${BLOCS_BUILD_TAG})."
-            
+            echo "Checked out staging commit ${BLOCS_BUILD_COMMIT_SHA}."
+
             # Pull the latest image
             compose pull
 
@@ -354,8 +344,9 @@ jobs:
 
             echo "Running smoke checks..."
 
-            probe_with_retry "https://10000-blocks.com/" /tmp/blocs_home_probe.txt 200 "Homepage" 40 2
-            probe_with_retry "https://10000-blocks.com/api/health" /tmp/blocs_health_probe.json 200 "Health endpoint" 40 2
+            site_base_url="${SITE_BASE_URL%/}"
+            probe_with_retry "${site_base_url}/" /tmp/blocs_home_probe.txt 200 "Homepage" 40 2
+            probe_with_retry "${site_base_url}/api/health" /tmp/blocs_health_probe.json 200 "Health endpoint" 40 2
 
             if ! grep -q '"configured":true' /tmp/blocs_health_probe.json; then
               echo "Health smoke check indicates upload/runtime configuration is incomplete"
@@ -372,7 +363,7 @@ jobs:
                 -F blockId=1 \
                 -F timestamp=1 \
                 -F signature=test \
-                https://10000-blocks.com/api/upload || true)
+                "${site_base_url}/api/upload" || true)
 
               if [ "$UPLOAD_STATUS" = "400" ]; then
                 echo "Upload endpoint ready (attempt $upload_attempt/20)."

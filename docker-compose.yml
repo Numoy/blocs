@@ -1,7 +1,7 @@
 services:
   blocs:
     container_name: blocs
-    image: ${BLOCS_IMAGE:-ghcr.io/Numoy/blocs:latest}
+    image: ${BLOCS_IMAGE:-ghcr.io/numoy/blocs:latest}
     restart: always
     environment:
       NEXT_PUBLIC_SOLANA_RPC_URL: ${NEXT_PUBLIC_SOLANA_RPC_URL:-https://api.devnet.solana.com}
@@ -14,6 +14,9 @@ services:
       HETZNER_PUBLIC_BASE_URL: ${HETZNER_PUBLIC_BASE_URL:-}
       UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
       UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
+      BLOCS_BUILD_COMMIT_SHA: ${BLOCS_BUILD_COMMIT_SHA:-}
+      BLOCS_BUILD_TAG: ${BLOCS_BUILD_TAG:-}
+      BLOCS_IMAGE_DIGEST: ${BLOCS_IMAGE_DIGEST:-}
     networks:
       - app-net
 

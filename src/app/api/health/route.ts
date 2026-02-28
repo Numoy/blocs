@@ -24,12 +24,21 @@ export async function GET() {
 
     const uploadConfigured = isUploadConfigured();
     const sharedGuardsConfigured = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+    const buildCommitSha = process.env.BLOCS_BUILD_COMMIT_SHA || null;
+    const buildTag = process.env.BLOCS_BUILD_TAG || null;
+    const imageDigest = process.env.BLOCS_IMAGE_DIGEST || null;
 
     return NextResponse.json(
         {
             ok: uploadConfigured,
             service: "blocs",
             timestamp: new Date().toISOString(),
+            build: {
+                commitSha: buildCommitSha,
+                tag: buildTag,
+                imageDigest,
+                metadataPresent: Boolean(buildCommitSha && buildTag && imageDigest),
+            },
             config: {
                 rpc: {
                     cluster: resolvedCluster,
