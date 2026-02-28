@@ -3,7 +3,7 @@
 ## Staging Deployments
 
 - Workflow: `Deploy to Staging` (`.github/workflows/staging.yml`)
-- Trigger: push of a signed semver tag (`v*.*.*`, for example `v1.0.0`)
+- Trigger: push of a semver tag (`v*.*.*`, for example `v1.0.0`)
 - Environment: GitHub `staging`
 
 Required staging secrets/vars:

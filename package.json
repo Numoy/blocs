@@ -15,18 +15,18 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.980.0",
+    "@aws-sdk/client-s3": "^3.1000.0",
     "@coral-xyz/anchor": "^0.32.1",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/wallet-adapter-react-ui": "^0.9.39",
     "@solana/web3.js": "^1.98.4",
-    "bn.js": "^5.2.2",
+    "bn.js": "^5.2.3",
     "lodash": "^4.17.23",
-    "next": "16.0.10",
+    "next": "^16.1.6",
     "next-plausible": "^3.12.5",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "react-zoom-pan-pinch": "^3.7.0",
     "sharp": "^0.34.5",
     "sonner": "^2.0.7",
@@ -37,16 +37,16 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/jest": "^30.0.0",
-    "@types/lodash": "^4.17.23",
-    "@types/node": "^25",
-    "@types/react": "^19",
+    "@types/lodash": "^4.17.24",
+    "@types/node": "^25.3.2",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19",
-    "@vitejs/plugin-react": "^5.1.2",
-    "eslint": "^9",
-    "eslint-config-next": "16.0.10",
+    "@vitejs/plugin-react": "^5.1.4",
+    "eslint": "^9.39.3",
+    "eslint-config-next": "^16.1.6",
     "husky": "^9.1.7",
-    "jsdom": "^27.4.0",
-    "lint-staged": "^16.2.7",
+    "jsdom": "^28.1.0",
+    "lint-staged": "^16.3.0",
     "typescript": "^5",
     "vitest": "^4.0.18"
   },
@@ -56,5 +56,8 @@
       "vitest related --run"
     ]
   },
-  "license": "MIT"
+  "license": "MIT",
+  "overrides": {
+    "fast-xml-parser": "^5.3.8"
+  }
 }

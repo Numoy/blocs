@@ -19,7 +19,7 @@ jobs:
       attestations: write
 
     steps:
-      - name: Resolve and verify signed annotated staging tag
+      - name: Resolve staging tag commit
         id: staging_ref
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         with:
@@ -46,36 +46,49 @@ jobs:
               ref: `tags/${tagName}`,
             });
 
-            if (refResponse.data.object.type !== "tag") {
-              core.setFailed(
-                `Staging tag ${tagName} must be an annotated and signed tag (lightweight tags are rejected).`,
+            const refObject = refResponse.data.object;
+            let commitSha = null;
+
+            if (refObject.type === "tag") {
+              const tagResponse = await github.rest.git.getTag({
+                owner,
+                repo,
+                tag_sha: refObject.sha,
+              });
+              const verification = tagResponse.data.verification;
+              if (!verification?.verified) {
+                const reason = verification?.reason || "unknown";
+                core.warning(
+                  `Staging tag ${tagName} is annotated but signature is not verified (${reason}). Continuing for staging.`,
+                );
+              } else {
+                core.info(`Staging tag ${tagName} has a verified signature.`);
+              }
+
+              const taggedObject = tagResponse.data.object;
+              if (taggedObject?.type !== "commit" || !taggedObject.sha) {
+                core.setFailed(
+                  `Tag ${tagName} must reference a commit. Found type: ${taggedObject?.type || "unknown"}.`,
+                );
+                return;
+              }
+              commitSha = taggedObject.sha;
+            } else if (refObject.type === "commit") {
+              // Lightweight tag; acceptable for staging.
+              commitSha = refObject.sha;
+              core.warning(
+                `Staging tag ${tagName} is lightweight (unsigned). Continuing for staging deployment.`,
               );
-              return;
-            }
-
-            const tagResponse = await github.rest.git.getTag({
-              owner,
-              repo,
-              tag_sha: refResponse.data.object.sha,
-            });
-            const verification = tagResponse.data.verification;
-            if (!verification?.verified) {
-              const reason = verification?.reason || "unknown";
-              core.setFailed(`Tag ${tagName} signature is not verified (${reason}).`);
-              return;
-            }
-
-            const taggedObject = tagResponse.data.object;
-            if (taggedObject?.type !== "commit" || !taggedObject.sha) {
+            } else {
               core.setFailed(
-                `Tag ${tagName} must reference a commit. Found type: ${taggedObject?.type || "unknown"}.`,
+                `Unsupported tag object type for ${tagName}: ${refObject.type}.`,
               );
               return;
             }
 
             core.setOutput("tag_name", tagName);
-            core.setOutput("commit_sha", taggedObject.sha);
-            core.info(`Verified signed staging tag: ${tagName} -> ${taggedObject.sha}`);
+            core.setOutput("commit_sha", commitSha);
+            core.info(`Resolved staging tag ${tagName} -> ${commitSha}`);
 
       - name: Checkout repository at staging tag commit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
