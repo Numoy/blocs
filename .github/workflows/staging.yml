@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     permissions:
-      contents: read
+      contents: write
       packages: write
       id-token: write
       attestations: write
