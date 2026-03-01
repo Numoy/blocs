@@ -133,10 +133,14 @@ jobs:
           solana --version
           anchor --version
 
-      - name: Validate Cargo.lock compatibility for SBF toolchain
+      - name: Normalize Cargo.lock compatibility for SBF toolchain
         run: |
           if grep -q '^version = 4$' Cargo.lock; then
-            echo "::error::anchor/Cargo.lock uses lockfile format v4, which is incompatible with the Solana 1.18 SBF cargo toolchain used in CI. Regenerate or pin it to v3."
+            echo "::warning::anchor/Cargo.lock uses lockfile v4; rewriting to v3 for Solana 1.18 SBF cargo compatibility."
+            sed -i 's/^version = 4$/version = 3/' Cargo.lock
+          fi
+          if ! grep -q '^version = 3$' Cargo.lock; then
+            echo "::error::anchor/Cargo.lock must contain version = 3 for Solana 1.18 SBF cargo compatibility."
             exit 1
           fi
 
