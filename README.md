@@ -117,7 +117,6 @@ Then verify tag, commit, image digest, and signature/provenance using [`VERIFICA
 - Privacy notice: [`PRIVACY.md`](./PRIVACY.md)
 - Support policy: [`SUPPORT.md`](./SUPPORT.md)
 - Release process: [`RELEASE.md`](./RELEASE.md)
-- Toolchain upgrade plan: [`TOOLCHAIN_UPGRADE_PLAN.md`](./TOOLCHAIN_UPGRADE_PLAN.md)
 - Threat model: [`THREAT_MODEL.md`](./THREAT_MODEL.md)
 - Verification guide: [`VERIFICATION.md`](./VERIFICATION.md)
 

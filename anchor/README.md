@@ -26,8 +26,6 @@ Core instruction set:
 - [Anchor](https://www.anchor-lang.com/docs/installation)
 - [Yarn](https://yarnpkg.com/)
 
-For version migrations (Solana/Anchor/Rust/dependencies), use the repository playbook: [`../TOOLCHAIN_UPGRADE_PLAN.md`](../TOOLCHAIN_UPGRADE_PLAN.md).
-
 ### Installation
 
 1. Clone the repository:
