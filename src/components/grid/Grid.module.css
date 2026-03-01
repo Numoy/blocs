@@ -157,6 +157,13 @@
     }
 }
 
+.ownerViewerSlot {
+    position: absolute;
+    bottom: 70px;
+    left: 16px;
+    z-index: 29;
+}
+
 @media (max-width: 768px) {
     .container {
         height: calc(100vh - 64px);

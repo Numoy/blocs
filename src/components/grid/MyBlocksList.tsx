@@ -6,46 +6,77 @@ import { toSafeExternalUrl } from '@/utils/url';
 interface MyBlocksListProps {
     blocks: BlockData[];
     onSelectBlock: (block: BlockData) => void;
+    isWalletConnected?: boolean;
+    title?: string;
+    onClear?: () => void;
 }
 
-export const MyBlocksList: React.FC<MyBlocksListProps> = ({ blocks, onSelectBlock }) => {
+export const MyBlocksList: React.FC<MyBlocksListProps> = ({
+    blocks,
+    onSelectBlock,
+    isWalletConnected,
+    title,
+    onClear,
+}) => {
     const [isOpen, setIsOpen] = useState(false);
 
-    if (!blocks || blocks.length === 0) return null;
+    // External owner view with 0 blocks → hide
+    if (title && blocks.length === 0) return null;
+
+    // Not wallet-connected and not an external owner view → hide
+    if (!isWalletConnected && !title) return null;
+
+    const label = title ?? `My Blocks (${blocks.length})`;
 
     return (
         <div className={styles.container}>
-            <button
-                className={styles.toggleButton}
-                onClick={() => setIsOpen(!isOpen)}
-            >
-                My Blocks ({blocks.length}) {isOpen ? '▼' : '▲'}
-            </button>
+            <div className={styles.toggleHeader}>
+                <button
+                    className={styles.toggleButton}
+                    onClick={() => setIsOpen(!isOpen)}
+                    aria-expanded={isOpen}
+                >
+                    {label} {isOpen ? '▼' : '▲'}
+                </button>
+                {onClear && (
+                    <button
+                        className={styles.clearButton}
+                        onClick={onClear}
+                        aria-label="Close"
+                    >
+                        ×
+                    </button>
+                )}
+            </div>
 
-            {isOpen && (
+            {isOpen && blocks.length === 0 && (
+                <div className={styles.emptyState}>
+                    No blocks yet. Browse the grid to find one to buy!
+                </div>
+            )}
+
+            {isOpen && blocks.length > 0 && (
                 <div className={styles.list}>
                     {blocks.map(block => {
                         const safeImageUrl = toSafeExternalUrl(block.imageUrl);
                         return (
-                        <div
-                            key={block.id}
-                            className={styles.item}
-                            onClick={() => {
-                                onSelectBlock(block);
-                                // Optional: setIsOpen(false); // Keep open for multi-manage?
-                            }}
-                        >
-                            {safeImageUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={safeImageUrl} alt="" className={styles.thumbnail} />
-                            ) : (
-                                <div className={styles.placeholder} style={{ backgroundColor: block.color || '#333' }} />
-                            )}
-                            <div className={styles.info}>
-                                <span className={styles.id}>Block #{block.id}</span>
-                                {block.isForSale && <span className={styles.price}>{block.price} SOL</span>}
-                            </div>
-                        </div>
+                            <button
+                                key={block.id}
+                                className={styles.item}
+                                onClick={() => onSelectBlock(block)}
+                                aria-label={`Block #${block.id}${block.isForSale ? `, for sale at ${block.price} SOL` : ''}`}
+                            >
+                                {safeImageUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={safeImageUrl} alt="" className={styles.thumbnail} />
+                                ) : (
+                                    <div className={styles.placeholder} style={{ backgroundColor: block.color || '#333' }} />
+                                )}
+                                <div className={styles.info}>
+                                    <span className={styles.id}>Block #{block.id}</span>
+                                    {block.isForSale && <span className={styles.price}>{block.price} SOL</span>}
+                                </div>
+                            </button>
                         );
                     })}
                 </div>

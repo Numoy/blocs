@@ -33,6 +33,46 @@
   opacity: 0.8;
 }
 
+.marketStats {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  padding: 0 1rem;
+}
+
+.statsText {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.statsSkeleton {
+  width: 180px;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statsSkeleton {
+    animation: none;
+    background: rgba(255,255,255,0.08);
+  }
+}
+
 .actions {
   display: flex;
   align-items: center;
@@ -47,6 +87,10 @@
 
   .logo {
     font-size: 1.2rem;
+  }
+
+  .marketStats {
+    display: none;
   }
 
   .actions {

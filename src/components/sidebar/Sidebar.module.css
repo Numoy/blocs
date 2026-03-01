@@ -50,12 +50,86 @@
     }
 }
 
+.titleRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.titleGroup {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 .title {
     font-size: 1.4rem;
     font-weight: 700;
     color: #fff;
-    margin-bottom: 0.2rem;
-    padding-right: 24px;
+    margin-bottom: 0;
+}
+
+.coordinates {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    line-height: 1.2;
+}
+
+.navButton {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.navButton:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #fff;
+}
+
+.navButton:disabled {
+    opacity: 0.25;
+    cursor: default;
+}
+
+.navButton:focus-visible {
+    outline: 2px solid var(--accent-secondary);
+    outline-offset: 2px;
+}
+
+.ownerButton {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent-secondary);
+    text-decoration: underline;
+    font-family: monospace;
+    font-size: 0.95rem;
+    cursor: pointer;
+    word-break: break-all;
+}
+
+.ownerButton:hover {
+    opacity: 0.8;
+}
+
+.ownerButton:focus-visible {
+    outline: 2px solid var(--accent-secondary);
+    outline-offset: 2px;
+    border-radius: 2px;
 }
 
 .section {
@@ -134,22 +208,31 @@
 }
 
 .closeButton {
-    position: absolute;
-    top: 0.8rem;
-    right: 0.8rem;
-    min-width: 34px;
-    min-height: 34px;
-    border-radius: 8px;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border-radius: 6px;
     border: 1px solid var(--border-soft);
     color: #ccc;
     background: rgba(255, 255, 255, 0.04);
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, border-color 0.15s;
 }
 
 .closeButton:hover {
     color: #fff;
     background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.closeButton:focus-visible {
+    outline: 2px solid var(--accent-secondary);
+    outline-offset: 2px;
 }
 
 .input {

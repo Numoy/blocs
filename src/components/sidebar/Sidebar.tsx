@@ -16,7 +16,9 @@ import {
     BLOCK_ACCOUNT_SIZE_BYTES,
     BLOCK_IMAGE_URL_MAX_BYTES,
     BLOCK_LINK_URL_MAX_BYTES,
-    BLOCK_TEXT_MAX_BYTES
+    BLOCK_TEXT_MAX_BYTES,
+    GRID_WIDTH,
+    GRID_SIZE,
 } from '@/utils/constants';
 
 type UploadApiErrorPayload = {
@@ -31,9 +33,12 @@ interface SidebarProps {
     onClose: () => void;
     onBuy: (block: BlockData) => void;
     initialMode?: 'view' | 'edit';
+    onPrev?: () => void;
+    onNext?: () => void;
+    onViewOwnerBlocks?: (owner: string) => void;
 }
 
-export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: SidebarProps) => {
+export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, onNext, onViewOwnerBlocks }: SidebarProps) => {
     const { connection } = useConnection();
     const { publicKey, signMessage } = useWallet();
     const { updateBlock, sellBlock, openWalletModal } = useProgram();
@@ -326,9 +331,27 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
         <>
             <div className={styles.overlay} onClick={onClose} aria-hidden="true" />
             <div className={styles.sidebar} role="dialog" aria-modal="true" aria-labelledby="sidebar-title">
-                <button className={styles.closeButton} onClick={onClose} aria-label="Close sidebar">×</button>
-
-                <h2 id="sidebar-title" className={styles.title}>Block #{block.id}</h2>
+                <div className={styles.titleRow}>
+                    <button
+                        className={styles.navButton}
+                        onClick={onPrev}
+                        disabled={!onPrev || block.id === 0}
+                        aria-label="Previous block"
+                    >←</button>
+                    <div className={styles.titleGroup}>
+                        <h2 id="sidebar-title" className={styles.title}>Block #{block.id}</h2>
+                        <div className={styles.coordinates}>
+                            Row {Math.floor(block.id / GRID_WIDTH) + 1}, Col {(block.id % GRID_WIDTH) + 1}
+                        </div>
+                    </div>
+                    <button
+                        className={styles.navButton}
+                        onClick={onNext}
+                        disabled={!onNext || block.id === GRID_SIZE - 1}
+                        aria-label="Next block"
+                    >→</button>
+                    <button className={styles.closeButton} onClick={onClose} aria-label="Close sidebar">×</button>
+                </div>
 
                 {!isEditing ? (
                     <>
@@ -347,7 +370,18 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                         <div className={styles.section}>
                             <span className={styles.label}>Owner</span>
                             <div className={styles.value}>
-                                {block.owner ? (block.owner === publicKey?.toBase58() ? "You" : block.owner) : "Available"}
+                                {block.owner
+                                    ? block.owner === publicKey?.toBase58()
+                                        ? "You"
+                                        : onViewOwnerBlocks
+                                            ? <button
+                                                className={styles.ownerButton}
+                                                onClick={() => onViewOwnerBlocks(block.owner!)}
+                                              >
+                                                {block.owner.slice(0, 4)}...{block.owner.slice(-4)}
+                                              </button>
+                                            : block.owner
+                                    : "Available"}
                             </div>
                         </div>
 

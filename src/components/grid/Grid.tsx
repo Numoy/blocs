@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useSearchParams } from 'next/navigation';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import type { ReactZoomPanPinchRef } from "react-zoom-pan-pinch";
 import styles from './Grid.module.css';
 import type { BlockData } from '@/types';
 import type { BuySource } from '@/context/ProgramContext';
@@ -17,7 +18,8 @@ import { MyBlocksList } from './MyBlocksList';
 import { MiniMapOverlay } from './MiniMapOverlay';
 import { MobileBlockSheet } from './MobileBlockSheet';
 import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
-import { GRID_WIDTH } from '@/utils/constants';
+import { OnboardingModal } from "@/components/modals/OnboardingModal";
+import { GRID_WIDTH, GRID_SIZE } from '@/utils/constants';
 import { toSafeExternalUrl } from '@/utils/url';
 import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
 import { parseGridBlockId } from '@/utils/numberParsing';
@@ -28,11 +30,16 @@ export const Grid = () => {
     const [successBlock, setSuccessBlock] = useState<BlockData | null>(null);
     const [isMobileViewport, setIsMobileViewport] = useState(false);
     const [isMobileBuying, setIsMobileBuying] = useState(false);
+    const [viewingOwner, setViewingOwner] = useState<string | null>(null);
+    const [showOnboarding, setShowOnboarding] = useState(() =>
+        typeof window !== 'undefined' && !localStorage.getItem('blocs_has_visited')
+    );
 
     const searchParams = useSearchParams();
     const blockParam = searchParams.get('block');
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const transformRef = useRef<ReactZoomPanPinchRef | null>(null);
 
     const CANVAS_RES = 3000;
     const CANVAS_MARGIN = 200;
@@ -190,12 +197,52 @@ export const Grid = () => {
         }
     }, [isMobileViewport, selectedBlock]);
 
+    const resetView = useCallback(() => {
+        transformRef.current?.centerView(0.6, 300);
+    }, []);
+
+    const jumpToBlock = useCallback((id: number) => {
+        const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
+        const col = id % GRID_WIDTH;
+        const row = Math.floor(id / GRID_WIDTH);
+        const targetX = col * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
+        const targetY = row * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
+        const scale = 2.0;
+        transformRef.current?.setTransform(
+            -targetX * scale + window.innerWidth / 2,
+            -targetY * scale + window.innerHeight / 2,
+            scale,
+            400,
+        );
+        setSelectedBlock(blocks[id]);
+        setSidebarMode('view');
+    }, [blocks, setSelectedBlock, setSidebarMode]);
+
+    const handleSidebarPrev = useCallback(() => {
+        if (!selectedBlock || selectedBlock.id <= 0) return;
+        setSelectedBlock(blocks[selectedBlock.id - 1]);
+    }, [selectedBlock, blocks, setSelectedBlock]);
+
+    const handleSidebarNext = useCallback(() => {
+        if (!selectedBlock || selectedBlock.id >= GRID_SIZE - 1) return;
+        setSelectedBlock(blocks[selectedBlock.id + 1]);
+    }, [selectedBlock, blocks, setSelectedBlock]);
+
+    const handleCloseOnboarding = useCallback(() => {
+        localStorage.setItem('blocs_has_visited', '1');
+        setShowOnboarding(false);
+    }, []);
+
     // Filter owned blocks
     const ownedBlocks = useMemo(() => {
         const owner = publicKey?.toBase58();
         if (!owner) return [];
         return blocks.filter((block) => block.owner === owner);
     }, [blocks, publicKey]);
+
+    const viewingOwnerBlocks = useMemo(() =>
+        viewingOwner ? blocks.filter(b => b.owner === viewingOwner) : [],
+    [blocks, viewingOwner]);
 
     return (
         <div
@@ -229,7 +276,10 @@ export const Grid = () => {
                 panning={{ velocityDisabled: false }}
                 alignmentAnimation={{ animationTime: 200 }}
                 onTransformed={(ref) => updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY)}
-                onInit={(ref) => updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY)}
+                onInit={(ref) => {
+                    transformRef.current = ref;
+                    updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY);
+                }}
             >
                 <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
                     <canvas
@@ -248,7 +298,13 @@ export const Grid = () => {
                 </TransformComponent>
             </TransformWrapper>
 
-            <MiniMapOverlay blocks={blocks} visibleBounds={visibleBounds} canvasRes={CANVAS_RES} />
+            <MiniMapOverlay
+                blocks={blocks}
+                visibleBounds={visibleBounds}
+                canvasRes={CANVAS_RES}
+                onResetView={resetView}
+                onJumpToBlock={jumpToBlock}
+            />
 
             {hoveredBlock && !isMobileViewport && (
                 <div
@@ -278,6 +334,9 @@ export const Grid = () => {
                     onClose={handleCloseSidebar}
                     onBuy={(block) => handleBuyBlock(block, "grid_sidebar")}
                     initialMode={sidebarMode}
+                    onPrev={selectedBlock && selectedBlock.id > 0 ? handleSidebarPrev : undefined}
+                    onNext={selectedBlock && selectedBlock.id < GRID_SIZE - 1 ? handleSidebarNext : undefined}
+                    onViewOwnerBlocks={(owner) => setViewingOwner(owner)}
                 />
             )}
 
@@ -317,6 +376,7 @@ export const Grid = () => {
 
             <MyBlocksList
                 blocks={ownedBlocks}
+                isWalletConnected={Boolean(publicKey)}
                 onSelectBlock={(block) => {
                     trackPlausibleEvent("owned_block_selected", {
                         block_id: block.id,
@@ -327,6 +387,22 @@ export const Grid = () => {
                     setSidebarMode('edit');
                 }}
             />
+
+            {viewingOwner && (
+                <div className={styles.ownerViewerSlot}>
+                    <MyBlocksList
+                        blocks={viewingOwnerBlocks}
+                        title={`Blocks by ${viewingOwner.slice(0, 4)}...${viewingOwner.slice(-4)}`}
+                        onClear={() => setViewingOwner(null)}
+                        onSelectBlock={(block) => {
+                            setSelectedBlock(block);
+                            setSidebarMode('view');
+                        }}
+                    />
+                </div>
+            )}
+
+            <OnboardingModal isOpen={showOnboarding} onClose={handleCloseOnboarding} />
         </div>
     );
 };

@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BlockData } from "@/types";
 import type { VisibleBounds } from "./useGridVisibility";
-import { GRID_WIDTH } from "@/utils/constants";
+import { GRID_WIDTH, GRID_SIZE } from "@/utils/constants";
 import styles from "./MiniMapOverlay.module.css";
 
 interface MiniMapOverlayProps {
     blocks: BlockData[];
     visibleBounds: VisibleBounds;
     canvasRes: number;
+    onResetView?: () => void;
+    onJumpToBlock?: (id: number) => void;
 }
 
 const MAP_SIZE = 180;
@@ -18,9 +20,10 @@ const BLOCKS_PER_BIN = GRID_WIDTH / BIN_COUNT;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-export const MiniMapOverlay = ({ blocks, visibleBounds, canvasRes }: MiniMapOverlayProps) => {
+export const MiniMapOverlay = ({ blocks, visibleBounds, canvasRes, onResetView, onJumpToBlock }: MiniMapOverlayProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [showHeatmap, setShowHeatmap] = useState(true);
+    const [jumpInput, setJumpInput] = useState("");
 
     const forSaleCount = useMemo(() => blocks.reduce((count, block) => count + (block?.isForSale ? 1 : 0), 0), [blocks]);
 
@@ -119,6 +122,13 @@ export const MiniMapOverlay = ({ blocks, visibleBounds, canvasRes }: MiniMapOver
         ctx.strokeRect(viewX, viewY, viewW, viewH);
     }, [blocks, canvasRes, showHeatmap, visibleBounds]);
 
+    const handleJump = () => {
+        const id = parseInt(jumpInput, 10);
+        if (isNaN(id) || !Number.isInteger(id) || id < 0 || id > GRID_SIZE - 1) return;
+        onJumpToBlock?.(id);
+        setJumpInput("");
+    };
+
     return (
         <aside className={styles.container} aria-label="Grid overview mini-map">
             <div className={styles.headerRow}>
@@ -126,13 +136,26 @@ export const MiniMapOverlay = ({ blocks, visibleBounds, canvasRes }: MiniMapOver
                     <div className={styles.title}>Market Map</div>
                     <div className={styles.subtitle}>{forSaleCount.toLocaleString()} listed</div>
                 </div>
-                <button
-                    type="button"
-                    className="uiButton uiButtonGhost"
-                    onClick={() => setShowHeatmap((value) => !value)}
-                >
-                    {showHeatmap ? "Heat" : "Owned"}
-                </button>
+                <div className={styles.headerActions}>
+                    {onResetView && (
+                        <button
+                            type="button"
+                            className="uiButton uiButtonGhost"
+                            onClick={onResetView}
+                            aria-label="Reset view"
+                            title="Reset view"
+                        >
+                            ↺
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        className="uiButton uiButtonGhost"
+                        onClick={() => setShowHeatmap((value) => !value)}
+                    >
+                        {showHeatmap ? "Heat" : "Owned"}
+                    </button>
+                </div>
             </div>
 
             <canvas
@@ -147,6 +170,25 @@ export const MiniMapOverlay = ({ blocks, visibleBounds, canvasRes }: MiniMapOver
                 <span className={styles.legendItem}><i className={styles.low} /> Low sale density</span>
                 <span className={styles.legendItem}><i className={styles.high} /> High sale density</span>
             </div>
+
+            {onJumpToBlock && (
+                <div className={styles.jumpRow}>
+                    <input
+                        type="number"
+                        className={styles.jumpInput}
+                        placeholder="Block #"
+                        value={jumpInput}
+                        onChange={(e) => setJumpInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleJump()}
+                        min="0"
+                        max="9999"
+                        aria-label="Jump to block number"
+                    />
+                    <button type="button" className="uiButton uiButtonGhost" onClick={handleJump}>
+                        Go
+                    </button>
+                </div>
+            )}
         </aside>
     );
 };
