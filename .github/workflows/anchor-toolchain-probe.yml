@@ -79,6 +79,13 @@ jobs:
           solana --version
           anchor --version
 
+      - name: Configure Anchor Wallet
+        run: |
+          WALLET_PATH="$RUNNER_TEMP/anchor-wallet.json"
+          solana-keygen new --no-bip39-passphrase --force -o "$WALLET_PATH"
+          echo "ANCHOR_WALLET=$WALLET_PATH" >> "$GITHUB_ENV"
+          echo "Configured ANCHOR_WALLET at $WALLET_PATH"
+
       - name: Normalize Cargo.lock for Legacy SBF Cargo
         run: |
           if grep -q '^version = 4$' Cargo.lock; then
