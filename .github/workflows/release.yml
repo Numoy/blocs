@@ -11,12 +11,17 @@ on:
 env:
   REGISTRY: ghcr.io
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 90
     permissions:
-      contents: write
+      contents: read
       packages: write
       id-token: write
       attestations: write
@@ -323,7 +328,7 @@ jobs:
             }
 
             # Login to GHCR
-            echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+            echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
             cd ~/blocs
             git fetch --tags --prune origin
