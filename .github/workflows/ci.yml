@@ -133,6 +133,13 @@ jobs:
           solana --version
           anchor --version
 
+      - name: Validate Cargo.lock compatibility for SBF toolchain
+        run: |
+          if grep -q '^version = 4$' Cargo.lock; then
+            echo "::error::anchor/Cargo.lock uses lockfile format v4, which is incompatible with the Solana 1.18 SBF cargo toolchain used in CI. Regenerate or pin it to v3."
+            exit 1
+          fi
+
       - name: Build Program
         run: |
           export PATH="$HOME/.cargo/bin:$HOME/solana-release/bin:$PATH"
