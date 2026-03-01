@@ -47,6 +47,8 @@ anchor build
 yarn test
 ```
 
+For Solana/Anchor/Rust dependency breakages or version bumps, follow the phased migration playbook in [`TOOLCHAIN_UPGRADE_PLAN.md`](./TOOLCHAIN_UPGRADE_PLAN.md) instead of upgrading transitive crates ad hoc.
+
 ## Pull Request Checklist
 
 - [ ] Describe the problem and the solution clearly.

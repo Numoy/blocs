@@ -1,0 +1,98 @@
+name: Anchor Toolchain Probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      solana_version:
+        description: "Solana CLI release version (without leading v)"
+        required: true
+        default: "1.18.23"
+        type: string
+      anchor_version:
+        description: "Anchor CLI release version (without leading v)"
+        required: true
+        default: "0.32.1"
+        type: string
+      run_tests:
+        description: "Run anchor test wrapper (yarn test) after build"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: toolchain-probe-${{ github.workflow }}-${{ github.ref }}-${{ inputs.solana_version }}-${{ inputs.anchor_version }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe Solana ${{ inputs.solana_version }} / Anchor ${{ inputs.anchor_version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ./anchor
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: "22"
+          cache: "yarn"
+          cache-dependency-path: anchor/yarn.lock
+
+      - name: Install Dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config build-essential libudev-dev libssl-dev
+
+      - name: Install Solana CLI
+        run: |
+          curl -sSfL "https://github.com/solana-labs/solana/releases/download/v${{ inputs.solana_version }}/solana-release-x86_64-unknown-linux-gnu.tar.bz2" | tar jxf - -C "$HOME"
+
+      - name: Install Anchor CLI
+        run: |
+          mkdir -p ~/.cargo/bin
+          curl -sSfL "https://github.com/solana-foundation/anchor/releases/download/v${{ inputs.anchor_version }}/anchor-${{ inputs.anchor_version }}-x86_64-unknown-linux-gnu" -o ~/.cargo/bin/anchor
+          chmod +x ~/.cargo/bin/anchor
+
+      - name: Add Tools to Path
+        run: |
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          echo "$HOME/solana-release/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Versions
+        run: |
+          export PATH="$HOME/.cargo/bin:$HOME/solana-release/bin:$PATH"
+          echo "cargo path: $(command -v cargo)"
+          cargo --version
+          solana --version
+          anchor --version
+
+      - name: Normalize Cargo.lock for Legacy SBF Cargo
+        run: |
+          if grep -q '^version = 4$' Cargo.lock; then
+            echo "::warning::Rewriting Cargo.lock v4 to v3 for legacy SBF compatibility during probe."
+            sed -i 's/^version = 4$/version = 3/' Cargo.lock
+          fi
+
+      - name: Build Program
+        run: |
+          export PATH="$HOME/.cargo/bin:$HOME/solana-release/bin:$PATH"
+          anchor build
+
+      - name: Run Anchor Tests
+        if: ${{ inputs.run_tests }}
+        run: |
+          export PATH="$HOME/.cargo/bin:$HOME/solana-release/bin:$PATH"
+          yarn test
