@@ -29,6 +29,10 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - name: Dependency Review
         uses: actions/dependency-review-action@05fe4576374b728f0c523d6a13d64c25081e0803
+        with:
+          # Temporary allowlist: `time` is pinned below the fixed advisory range
+          # to remain compatible with the Solana 1.18 SBF toolchain.
+          allow-ghsas: GHSA-r6v5-fh4h-64xc
 
   secret-scan:
     name: Secret Scan (gitleaks)

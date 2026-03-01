@@ -20,5 +20,5 @@ idl-build = ["anchor-lang/idl-build"]
 [dependencies]
 anchor-lang = "0.32.1"
 bytemuck = { version = "1.16.0", features = ["derive", "min_const_generics"] }
-# Keep pinned for Solana 1.18 SBF toolchain compatibility (Cargo 1.75 rejects newer edition2024 metadata).
-time = "=0.3.44"
+# Keep pinned for Solana 1.18 SBF toolchain compatibility (Rust/Cargo 1.75).
+time = "=0.3.41"
