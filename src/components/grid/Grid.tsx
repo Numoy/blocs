@@ -1,20 +1,22 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useSearchParams } from 'next/navigation';
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import styles from './Grid.module.css';
-import { BlockData } from '@/types';
+import type { BlockData } from '@/types';
+import type { BuySource } from '@/context/ProgramContext';
 import { Sidebar } from '@/components/sidebar/Sidebar';
 import { useProgram } from '@/context/ProgramContext';
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { useGridVisibility } from './useGridVisibility';
 import { useGridCanvas } from './useGridCanvas';
 import { useGridInteraction } from './useGridInteraction';
 import { MyBlocksList } from './MyBlocksList';
+import { MiniMapOverlay } from './MiniMapOverlay';
+import { MobileBlockSheet } from './MobileBlockSheet';
 import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
-
-import { useWallet } from '@solana/wallet-adapter-react';
-
-import { useSearchParams } from 'next/navigation';
 import { GRID_WIDTH } from '@/utils/constants';
 import { toSafeExternalUrl } from '@/utils/url';
 import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
@@ -24,6 +26,9 @@ export const Grid = () => {
     const { blocks, buyBlock, isLoading, isSyncing } = useProgram();
     const { publicKey } = useWallet();
     const [successBlock, setSuccessBlock] = useState<BlockData | null>(null);
+    const [isMobileViewport, setIsMobileViewport] = useState(false);
+    const [isMobileBuying, setIsMobileBuying] = useState(false);
+
     const searchParams = useSearchParams();
     const blockParam = searchParams.get('block');
 
@@ -32,52 +37,59 @@ export const Grid = () => {
     const CANVAS_RES = 3000;
     const CANVAS_MARGIN = 200;
 
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const mediaQuery = window.matchMedia("(max-width: 900px), (pointer: coarse)");
+        const updateViewportType = () => setIsMobileViewport(mediaQuery.matches);
+
+        updateViewportType();
+        mediaQuery.addEventListener('change', updateViewportType);
+
+        return () => {
+            mediaQuery.removeEventListener('change', updateViewportType);
+        };
+    }, []);
+
     // Deep Linking Logic
     const initialTransform = useMemo(() => {
         if (blockParam) {
             const id = parseGridBlockId(blockParam);
             if (id !== null) {
-                const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH; // 30
+                const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
                 const col = id % GRID_WIDTH;
                 const row = Math.floor(id / GRID_WIDTH);
-                
-                // Target Center (in canvas coords)
+
                 const targetX = col * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
                 const targetY = row * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
-
-                // Viewport Center (approx, assuming 100vw/100vh)
-                // Since we don't know exact window size on server/init, we estimate or just position relative.
-                // A scale of 2.0 is good for focus.
                 const scale = 2.0;
-                
-                // Transform: -Target * Scale + ViewportCenter
-                // We'll trust react-zoom-pan-pinch to clamp if needed, but we pass these as initial.
-                // Note: The library applies these directly.
-                // To center perfectly we need window dimensions, but a rough offset works for deep linking.
-                // Let's assume a typical 1920x1080 screen, center is 960x540.
+
                 const winW = typeof window !== 'undefined' ? window.innerWidth : 1000;
                 const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
 
                 return {
                     scale,
                     positionX: -targetX * scale + winW / 2,
-                    positionY: -targetY * scale + winH / 2
+                    positionY: -targetY * scale + winH / 2,
                 };
             }
         }
-        return { scale: 0.6, positionX: 0, positionY: 0 }; // Default
+
+        return { scale: 0.6, positionX: 0, positionY: 0 };
     }, [blockParam]);
 
     const { visibleBounds, updateVisibility } = useGridVisibility({
         canvasRes: CANVAS_RES,
-        margin: CANVAS_MARGIN
+        margin: CANVAS_MARGIN,
     });
 
     useGridCanvas({
         canvasRef,
         blocks,
         visibleBounds,
-        CANVAS_RES
+        CANVAS_RES,
     });
 
     const {
@@ -92,39 +104,97 @@ export const Grid = () => {
         handleMouseLeave,
         handleMouseDown,
         handleKeyDown,
-        handleCloseSidebar
+        handleCloseSidebar,
     } = useGridInteraction({
         canvasRef,
         blocks,
-        CANVAS_RES
+        CANVAS_RES,
     });
-    const safeHoveredImageUrl = toSafeExternalUrl(hoveredBlock?.imageUrl);
 
-    const handleBuyBlock = useCallback(async (block: BlockData) => {
+    const safeHoveredImageUrl = toSafeExternalUrl(hoveredBlock?.imageUrl);
+    const selectedIsOwner = Boolean(publicKey && selectedBlock && selectedBlock.owner === publicKey.toBase58());
+    const showDesktopSidebar = Boolean(selectedBlock) && (!isMobileViewport || sidebarMode === 'edit');
+    const showMobileSheet = Boolean(selectedBlock) && isMobileViewport && sidebarMode === 'view';
+
+    const handleBuyBlock = useCallback(async (block: BlockData, source: BuySource = "grid_sidebar") => {
         if (!block.price) return;
+
         trackPlausibleEvent("buy_flow_requested", {
             block_id: block.id,
-            ui_source: "grid_sidebar",
+            ui_source: source,
             price_sol: block.price,
         });
+
         try {
-            await buyBlock(block.id, block.price, undefined, "grid_sidebar");
+            await buyBlock(block.id, block.price, undefined, source);
             setSuccessBlock(block);
         } catch (error) {
             trackPlausibleEvent("buy_flow_failed", {
                 block_id: block.id,
-                ui_source: "grid_sidebar",
+                ui_source: source,
                 error_category: toErrorCategory(error),
             });
             console.error("Failed to buy block:", error);
         }
     }, [buyBlock]);
 
+    const handleMobileBuy = useCallback(async () => {
+        if (!selectedBlock) {
+            return;
+        }
+
+        setIsMobileBuying(true);
+        try {
+            await handleBuyBlock(selectedBlock, "mobile_sheet");
+        } finally {
+            setIsMobileBuying(false);
+        }
+    }, [handleBuyBlock, selectedBlock]);
+
+    const handleShareSelectedBlock = useCallback(async () => {
+        if (!selectedBlock || typeof window === "undefined") {
+            return;
+        }
+
+        const shareUrl = `${window.location.origin}/block/${selectedBlock.id}`;
+        const shareTitle = `Block #${selectedBlock.id} on Blocs`;
+
+        try {
+            if (navigator.share && isMobileViewport) {
+                await navigator.share({
+                    title: shareTitle,
+                    text: "Check out this block on the Blocs grid.",
+                    url: shareUrl,
+                });
+                trackPlausibleEvent("share_block_link_clicked", {
+                    block_id: selectedBlock.id,
+                    ui_source: "mobile_sheet",
+                    method: "native_share",
+                });
+                return;
+            }
+
+            await navigator.clipboard.writeText(shareUrl);
+            trackPlausibleEvent("share_block_link_clicked", {
+                block_id: selectedBlock.id,
+                ui_source: isMobileViewport ? "mobile_sheet" : "sidebar",
+                method: "clipboard",
+            });
+            toast.success("Link copied to clipboard!");
+        } catch (error) {
+            const abortError = error as DOMException;
+            if (abortError?.name === "AbortError") {
+                return;
+            }
+            toast.error("Could not share this block right now.");
+        }
+    }, [isMobileViewport, selectedBlock]);
+
     // Filter owned blocks
     const ownedBlocks = useMemo(() => {
         const owner = publicKey?.toBase58();
         if (!owner) return [];
-        return blocks.filter(b => b.owner === owner);
+        return blocks.filter((block) => block.owner === owner);
     }, [blocks, publicKey]);
 
     return (
@@ -140,32 +210,20 @@ export const Grid = () => {
                     <div className={styles.loadingText}>Synchronizing with Solana...</div>
                 </div>
             )}
+
             {!isLoading && isSyncing && (
-                <div
-                    style={{
-                        position: "absolute",
-                        top: 16,
-                        right: 16,
-                        zIndex: 20,
-                        background: "rgba(0,0,0,0.65)",
-                        color: "#bbb",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: 999,
-                        padding: "6px 10px",
-                        fontSize: "0.75rem",
-                        letterSpacing: "0.02em",
-                    }}
-                >
+                <div className={styles.syncBadge}>
                     Syncing…
                 </div>
             )}
+
             <TransformWrapper
                 initialScale={initialTransform.scale}
                 initialPositionX={initialTransform.positionX}
                 initialPositionY={initialTransform.positionY}
                 minScale={0.1}
                 maxScale={10}
-                centerOnInit={!blockParam} // Only center if no block param
+                centerOnInit={!blockParam}
                 limitToBounds={true}
                 wheel={{ step: 0.1 }}
                 panning={{ velocityDisabled: false }}
@@ -190,8 +248,9 @@ export const Grid = () => {
                 </TransformComponent>
             </TransformWrapper>
 
+            <MiniMapOverlay blocks={blocks} visibleBounds={visibleBounds} canvasRes={CANVAS_RES} />
 
-            {hoveredBlock && (
+            {hoveredBlock && !isMobileViewport && (
                 <div
                     className={styles.hoverCard}
                     style={{
@@ -201,7 +260,7 @@ export const Grid = () => {
 
                         ...((cursorPos.x > (typeof window !== 'undefined' ? window.innerWidth * 0.7 : 800))
                             ? { left: 'auto', right: (typeof window !== 'undefined' ? window.innerWidth - cursorPos.x + 20 : 20) }
-                            : { left: cursorPos.x + 20, right: 'auto' })
+                            : { left: cursorPos.x + 20, right: 'auto' }),
                     }}
                 >
                     <div className={styles.cardTitle}>Block #{hoveredBlock.id}</div>
@@ -213,12 +272,32 @@ export const Grid = () => {
                 </div>
             )}
 
-            <Sidebar
-                block={selectedBlock}
-                onClose={handleCloseSidebar}
-                onBuy={handleBuyBlock}
-                initialMode={sidebarMode}
-            />
+            {showDesktopSidebar && (
+                <Sidebar
+                    block={selectedBlock}
+                    onClose={handleCloseSidebar}
+                    onBuy={(block) => handleBuyBlock(block, "grid_sidebar")}
+                    initialMode={sidebarMode}
+                />
+            )}
+
+            {showMobileSheet && (
+                <MobileBlockSheet
+                    block={selectedBlock}
+                    isOwner={selectedIsOwner}
+                    isBuying={isMobileBuying}
+                    onBuy={handleMobileBuy}
+                    onEdit={() => {
+                        trackPlausibleEvent("mobile_sheet_edit_clicked", {
+                            block_id: selectedBlock?.id,
+                            ui_source: "mobile_sheet",
+                        });
+                        setSidebarMode('edit');
+                    }}
+                    onShare={handleShareSelectedBlock}
+                    onClose={handleCloseSidebar}
+                />
+            )}
 
             <PurchaseSuccessModal
                 block={successBlock}
@@ -226,7 +305,7 @@ export const Grid = () => {
                 onClose={() => setSuccessBlock(null)}
                 onEdit={() => {
                     if (successBlock) {
-                        const freshBlock = blocks.find(b => b.id === successBlock.id);
+                        const freshBlock = blocks.find((block) => block.id === successBlock.id);
                         if (freshBlock) {
                             setSelectedBlock(freshBlock);
                             setSidebarMode('edit');

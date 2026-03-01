@@ -339,7 +339,7 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                 <img
                                     src={safeBlockImageUrl}
                                     alt={`Block ${block.id} `}
-                                    style={{ width: '100%', borderRadius: '8px' }}
+                                    className={styles.image}
                                 />
                             </div>
                         )}
@@ -375,28 +375,28 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                             <div className={styles.section}>
                                 <span className={styles.label}>Price</span>
                                 {(!block.owner && rentFee) ? (
-                                    <div style={{ marginBottom: '12px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#ccc' }}>
+                                    <div className={styles.priceBreakdown}>
+                                        <div className={styles.priceRow}>
                                             <span>Block Price:</span>
                                             <span>{block.price} SOL</span>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#ccc' }}>
+                                        <div className={styles.priceRow}>
                                             <span>Network Fee (Rent):</span>
                                             <span>~{rentFee.toFixed(4)} SOL</span>
                                         </div>
-                                        <div style={{ borderTop: '1px solid #333', marginTop: '4px', paddingTop: '4px', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: 'var(--accent-secondary)' }}>
+                                        <div className={styles.priceTotal}>
                                             <span>Total:</span>
                                             <span>~{((block.price || 0) + rentFee).toFixed(4)} SOL</span>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className={styles.value} style={{ fontSize: '1.5rem', color: 'var(--accent-secondary)' }}>
+                                    <div className={styles.priceDisplay}>
                                         {block.price} SOL
                                     </div>
                                 )}
 
                                 <button
-                                    className={`${styles.button} ${styles.buyButton} `}
+                                    className={`${styles.button} uiButton uiButtonPrimary`}
                                     onClick={async () => {
                                         trackPlausibleEvent("buy_cta_clicked", {
                                             block_id: block.id,
@@ -415,15 +415,12 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                             setIsBuying(false);
                                         }
                                     }}
-                                    style={{
-                                        opacity: isBuying ? 0.7 : 1,
-                                        pointerEvents: isBuying ? 'none' : 'auto'
-                                    }}
+                                    disabled={isBuying}
                                 >
                                     {isBuying ? "Processing..." : "Buy Block"}
                                 </button>
                                 {isBuying && (
-                                    <p style={{ color: '#aaa', fontSize: '0.8rem', marginTop: '8px', textAlign: 'center' }}>
+                                    <p className={styles.helperText}>
                                         Please confirm the transaction in your wallet.
                                     </p>
                                 )}
@@ -431,22 +428,42 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                         )}
 
                         {isOwner && (
-                            <button className={styles.button} style={{ background: '#333', color: '#fff', marginBottom: '8px' }} onClick={handleEditToggle}>
+                            <button className={`${styles.button} uiButton uiButtonSecondary`} onClick={handleEditToggle}>
                                 Edit Block
                             </button>
                         )}
 
                         <button
-                            className={styles.button}
-                            style={{ background: 'transparent', border: '1px solid #333', color: '#fff' }}
-                            onClick={() => {
+                            className={`${styles.button} uiButton uiButtonGhost`}
+                            onClick={async () => {
                                 const url = `${window.location.origin}/block/${block.id}`;
-                                navigator.clipboard.writeText(url);
-                                trackPlausibleEvent("share_block_link_clicked", {
-                                    block_id: block.id,
-                                    ui_source: "sidebar",
-                                });
-                                toast.success("Link copied to clipboard!");
+                                try {
+                                    if (navigator.share) {
+                                        await navigator.share({
+                                            title: `Block #${block.id} on Blocs`,
+                                            text: "Check out this block on the Blocs grid.",
+                                            url,
+                                        });
+                                        trackPlausibleEvent("share_block_link_clicked", {
+                                            block_id: block.id,
+                                            ui_source: "sidebar",
+                                            method: "native_share",
+                                        });
+                                        return;
+                                    }
+
+                                    await navigator.clipboard.writeText(url);
+                                    trackPlausibleEvent("share_block_link_clicked", {
+                                        block_id: block.id,
+                                        ui_source: "sidebar",
+                                        method: "clipboard",
+                                    });
+                                    toast.success("Link copied to clipboard!");
+                                } catch (error) {
+                                    const abortError = error as DOMException;
+                                    if (abortError?.name === "AbortError") return;
+                                    toast.error("Could not share this block right now.");
+                                }
                             }}
                         >
                             Share Block
@@ -464,9 +481,9 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
 
                         {/* Image Management */}
                         <div className={styles.section}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                            <div className={styles.uploadHeader}>
                                 <span className={styles.label} style={{ marginBottom: 0 }}>Image</span>
-                                <div title="Supported formats: PNG, JPG, GIF, WEBP" style={{ cursor: 'help', display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                                <div title="Supported formats: PNG, JPG, GIF, WEBP" className={styles.infoIcon}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <circle cx="12" cy="12" r="10"></circle>
                                         <line x1="12" y1="16" x2="12" y2="12"></line>
@@ -476,23 +493,16 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                             </div>
 
                             {imageUrl ? (
-                                <div style={{ marginBottom: '10px' }}>
+                                <div className={styles.imagePreviewWrap}>
                                     {/* Preview */}
-                                    <div style={{ position: 'relative', width: '100%', marginBottom: '10px' }}>
+                                    <div className={styles.imagePreviewWrap}>
                                         {safeEditingImageUrl ? (
                                             <>
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img
                                                     src={safeEditingImageUrl}
                                                     alt="Preview"
-                                                    style={{
-                                                        width: '100%',
-                                                        borderRadius: '8px',
-                                                        maxHeight: '200px',
-                                                        objectFit: 'contain',
-                                                        background: '#333',
-                                                        border: '1px solid #444'
-                                                    }}
+                                                    className={styles.imagePreview}
                                                 />
                                             </>
                                         ) : (
@@ -501,40 +511,27 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                                     </div>
 
                                     <button
-                                        className={styles.button}
-                                        style={{ background: '#ff4444', color: '#fff', width: '100%' }}
+                                        className={`${styles.button} uiButton uiButtonGhost`}
                                         onClick={() => setImageUrl("")}
                                     >
                                         Remove Image
                                     </button>
                                 </div>
                             ) : (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexDirection: 'column', width: '100%' }}>
+                                <div className={styles.uploadArea}>
                                     <label
-                                        className={styles.button}
-                                        style={{
-                                            background: 'rgba(255,255,255,0.1)',
-                                            border: '1px solid rgba(255,255,255,0.1)',
-                                            color: '#fff',
-                                            cursor: 'pointer',
-                                            display: 'block',
-                                            textAlign: 'center',
-                                            padding: '8px 16px',
-                                            fontSize: '0.9rem',
-                                            marginBottom: 0,
-                                            width: '100%'
-                                        }}
+                                        className={`${styles.uploadLabel} uiButton uiButtonSecondary`}
                                     >
                                         {isUploading ? "Uploading..." : "Upload New Image"}
                                         <input
                                             type="file"
                                             accept="image/png,image/jpeg,image/gif,image/webp"
-                                            style={{ display: 'none' }}
+                                            className={styles.uploadInput}
                                             disabled={isUploading}
                                             onChange={handleFileUpload}
                                         />
                                     </label>
-                                    {isUploading && <span style={{ fontSize: '0.8rem', color: '#888' }}>Uploading...</span>}
+                                    {isUploading && <span className={styles.uploadHint}>Uploading...</span>}
                                 </div>
                             )}
                         </div>
@@ -557,11 +554,11 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
                             />
                         </div>
 
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button className={styles.button} style={{ background: 'var(--accent-secondary)', color: '#000' }} onClick={handleSave}>
+                        <div className={styles.splitActions}>
+                            <button className={`${styles.button} uiButton uiButtonPrimary`} onClick={handleSave}>
                                 Save Changes
                             </button>
-                            <button className={styles.button} style={{ background: 'transparent', border: '1px solid #333', color: '#fff' }} onClick={handleEditToggle}>
+                            <button className={`${styles.button} uiButton uiButtonGhost`} onClick={handleEditToggle}>
                                 Cancel
                             </button>
                         </div>

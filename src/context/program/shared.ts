@@ -11,7 +11,7 @@ export interface ProgramContextState {
     openWalletModal: (source?: WalletModalSource) => void;
 }
 
-export type BuySource = "grid_sidebar" | "block_detail" | "unknown";
+export type BuySource = "grid_sidebar" | "block_detail" | "mobile_sheet" | "unknown";
 export type WalletModalSource = "sidebar_buy" | "block_detail_buy" | "unknown";
 
 export const PRICE_EPSILON_SOL = 1e-9;

@@ -3,6 +3,18 @@
   --foreground: #ffffff;
   --accent: #9945FF;
   --accent-secondary: #14F195;
+  --surface-base: #070707;
+  --surface-card: rgba(255, 255, 255, 0.05);
+  --surface-card-strong: rgba(255, 255, 255, 0.08);
+  --surface-elevated: rgba(10, 10, 10, 0.94);
+  --border-soft: rgba(255, 255, 255, 0.14);
+  --text-secondary: #d3d3d3;
+  --text-tertiary: #9f9f9f;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.45);
 }
 
 * {
@@ -47,6 +59,80 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.uiCard {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.uiButton {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  transition: transform 120ms ease, opacity 120ms ease, border-color 120ms ease, background-color 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: #fff;
+}
+
+.uiButton:hover {
+  transform: translateY(-1px);
+}
+
+.uiButton:disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.uiButtonPrimary {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
+  color: #030303;
+}
+
+.uiButtonSecondary {
+  background: var(--surface-card-strong);
+  border-color: var(--border-soft);
+  color: #fff;
+}
+
+.uiButtonGhost {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #e8e8e8;
+}
+
+.uiChip,
+.uiChipMuted {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.uiChip {
+  background: rgba(20, 241, 149, 0.16);
+  border-color: rgba(20, 241, 149, 0.32);
+  color: #7ff7c6;
+}
+
+.uiChipMuted {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--text-tertiary);
 }
 
 /* Custom Scrollbar */
