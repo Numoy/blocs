@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Toaster } from 'sonner';
 import PlausibleProvider from "next-plausible";
 import "./env-init";
@@ -9,47 +9,85 @@ import { WalletContextProvider } from "@/components/providers/WalletContextProvi
 import { Header } from "@/components/layout/Header";
 import { ProgramProvider } from "@/context/ProgramContext";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { getSiteOrigin, getSiteUrl } from "@/utils/siteUrl";
 
-const parseMetadataBase = () => {
-  const fallback = "http://localhost:3000";
-  const rawUrl = process.env.NEXT_PUBLIC_SITE_URL || fallback;
-
-  try {
-    return new URL(rawUrl);
-  } catch {
-    return new URL(fallback);
-  }
+const metadataBase = getSiteUrl();
+const siteUrl = getSiteOrigin();
+const siteName = "Blocs";
+const siteDescription =
+  "A decentralized 100x100 grid on Solana where you can buy, trade, and own one of 10,000 blocks permanently.";
+const defaultOgImage = {
+  url: "/og-image.png",
+  width: 1200,
+  height: 630,
+  alt: "Blocs: 10,000 ownable blocks on Solana",
 };
 
-const parsePlausibleDomain = () => parseMetadataBase().hostname;
-const metadataBase = parseMetadataBase();
-const siteUrl = metadataBase.toString().replace(/\/$/, "");
+const parsePlausibleDomain = () => metadataBase.hostname;
 
 export const metadata: Metadata = {
   metadataBase,
-  title: "Blocs - 10,000 Blocks on Solana",
-  description: "A decentralized 100x100 grid. Buy, trade, and own blocks on the Solana blockchain. Permanently.",
+  title: {
+    default: "Blocs | 10,000 Blocks on Solana",
+    template: "%s | Blocs",
+  },
+  description: siteDescription,
+  applicationName: siteName,
+  keywords: [
+    "Solana",
+    "on-chain grid",
+    "NFT alternative",
+    "decentralized ownership",
+    "digital real estate",
+    "block marketplace",
+  ],
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  formatDetection: {
+    telephone: false,
+    address: false,
+    email: false,
+  },
   openGraph: {
-    title: "Blocs on Solana",
-    description: "Own a piece of the grid. 10,000 blocks, fully decentralized.",
+    title: siteName,
+    description: siteDescription,
     url: siteUrl,
-    siteName: "Blocs",
-    images: [
-      {
-        url: "/og-image.png", // We should create this
-        width: 1200,
-        height: 630,
-      },
-    ],
+    siteName,
+    images: [defaultOgImage],
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Blocs - Own the Grid",
-    description: "Participate in the decentralized 10k block experiment on Solana.",
-    images: ["/og-image.png"],
+    title: siteName,
+    description: siteDescription,
+    images: [defaultOgImage.url],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
+};
+
+const webSiteStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: siteName,
+  url: siteUrl,
+  description: siteDescription,
+  inLanguage: "en-US",
 };
 
 export default function RootLayout({
@@ -60,6 +98,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="app-font" suppressHydrationWarning>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteStructuredData) }}
+        />
         <PlausibleProvider
           domain={parsePlausibleDomain()}
           enabled={process.env.NODE_ENV === "production"}

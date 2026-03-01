@@ -3,7 +3,7 @@
 Blocs is a 100x100 on-chain grid on Solana.
 Each cell is a tradable block that can hold color, text, image URL, and link metadata.
 Live app: [https://10000-blocks.com](https://10000-blocks.com)
-This repository is the public transparency surface for that live deployment.
+This repository is the public reference for that live deployment.
 
 ## Why Blocs
 
@@ -20,7 +20,9 @@ This repository is the public transparency surface for that live deployment.
 
 ## Network + Program
 
-- Current deployment target: Solana Devnet
+- Default RPC target in examples: Solana Devnet
+- Runtime cluster is environment-driven via `NEXT_PUBLIC_SOLANA_RPC_URL`/`SOLANA_RPC_URL`
+- Production release workflow validates mainnet-style RPC endpoints
 - Program ID: `C4MgCjSCzHPnxaFHqTPFH7ur67rKHeunEQAzGRSMDKDM`
 
 To verify a local build against on-chain artifacts:
@@ -33,6 +35,7 @@ To verify a local build against on-chain artifacts:
 
 - `src/`: Next.js app (frontend + API routes)
 - `anchor/`: Solana smart contract (Rust + Anchor)
+  - Smart contract details: [`anchor/README.md`](./anchor/README.md)
 
 ## Local Development
 
@@ -47,7 +50,7 @@ To verify a local build against on-chain artifacts:
 
 ```bash
 cp .env.example .env
-npm install
+npm ci
 npm run dev
 ```
 
@@ -65,6 +68,7 @@ See [`.env.example`](./.env.example). Important variables include:
 - `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (optional shared upload guards)
 - `ALLOW_IN_MEMORY_UPLOAD_GUARDS` (default `false`; production upload route expects shared guards unless explicitly allowed)
 - `ERROR_REPORT_WEBHOOK_URL` (optional client error forwarding target)
+- `HEALTH_PUBLIC_READ_PROBE_URL` (optional URL to probe public-read access in `/api/health`)
 
 RPC values must be valid HTTP(S) URLs (for example `https://api.devnet.solana.com`).
 
@@ -72,9 +76,12 @@ RPC values must be valid HTTP(S) URLs (for example `https://api.devnet.solana.co
 
 ```bash
 cd anchor
+yarn install --frozen-lockfile
 anchor build
-anchor test
+yarn test
 ```
+
+`yarn test` wraps `anchor test` and auto-selects validator ports.
 
 ## Quality Checks
 
@@ -82,6 +89,7 @@ anchor test
 npm run lint
 npm run typecheck
 npm run test -- --run
+npm run build
 ```
 
 Health endpoint check after deploy:

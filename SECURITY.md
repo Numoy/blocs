@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes are applied to the latest `main` branch.
+Security fixes are applied only to the latest `main` branch.
 
 | Version | Supported |
 | ------- | --------- |
@@ -11,9 +11,10 @@ Security fixes are applied to the latest `main` branch.
 
 ## Reporting a Vulnerability
 
-Please do not report security vulnerabilities in public issues.
+Do not report vulnerabilities in public issues.
 
-Use GitHub private vulnerability reporting for this repository:
+Use GitHub private vulnerability reporting:
+
 1. Open the repository on GitHub.
 2. Go to `Security`.
 3. Select `Report a vulnerability`.
@@ -28,11 +29,11 @@ Include the following details:
 
 - Initial acknowledgment: within 72 hours.
 - Triage/update: within 7 days.
-- Remediation target for confirmed high severity issues: as soon as possible, typically within 30 days.
+- Remediation target for confirmed high-severity issues: as soon as possible, typically within 30 days.
 
 ## Disclosure
 
-After a fix is available, we will disclose:
-- a summary of impact,
-- fixed version/commit, and
-- any required user actions (for example key rotation).
+After a fix is available, we disclose:
+- Summary of impact.
+- Fixed version/commit.
+- Required user actions (for example key rotation).

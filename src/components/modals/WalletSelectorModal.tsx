@@ -1,6 +1,7 @@
 import React from 'react';
 import { generateWalletDeepLinks } from '@/utils/mobile';
 import styles from './WalletSelectorModal.module.css';
+import { useAccessibleDialog } from './useAccessibleDialog';
 
 interface WalletSelectorModalProps {
     isOpen: boolean;
@@ -47,14 +48,24 @@ const MetaMaskLogo = () => (
 );
 
 export const WalletSelectorModal: React.FC<WalletSelectorModalProps> = ({ isOpen, onClose, currentUrl }) => {
+    const { dialogRef } = useAccessibleDialog({ isOpen, onClose });
+
     if (!isOpen) return null;
 
     const urls = generateWalletDeepLinks(currentUrl);
 
     return (
         <div className={styles.overlay} onClick={onClose}>
-            <div className={styles.modal} onClick={e => e.stopPropagation()}>
-                <h2 className={styles.title}>Connect Wallet</h2>
+            <div
+                ref={dialogRef}
+                className={styles.modal}
+                onClick={e => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="wallet-selector-title"
+                tabIndex={-1}
+            >
+                <h2 id="wallet-selector-title" className={styles.title}>Connect Wallet</h2>
                 <p className={styles.subtitle}>
                     Choose a wallet to connect or open this app in your wallet browser.
                 </p>
@@ -78,7 +89,7 @@ export const WalletSelectorModal: React.FC<WalletSelectorModalProps> = ({ isOpen
                     </a>
                 </div>
 
-                <button className={styles.closeButton} onClick={onClose}>
+                <button className={styles.closeButton} onClick={onClose} data-autofocus="true">
                     Close
                 </button>
             </div>

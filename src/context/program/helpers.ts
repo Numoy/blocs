@@ -4,7 +4,7 @@ import type { BlockData } from "@/types";
 import { GRID_SIZE, getPrimaryBlockPriceSol } from "@/utils/constants";
 import { parseColor } from "@/utils/colors";
 import { toSafeExternalUrl } from "@/utils/url";
-import type { BlockAccountEntry } from "@/utils/programTypes";
+import type { BlockAccountEntry, RawBlockAccount } from "@/utils/programTypes";
 
 const blockSeedPrefix = new TextEncoder().encode("block");
 const textDecoder = new TextDecoder("utf-8");
@@ -19,8 +19,7 @@ const toIdSeed = (id: number): Uint8Array => {
     return seed;
 };
 
-const mapBlockAccountToBlockData = (entry: BlockAccountEntry): BlockData => {
-    const data = entry.account;
+export const mapRawBlockAccountToBlockData = (data: RawBlockAccount): BlockData => {
     const parsedImageUrl = toSafeExternalUrl(parseProgramString(data.imageUrl ?? []));
 
     return {
@@ -36,7 +35,11 @@ const mapBlockAccountToBlockData = (entry: BlockAccountEntry): BlockData => {
     };
 };
 
-const createDefaultBlockData = (id: number): BlockData => ({
+const mapBlockAccountToBlockData = (entry: BlockAccountEntry): BlockData => {
+    return mapRawBlockAccountToBlockData(entry.account);
+};
+
+export const createDefaultBlockData = (id: number): BlockData => ({
     id,
     owner: null,
     price: getPrimaryBlockPriceSol(id),

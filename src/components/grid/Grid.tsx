@@ -15,9 +15,10 @@ import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
 import { useWallet } from '@solana/wallet-adapter-react';
 
 import { useSearchParams } from 'next/navigation';
-import { GRID_SIZE, GRID_WIDTH } from '@/utils/constants';
+import { GRID_WIDTH } from '@/utils/constants';
 import { toSafeExternalUrl } from '@/utils/url';
 import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
+import { parseGridBlockId } from '@/utils/numberParsing';
 
 export const Grid = () => {
     const { blocks, buyBlock, isLoading, isSyncing } = useProgram();
@@ -34,8 +35,8 @@ export const Grid = () => {
     // Deep Linking Logic
     const initialTransform = useMemo(() => {
         if (blockParam) {
-            const id = parseInt(blockParam, 10);
-            if (!isNaN(id) && id >= 0 && id < GRID_SIZE) {
+            const id = parseGridBlockId(blockParam);
+            if (id !== null) {
                 const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH; // 30
                 const col = id % GRID_WIDTH;
                 const row = Math.floor(id / GRID_WIDTH);

@@ -1,6 +1,7 @@
 "use client";
 
 import styles from './InfoModal.module.css';
+import { useAccessibleDialog } from './useAccessibleDialog';
 
 interface InfoModalProps {
     isOpen: boolean;
@@ -8,14 +9,31 @@ interface InfoModalProps {
 }
 
 export const InfoModal = ({ isOpen, onClose }: InfoModalProps) => {
+    const { dialogRef } = useAccessibleDialog({ isOpen, onClose });
+
     if (!isOpen) return null;
 
     return (
         <div className={styles.overlay} onClick={onClose}>
-            <div className={styles.modal} onClick={e => e.stopPropagation()}>
-                <button className={styles.closeButton} onClick={onClose}>×</button>
+            <div
+                ref={dialogRef}
+                className={styles.modal}
+                onClick={e => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="info-modal-title"
+                tabIndex={-1}
+            >
+                <button
+                    className={styles.closeButton}
+                    onClick={onClose}
+                    aria-label="Close info dialog"
+                    data-autofocus="true"
+                >
+                    ×
+                </button>
 
-                <h2 className={styles.title}>About Blocs</h2>
+                <h2 id="info-modal-title" className={styles.title}>About Blocs</h2>
 
                 <div className={styles.content}>
                     <p className={styles.highlight}>

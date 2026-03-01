@@ -27,6 +27,7 @@ const envSchema = z
     UPSTASH_REDIS_REST_URL: optionalUrl,
     UPSTASH_REDIS_REST_TOKEN: optionalTrimmedString,
     ERROR_REPORT_WEBHOOK_URL: optionalUrl,
+    HEALTH_PUBLIC_READ_PROBE_URL: optionalUrl,
   })
   .superRefine((value, ctx) => {
     const hasHetznerConfig = Boolean(
@@ -85,4 +86,5 @@ export const env = envSchema.parse({
   UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
   UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
   ERROR_REPORT_WEBHOOK_URL: process.env.ERROR_REPORT_WEBHOOK_URL,
+  HEALTH_PUBLIC_READ_PROBE_URL: process.env.HEALTH_PUBLIC_READ_PROBE_URL,
 });

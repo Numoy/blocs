@@ -64,4 +64,29 @@ describe("upload route guards", () => {
         expect(payload.error).toBe("Upload guard service is temporarily unavailable. Please retry shortly.");
         expect(fetchMock).toHaveBeenCalled();
     });
+
+    it("does not treat malformed content-length as authoritative", async () => {
+        vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://app.example.com");
+        vi.stubEnv("NEXT_PUBLIC_SOLANA_RPC_URL", "https://api.devnet.solana.com");
+        vi.stubEnv("HETZNER_BUCKET_NAME", "");
+        vi.stubEnv("HETZNER_ACCESS_KEY_ID", "");
+        vi.stubEnv("HETZNER_SECRET_ACCESS_KEY", "");
+        vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+        const { POST } = await importRoute();
+        const request = new Request("https://app.example.com/api/upload", {
+            method: "POST",
+            headers: {
+                origin: "https://app.example.com",
+                "content-length": "999999oops",
+            },
+            body: "",
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(503);
+        await expect(response.json()).resolves.toEqual({
+            error: "Upload service is not configured.",
+        });
+    });
 });

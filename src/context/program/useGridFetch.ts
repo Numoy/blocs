@@ -18,7 +18,13 @@ import {
     GRID_MIN_SYNC_INTERVAL_MS,
     GRID_READ_TIMEOUT_MS,
 } from "@/context/program/shared";
-import { buildFullGrid, withTimeout } from "@/context/program/helpers";
+import {
+    buildFullGrid,
+    createDefaultBlockData,
+    deriveBlockPda,
+    mapRawBlockAccountToBlockData,
+    withTimeout,
+} from "@/context/program/helpers";
 import type { BlockData } from "@/types";
 
 type ProviderWalletLike = {
@@ -29,6 +35,7 @@ type ProviderWalletLike = {
 
 export type UpdateBlockInState = (id: number, updater: (existing: BlockData) => BlockData) => void;
 export type QueueGridSync = (delayMs?: number) => void;
+export type RefreshBlockById = (id: number) => Promise<void>;
 
 type UseGridFetchOptions = {
     connection: Connection;
@@ -41,6 +48,7 @@ export type UseGridFetchResult = {
     isSyncing: boolean;
     gridAdmin: PublicKey | null;
     fetchGrid: () => Promise<void>;
+    refreshBlockById: RefreshBlockById;
     queueGridSync: QueueGridSync;
     updateBlockInState: UpdateBlockInState;
 };
@@ -63,6 +71,17 @@ export const useGridFetch = ({ connection, providerWallet }: UseGridFetchOptions
             .map((part) => part.trim())
             .filter(Boolean);
     }, []);
+
+    const getRpcCandidates = useCallback(() => {
+        const primaryEndpoint = resolveSolanaRpcEndpoint(connection.rpcEndpoint);
+        return {
+            primaryEndpoint,
+            rpcCandidates: [
+                primaryEndpoint,
+                ...getFallbackRpcEndpoints(primaryEndpoint, explicitFallbackRpcCandidates),
+            ],
+        };
+    }, [connection.rpcEndpoint, explicitFallbackRpcCandidates]);
 
     const updateBlockInState = useCallback<UpdateBlockInState>((id, updater) => {
         setBlocks((prev) => {
@@ -109,11 +128,7 @@ export const useGridFetch = ({ connection, providerWallet }: UseGridFetchOptions
                     setIsSyncing(true);
                 }
 
-                const primaryEndpoint = resolveSolanaRpcEndpoint(connection.rpcEndpoint);
-                const rpcCandidates = [
-                    primaryEndpoint,
-                    ...getFallbackRpcEndpoints(primaryEndpoint, explicitFallbackRpcCandidates),
-                ];
+                const { primaryEndpoint, rpcCandidates } = getRpcCandidates();
                 let loadedGrid = false;
                 let lastError: unknown = null;
 
@@ -193,7 +208,72 @@ export const useGridFetch = ({ connection, providerWallet }: UseGridFetchOptions
         } finally {
             fetchGridInFlightRef.current = null;
         }
-    }, [connection, explicitFallbackRpcCandidates, providerWallet]);
+    }, [connection, getRpcCandidates, providerWallet]);
+
+    const refreshBlockById = useCallback<RefreshBlockById>(async (id) => {
+        if (!Number.isInteger(id) || id < 0) {
+            return;
+        }
+
+        const { primaryEndpoint, rpcCandidates } = getRpcCandidates();
+        let loaded = false;
+        let lastError: unknown = null;
+
+        for (const endpoint of rpcCandidates) {
+            try {
+                const readConnection = endpoint === primaryEndpoint
+                    ? connection
+                    : new Connection(endpoint, "confirmed");
+                const readProvider = new AnchorProvider(readConnection, providerWallet, { preflightCommitment: "confirmed" });
+                const readProgram = asBlocsProgram(new Program(idl as Idl, readProvider));
+                const blockPda = deriveBlockPda(id, readProgram.programId);
+
+                const blockAccount = await withTimeout(
+                    readProgram.account.block.fetch(blockPda),
+                    GRID_READ_TIMEOUT_MS,
+                    `block.fetch via ${endpoint}`,
+                );
+
+                const normalizedBlock = mapRawBlockAccountToBlockData(blockAccount);
+                if (isMountedRef.current) {
+                    setBlocks((prev) => {
+                        if (id < 0 || id >= prev.length) {
+                            return prev;
+                        }
+                        const next = [...prev];
+                        next[id] = normalizedBlock;
+                        return next;
+                    });
+                }
+                lastSuccessfulGridFetchAtRef.current = Date.now();
+                loaded = true;
+                break;
+            } catch (error) {
+                lastError = error;
+                const message = String((error as Error)?.message || "").toLowerCase();
+                if (message.includes("account does not exist") || message.includes("could not find account")) {
+                    if (isMountedRef.current) {
+                        setBlocks((prev) => {
+                            if (id < 0 || id >= prev.length) {
+                                return prev;
+                            }
+                            const next = [...prev];
+                            next[id] = createDefaultBlockData(id);
+                            return next;
+                        });
+                    }
+                    lastSuccessfulGridFetchAtRef.current = Date.now();
+                    loaded = true;
+                    break;
+                }
+                console.error(`Failed to refresh block #${id} using RPC ${endpoint}:`, error);
+            }
+        }
+
+        if (!loaded) {
+            throw lastError || new Error(`Unable to refresh block #${id}.`);
+        }
+    }, [connection, getRpcCandidates, providerWallet]);
 
     const queueGridSync = useCallback<QueueGridSync>((delayMs = 500) => {
         const boundedDelay = Math.max(delayMs, 0);
@@ -261,6 +341,7 @@ export const useGridFetch = ({ connection, providerWallet }: UseGridFetchOptions
         isSyncing,
         gridAdmin,
         fetchGrid,
+        refreshBlockById,
         queueGridSync,
         updateBlockInState,
     };

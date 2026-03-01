@@ -13,7 +13,11 @@ import { parseSolToLamports } from "@/utils/sol";
 import { toSafeExternalUrl } from "@/utils/url";
 import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
 import { deriveBlockPda } from "@/context/program/helpers";
-import { PRICE_EPSILON_SOL, type BuySource } from "@/context/program/shared";
+import {
+    EVENTUAL_GRID_SYNC_DELAY_MS,
+    PRICE_EPSILON_SOL,
+    type BuySource,
+} from "@/context/program/shared";
 import { asBlocsProgram } from "@/utils/programTypes";
 import type { BlockData } from "@/types";
 
@@ -39,6 +43,7 @@ type UseBlockActionsOptions = {
     blocks: BlockData[];
     gridAdmin: PublicKey | null;
     fetchGrid: () => Promise<void>;
+    refreshBlockById: (id: number) => Promise<void>;
     queueGridSync: (delayMs?: number) => void;
     updateBlockInState: UpdateBlockInState;
     openWalletSelectorModal: (currentUrl: string) => void;
@@ -60,6 +65,7 @@ export const useBlockActions = ({
     blocks,
     gridAdmin,
     fetchGrid,
+    refreshBlockById,
     queueGridSync,
     updateBlockInState,
     openWalletSelectorModal,
@@ -196,8 +202,14 @@ export const useBlockActions = ({
                 ui_source: source,
                 price_sol: price,
             });
+            try {
+                await refreshBlockById(id);
+            } catch (refreshError) {
+                console.error(`Failed to refresh block #${id} after purchase:`, refreshError);
+                queueGridSync(0);
+            }
             toast.success("Block purchased!", { id: toastId });
-            queueGridSync();
+            queueGridSync(EVENTUAL_GRID_SYNC_DELAY_MS);
         } catch (error) {
             console.error("Purchase Error:", error);
             queueGridSync(0);
@@ -253,6 +265,7 @@ export const useBlockActions = ({
         openWalletSelectorModal,
         program,
         publicKey,
+        refreshBlockById,
         queueGridSync,
         sendTransaction,
         updateBlockInState,
@@ -330,8 +343,14 @@ export const useBlockActions = ({
                 has_image: Boolean(normalizedImageUrl),
                 has_link: Boolean(normalizedUrl),
             });
+            try {
+                await refreshBlockById(id);
+            } catch (refreshError) {
+                console.error(`Failed to refresh block #${id} after update:`, refreshError);
+                queueGridSync(0);
+            }
             toast.success("Block updated!", { id: toastId });
-            queueGridSync();
+            queueGridSync(EVENTUAL_GRID_SYNC_DELAY_MS);
         } catch (error) {
             console.error(error);
             queueGridSync(0);
@@ -342,7 +361,7 @@ export const useBlockActions = ({
             toast.error("Update failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
-    }, [connected, connection, program, queueGridSync, updateBlockInState, wallet]);
+    }, [connected, connection, program, queueGridSync, refreshBlockById, updateBlockInState, wallet]);
 
     const sellBlock = useCallback(async (id: number, priceInput: string) => {
         if (!connected || !wallet) {
@@ -389,8 +408,14 @@ export const useBlockActions = ({
                 action: saleAction,
                 price_sol: normalizedPrice,
             });
+            try {
+                await refreshBlockById(id);
+            } catch (refreshError) {
+                console.error(`Failed to refresh block #${id} after sale update:`, refreshError);
+                queueGridSync(0);
+            }
             toast.success(saleAction === "list" ? "Block listed for sale!" : "Block removed from sale.", { id: toastId });
-            queueGridSync();
+            queueGridSync(EVENTUAL_GRID_SYNC_DELAY_MS);
         } catch (error) {
             console.error(error);
             queueGridSync(0);
@@ -403,7 +428,7 @@ export const useBlockActions = ({
             toast.error("Listing failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
-    }, [connected, connection, program, queueGridSync, updateBlockInState, wallet]);
+    }, [connected, connection, program, queueGridSync, refreshBlockById, updateBlockInState, wallet]);
 
     return {
         buyBlock,

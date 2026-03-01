@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { parseClientErrorPayload } from "@/utils/clientErrorPayload";
+import { parseNonNegativeIntegerString } from "@/utils/numberParsing";
 import { buildClientRateLimitKey } from "@/utils/requestIdentity";
 
 export const runtime = "nodejs";
@@ -32,11 +33,7 @@ const getContentLength = (request: Request): number | null => {
         return null;
     }
 
-    const parsed = Number.parseInt(header, 10);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-        return null;
-    }
-    return parsed;
+    return parseNonNegativeIntegerString(header);
 };
 
 const forwardClientErrorReport = async (webhookUrl: string, report: Record<string, unknown>): Promise<void> => {

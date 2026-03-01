@@ -14,6 +14,8 @@ import { resolveSolanaRpcEndpoint } from "@/utils/rpc";
 import { buildClientRateLimitKey } from "@/utils/requestIdentity";
 import { normalizeSolanaPublicKey } from "@/utils/publicKey";
 import { consumeReplayTokenFromStore } from "@/utils/replayProtection";
+import { parseGridBlockId, parseNonNegativeIntegerString } from "@/utils/numberParsing";
+import { probePublicObjectUrl } from "@/utils/publicUrlProbe";
 import {
     doesMimeMatchDetectedFormat,
     isAllowedDetectedImageFormat,
@@ -90,12 +92,7 @@ const getContentLength = (request: Request): number | null => {
         return null;
     }
 
-    const parsed = Number.parseInt(raw, 10);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-        return null;
-    }
-
-    return parsed;
+    return parseNonNegativeIntegerString(raw);
 };
 
 const isAllowedRequestOrigin = (request: Request): boolean => {
@@ -429,16 +426,16 @@ export async function POST(request: Request) {
             );
         }
 
-        const blockId = Number.parseInt(blockIdRaw, 10);
-        if (!Number.isInteger(blockId) || blockId < 0 || blockId >= GRID_SIZE) {
+        const blockId = parseGridBlockId(blockIdRaw);
+        if (blockId === null) {
             return NextResponse.json(
                 { error: "Invalid block ID." },
                 { status: 400 }
             );
         }
 
-        const timestamp = Number.parseInt(timestampRaw, 10);
-        if (!Number.isFinite(timestamp)) {
+        const timestamp = parseNonNegativeIntegerString(timestampRaw);
+        if (timestamp === null) {
             return NextResponse.json(
                 { error: "Invalid upload timestamp." },
                 { status: 400 }
@@ -576,6 +573,26 @@ export async function POST(request: Request) {
         }
 
         const fileUrl = getPublicObjectUrl(filename);
+
+        const publicUrlProbe = await probePublicObjectUrl(fileUrl);
+        if (!publicUrlProbe.ok) {
+            console.error("Upload completed but public URL probe failed:", {
+                blockId,
+                owner: normalizedOwner,
+                fileUrl,
+                status: publicUrlProbe.status,
+                method: publicUrlProbe.method,
+            });
+            return NextResponse.json(
+                {
+                    error: "Upload succeeded, but the image URL is not publicly reachable. Check object storage public-read settings.",
+                    code: "UPLOAD_URL_NOT_PUBLIC",
+                    url: fileUrl,
+                    status: publicUrlProbe.status,
+                },
+                { status: 502 }
+            );
+        }
 
         return NextResponse.json({ url: fileUrl, success: true });
     } catch (error) {

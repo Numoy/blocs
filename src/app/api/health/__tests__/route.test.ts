@@ -33,6 +33,7 @@ const importRoute = async ({ uploadConfigured = true }: { uploadConfigured?: boo
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     process.env = { ...ORIGINAL_ENV };
 });
@@ -70,6 +71,46 @@ describe("health route build metadata", () => {
             tag: null,
             imageDigest: null,
             metadataPresent: false,
+        });
+    });
+
+    it("reports a warning when public-read probe is not configured", async () => {
+        vi.stubEnv("NEXT_PUBLIC_SOLANA_RPC_URL", "https://api.devnet.solana.com");
+
+        const { GET } = await importRoute();
+        const response = await GET();
+        const payload = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(payload.config.upload.publicReadProbeUrlConfigured).toBe(false);
+        expect(payload.config.upload.publicReadProbe).toEqual({
+            configured: false,
+            ok: null,
+            status: null,
+            warning: "public_read_probe_not_configured",
+        });
+    });
+
+    it("runs public-read probe when configured", async () => {
+        vi.stubEnv("NEXT_PUBLIC_SOLANA_RPC_URL", "https://api.devnet.solana.com");
+        vi.stubEnv("HEALTH_PUBLIC_READ_PROBE_URL", "https://cdn.example.com/probe.webp");
+
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+        }));
+
+        const { GET } = await importRoute();
+        const response = await GET();
+        const payload = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(payload.config.upload.publicReadProbeUrlConfigured).toBe(true);
+        expect(payload.config.upload.publicReadProbe).toEqual({
+            configured: true,
+            ok: true,
+            status: 200,
+            warning: null,
         });
     });
 });

@@ -15,7 +15,7 @@ Thanks for contributing to Blocs.
 
 ```bash
 cp .env.example .env
-npm install
+npm ci
 npm run dev
 ```
 
@@ -23,7 +23,7 @@ npm run dev
 
 ```bash
 cd anchor
-yarn install
+yarn install --frozen-lockfile
 anchor build
 yarn test
 ```
@@ -36,6 +36,7 @@ Run from repository root:
 npm run lint
 npm run typecheck
 npm run test -- --run
+npm run build
 ```
 
 If you changed Anchor code, also run:
@@ -48,10 +49,11 @@ yarn test
 
 ## Pull Request Checklist
 
-- Describe the problem and the solution clearly.
-- Link related issues.
-- Add/adjust tests and docs.
-- Confirm CI is green.
+- [ ] Describe the problem and the solution clearly.
+- [ ] Link related issues.
+- [ ] Add or update tests and docs.
+- [ ] Keep docs and `.env.example` in sync when changing env vars, workflows, or operational behavior.
+- [ ] Confirm CI is green.
 
 ## Commit Guidance
 

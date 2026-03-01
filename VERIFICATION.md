@@ -3,7 +3,14 @@
 This repository is public so anyone can verify what is running at [https://10000-blocks.com](https://10000-blocks.com).
 Use this guide to validate the deployed app against source, container artifacts, and release provenance.
 
-## 1) Read Build Metadata From Production
+## Prerequisites
+
+- `git`
+- `curl`
+- `jq`
+- `cosign`
+
+## Step 1: Read Build Metadata From Production
 
 ```bash
 curl -fsS https://10000-blocks.com/api/health | jq .
@@ -18,18 +25,20 @@ Check `build`:
 
 If those values are missing, the service was not deployed through the signed release workflow.
 
-## 2) Confirm Tag -> Commit Mapping
+## Step 2: Confirm Tag to Commit Mapping
 
 Given `build.tag` and `build.commitSha` from the health response:
 
 ```bash
 git fetch --tags
+git cat-file -t "<tag>"        # expected: tag (annotated tag object)
+git verify-tag "<tag>"         # expected: Good signature
 git rev-parse "<tag>^{commit}"
 ```
 
 The resolved commit must match `build.commitSha`.
 
-## 3) Confirm the Published Image Digest
+## Step 3: Confirm the Published Image Digest
 
 The release workflow publishes:
 
@@ -41,7 +50,7 @@ The release workflow publishes:
 
 You can inspect image tags in GitHub Container Registry and compare the digest shown there to the health payload.
 
-## 4) Verify Sigstore Signature (Keyless)
+## Step 4: Verify Sigstore Signature (Keyless)
 
 Use the digest from `build.imageDigest`:
 
@@ -54,7 +63,7 @@ cosign verify \
 
 This confirms the image was signed by GitHub Actions OIDC identity for this repository workflow.
 
-## 5) Verify Build Provenance Attestation
+## Step 5: Verify Build Provenance Attestation
 
 ```bash
 cosign verify-attestation \
@@ -66,7 +75,7 @@ cosign verify-attestation \
 
 The attestation should reference the same source repository and commit.
 
-## 6) Optional: Verify On-Chain Program Build
+## Step 6 (Optional): Verify On-Chain Program Build
 
 Program ID (Devnet):
 

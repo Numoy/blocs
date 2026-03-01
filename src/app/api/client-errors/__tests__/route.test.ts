@@ -76,4 +76,27 @@ describe("client-errors route", () => {
         expect(loggedPayload.userAgent).toBeUndefined();
         expect(loggedPayload.name).toBe("TypeError");
     });
+
+    it("ignores malformed content-length headers and validates the actual body", async () => {
+        vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://app.example.com");
+        vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+        const { POST } = await importRoute();
+        const request = new Request("https://app.example.com/api/client-errors", {
+            method: "POST",
+            headers: {
+                origin: "https://app.example.com",
+                "content-type": "application/json",
+                "content-length": "70000oops",
+            },
+            body: JSON.stringify({
+                name: "TypeError",
+                message: "Cannot read properties of undefined",
+                timestamp: new Date().toISOString(),
+            }),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(202);
+    });
 });

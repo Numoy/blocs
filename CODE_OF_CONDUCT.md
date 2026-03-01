@@ -2,7 +2,7 @@
 
 ## Our Pledge
 
-We are committed to making participation in this project a harassment-free experience for everyone, regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
+We are committed to a harassment-free experience for everyone, regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
 ## Our Standards
 
@@ -22,7 +22,7 @@ Examples of unacceptable behavior:
 
 ## Enforcement Responsibilities
 
-Project maintainers are responsible for clarifying and enforcing these standards and may remove, edit, or reject comments, commits, code, wiki edits, issues, and other contributions that are not aligned with this Code of Conduct.
+Project maintainers are responsible for clarifying and enforcing these standards. They may remove, edit, or reject comments, commits, code, wiki edits, issues, and other contributions that are not aligned with this Code of Conduct.
 
 ## Scope
 
@@ -30,7 +30,7 @@ This Code of Conduct applies in all project spaces and when representing the pro
 
 ## Reporting
 
-If you experience or witness unacceptable behavior, report it privately through GitHub (for example by contacting maintainers directly). Reports will be reviewed promptly and handled confidentially as far as practical.
+If you experience or witness unacceptable behavior, report it privately through GitHub (for example, by contacting maintainers directly). We review reports promptly and handle them confidentially as far as practical.
 
 ## Enforcement
 

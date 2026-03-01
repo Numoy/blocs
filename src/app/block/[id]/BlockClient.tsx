@@ -7,6 +7,7 @@ import { GRID_SIZE } from "@/utils/constants";
 import { toSafeExternalUrl } from "@/utils/url";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
+import { parseGridBlockId } from "@/utils/numberParsing";
 
 export default function BlockClient() {
     const params = useParams();
@@ -17,7 +18,7 @@ export default function BlockClient() {
     const lastTrackedViewBlockId = useRef<number | null>(null);
 
     // Parse ID from URL
-    const id = typeof params.id === 'string' ? parseInt(params.id, 10) : -1;
+    const id = typeof params.id === "string" ? (parseGridBlockId(params.id) ?? -1) : -1;
 
     // Touch state for swipe
     const touchStartX = useRef<number | null>(null);

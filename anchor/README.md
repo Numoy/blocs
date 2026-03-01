@@ -17,7 +17,7 @@ Core instruction set:
 6. `update_admin`: admin rotation.
 7. `close_block`: owner closes block PDA and recovers rent.
 
-## Setup & Development
+## Setup and Development
 
 ### Prerequisites
 
@@ -28,23 +28,23 @@ Core instruction set:
 
 ### Installation
 
-1.  Clone the repository:
+1. Clone the repository:
     ```bash
     git clone <repo-url>
     cd blocs/anchor
     ```
 
-2.  Install dependencies:
+2. Install dependencies:
     ```bash
     yarn install
     ```
 
-3.  Build the program:
+3. Build the program:
     ```bash
     anchor build
     ```
 
-4.  Run tests:
+4. Run tests:
     ```bash
     yarn test
     ```

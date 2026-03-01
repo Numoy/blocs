@@ -19,6 +19,13 @@ import {
     BLOCK_TEXT_MAX_BYTES
 } from '@/utils/constants';
 
+type UploadApiErrorPayload = {
+    error?: string;
+    code?: string;
+    status?: number | null;
+    url?: string;
+};
+
 interface SidebarProps {
     block: BlockData | null;
     onClose: () => void;
@@ -67,6 +74,22 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
     const safeBlockUrl = toSafeExternalUrl(block?.url);
     const safeBlockImageUrl = toSafeExternalUrl(block?.imageUrl);
     const safeEditingImageUrl = toSafeExternalUrl(imageUrl);
+
+    const mapUploadErrorMessage = (payload: UploadApiErrorPayload | null, statusCode: number): string => {
+        if (payload?.code === "UPLOAD_URL_NOT_PUBLIC") {
+            return "Image uploaded, but it is not publicly reachable. Check your object-storage public read policy.";
+        }
+
+        if (statusCode === 502) {
+            return "Upload storage is reachable, but the final image URL could not be verified.";
+        }
+
+        if (statusCode >= 500) {
+            return "Upload service is temporarily unavailable. Please retry.";
+        }
+
+        return payload?.error || "Upload failed";
+    };
 
     // Effect to handle mode switching
     useEffect(() => {
@@ -154,10 +177,13 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view' }: Sidebar
             if (!response.ok) {
                 let errorMessage = "Upload failed";
                 try {
-                    const errorData = await response.json();
-                    errorMessage = errorData.error || errorMessage;
+                    const errorData = await response.json() as UploadApiErrorPayload;
+                    errorMessage = mapUploadErrorMessage(errorData, response.status);
                 } catch {
                     // Keep generic upload error fallback when server response is not JSON.
+                    errorMessage = response.status >= 500
+                        ? "Upload service is temporarily unavailable. Please retry."
+                        : errorMessage;
                 }
                 throw new Error(errorMessage);
             }

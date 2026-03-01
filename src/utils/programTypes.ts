@@ -47,6 +47,7 @@ interface GridStateNamespace {
 interface BlockNamespace {
     all(): Promise<BlockAccountEntry[]>;
     fetch(pubkey: PublicKey): Promise<RawBlockAccount>;
+    fetchNullable?(pubkey: PublicKey): Promise<RawBlockAccount | null>;
 }
 
 interface ProgramAccountNamespace {

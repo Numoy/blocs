@@ -26,6 +26,7 @@ type UseGridSyncResult = {
     isSyncing: boolean;
     gridAdmin: PublicKey | null;
     fetchGrid: () => Promise<void>;
+    refreshBlockById: (id: number) => Promise<void>;
     queueGridSync: (delayMs?: number) => void;
     updateBlockInState: UpdateBlockInState;
 };
@@ -37,6 +38,7 @@ export const useGridSync = ({ connection, providerWallet, program }: UseGridSync
         isSyncing,
         gridAdmin,
         fetchGrid,
+        refreshBlockById,
         queueGridSync,
         updateBlockInState,
     } = useGridFetch({
@@ -56,6 +58,7 @@ export const useGridSync = ({ connection, providerWallet, program }: UseGridSync
         isSyncing,
         gridAdmin,
         fetchGrid,
+        refreshBlockById,
         queueGridSync,
         updateBlockInState,
     };

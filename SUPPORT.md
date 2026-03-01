@@ -8,8 +8,7 @@
 
 ## Getting Help
 
-- Usage questions and bug reports: GitHub Issues.
-- Feature requests: GitHub Issues.
+- Usage questions, bug reports, and feature requests: GitHub issues in this repository.
 - Security issues: use private vulnerability reporting as documented in [`SECURITY.md`](./SECURITY.md).
 
 ## Response Expectations
@@ -20,4 +19,4 @@
 ## What Is Out of Scope
 
 - Support for modified forks.
-- Support for outdated Node, Rust, Solana CLI, or Anchor versions not documented in this repo.
+- Support for outdated Node, Rust, Solana CLI, or Anchor versions not documented in this repository.

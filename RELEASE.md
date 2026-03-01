@@ -5,6 +5,9 @@
 - Workflow: `Deploy to Staging` (`.github/workflows/staging.yml`)
 - Trigger: push of a semver tag (`v*.*.*`, for example `v1.0.0`)
 - Environment: GitHub `staging`
+- Tag policy in staging:
+  - annotated/signed tags are preferred,
+  - lightweight or unsigned tags are allowed for staging only.
 
 Required staging secrets/vars:
 
@@ -14,6 +17,9 @@ Required staging secrets/vars:
 - `HETZNER_ACCESS_KEY_ID`
 - `HETZNER_SECRET_ACCESS_KEY`
 - `HETZNER_BUCKET_NAME` (environment variable)
+- `HETZNER_REGION` (optional, defaults to `fsn1`)
+- `HETZNER_ENDPOINT` (optional)
+- `HETZNER_PUBLIC_BASE_URL` (optional)
 - `SERVER_HOST` (environment variable or secret)
 - `SSH_PRIVATE_KEY` (secret)
 - Optional for staging upload guard fallback: `ALLOW_IN_MEMORY_UPLOAD_GUARDS=true`
@@ -47,10 +53,12 @@ This tag push triggers the staging deployment workflow.
 
 ### Trigger Production Manually
 
-1. Open GitHub Actions -> `Release to Production`.
+1. Open GitHub Actions > `Release to Production`.
 2. Click `Run workflow`.
 3. Set `release_tag` to the signed tag you want to deploy (for example `v1.0.0`).
 4. Run the workflow.
+
+Note: production smoke checks in the current workflow target `https://10000-blocks.com`.
 
 ### What the Release Workflow Produces
 
@@ -59,6 +67,12 @@ This tag push triggers the staging deployment workflow.
 - Publishes build provenance attestation to the registry.
 - Generates an SPDX JSON SBOM artifact.
 - Deploys to production host and runs smoke checks.
+
+Smoke checks currently validate:
+
+- `GET /` returns `200`
+- `GET /api/health` returns `200` with upload config marked as configured
+- `POST /api/upload` with dummy form fields returns `400` (route is reachable and configured)
 
 ### Verification
 

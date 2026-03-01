@@ -8,6 +8,8 @@ import { toSafeExternalUrl } from "@/utils/url";
 import { unstable_cache } from "next/cache";
 import { resolveSolanaRpcEndpoint } from "@/utils/rpc";
 import { asBlocsProgram } from "@/utils/programTypes";
+import { parseGridBlockId } from "@/utils/numberParsing";
+import { getSiteOrigin } from "@/utils/siteUrl";
 
 // This is a Server Component
 
@@ -20,6 +22,7 @@ const readonlyWallet = {
 };
 const provider = new AnchorProvider(connection, readonlyWallet, {});
 const program = asBlocsProgram(new Program(idl as Idl, provider));
+const siteUrl = getSiteOrigin();
 
 const parseString = (arr: number[]) => {
     const uint8 = new Uint8Array(arr);
@@ -71,46 +74,112 @@ const getBlockData = async (id: number) => {
     return getBlockDataCached(id);
 };
 
+const truncate = (value: string, maxLength: number) => {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (normalized.length <= maxLength) {
+        return normalized;
+    }
+
+    return `${normalized.slice(0, maxLength - 1)}…`;
+};
+
 type Props = {
     params: Promise<{ id: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { id: rawId } = await params;
-    const id = parseInt(rawId, 10);
-    if (!Number.isInteger(id) || id < 0 || id >= GRID_SIZE) {
+    const id = parseGridBlockId(rawId);
+    if (id === null) {
         return {
-            title: "Blocs",
-            description: "Explore the 10,000 block grid on Solana.",
+            title: "Invalid Block",
+            description: "Explore the live 10,000 block grid on Solana.",
+            alternates: {
+                canonical: "/",
+            },
+            robots: {
+                index: false,
+                follow: false,
+            },
         };
     }
 
+    const blockPath = `/block/${id}`;
+    const blockUrl = `${siteUrl}${blockPath}`;
     const block = await getBlockData(id);
 
     if (!block) {
         return {
-            title: `Block #${id} - Blocs`,
-            description: "View this block on the grid.",
+            title: `Block #${id}`,
+            description: `View block #${id} on Blocs, the decentralized 100x100 grid on Solana.`,
+            alternates: {
+                canonical: blockPath,
+            },
+            openGraph: {
+                title: `Block #${id}`,
+                description: `View block #${id} on Blocs, the decentralized 100x100 grid on Solana.`,
+                url: blockUrl,
+                siteName: "Blocs",
+                type: "website",
+                images: [
+                    {
+                        url: "/og-image.png",
+                        width: 1200,
+                        height: 630,
+                        alt: `Blocs block #${id}`,
+                    },
+                ],
+            },
+            twitter: {
+                card: "summary_large_image",
+                title: `Block #${id}`,
+                description: `View block #${id} on Blocs, the decentralized 100x100 grid on Solana.`,
+                images: ["/og-image.png"],
+            },
         };
     }
 
-    const title = block.text ? `Block #${id}: "${block.text}"` : `Block #${id} - Blocs`;
-    const description = block.imageUrl ? "Check out this image block on Blocs!" : `Owned by ${block.owner.slice(0, 4)}...${block.owner.slice(-4)}`;
+    const textPreview = block.text ? truncate(block.text, 48) : "";
+    const title = textPreview ? `Block #${id}: "${textPreview}"` : `Block #${id}`;
+    const description = block.imageUrl
+        ? "Explore this image block on Blocs and see its on-chain owner and metadata."
+        : `Owned by ${block.owner.slice(0, 4)}...${block.owner.slice(-4)} on the Blocs grid.`;
 
     const safeImageUrl = toSafeExternalUrl(block.imageUrl);
+    const ogImage = safeImageUrl
+        ? [
+            {
+                url: safeImageUrl,
+                alt: `Image for block #${id} on Blocs`,
+            },
+        ]
+        : [
+            {
+                url: "/og-image.png",
+                width: 1200,
+                height: 630,
+                alt: `Blocs block #${id}`,
+            },
+        ];
 
     return {
-        title: title,
-        description: description,
+        title,
+        description,
+        alternates: {
+            canonical: blockPath,
+        },
         openGraph: {
-            title: title,
-            description: description,
-            images: safeImageUrl ? [safeImageUrl] : ["/og-image.png"],
+            title,
+            description,
+            url: blockUrl,
+            siteName: "Blocs",
+            type: "website",
+            images: ogImage,
         },
         twitter: {
             card: "summary_large_image",
-            title: title,
-            description: description,
+            title,
+            description,
             images: safeImageUrl ? [safeImageUrl] : ["/og-image.png"],
         }
     };

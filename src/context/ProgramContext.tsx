@@ -54,6 +54,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         isSyncing,
         gridAdmin,
         fetchGrid,
+        refreshBlockById,
         queueGridSync,
         updateBlockInState,
     } = useGridSync({
@@ -72,6 +73,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         blocks,
         gridAdmin,
         fetchGrid,
+        refreshBlockById,
         queueGridSync,
         updateBlockInState,
         openWalletSelectorModal,

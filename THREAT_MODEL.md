@@ -1,6 +1,6 @@
 # Threat Model
 
-Last updated: 2026-02-28
+Last updated: 2026-03-01
 
 ## System Boundaries
 
@@ -19,7 +19,7 @@ Last updated: 2026-02-28
 
 ## Trust Assumptions
 
-- Solana network and selected RPC endpoints are reachable and honest enough for expected finality.
+- Solana and selected RPC endpoints are reachable and sufficiently trustworthy for expected finality.
 - Maintainer GitHub accounts and signing keys are secured.
 - Deployment host is hardened and SSH key custody is controlled.
 
@@ -38,6 +38,7 @@ Last updated: 2026-02-28
 - Ownership verification before upload acceptance.
 - Upload replay protection with TTL-bound tokens.
 - Per-IP/per-wallet rate limits, with optional shared Redis guards.
+- Post-upload public URL probe to catch non-public object-storage configs.
 - CI checks for lint/type/tests and security scans.
 - Action pinning to immutable commit SHAs.
 - Release-gated signed tag verification.
@@ -48,7 +49,7 @@ Last updated: 2026-02-28
 - Compromise of maintainer account/signing key can still authorize bad releases.
 - Misconfigured object storage ACLs can expose or allow overwrite of assets.
 - RPC-level outages or integrity issues can degrade availability or correctness.
-- In-memory fallback guards are weaker under multi-instance scaling.
+- In-memory fallback guards are weaker in multi-instance deployments.
 
 ## Planned Improvements
 
