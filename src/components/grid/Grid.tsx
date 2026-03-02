@@ -15,7 +15,6 @@ import { useGridVisibility } from './useGridVisibility';
 import { useGridCanvas } from './useGridCanvas';
 import { useGridInteraction } from './useGridInteraction';
 import { MyBlocksList } from './MyBlocksList';
-import { MiniMapOverlay } from './MiniMapOverlay';
 import { MobileBlockSheet } from './MobileBlockSheet';
 import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
 import { OnboardingModal } from "@/components/modals/OnboardingModal";
@@ -197,27 +196,6 @@ export const Grid = () => {
         }
     }, [isMobileViewport, selectedBlock]);
 
-    const resetView = useCallback(() => {
-        transformRef.current?.centerView(0.6, 300);
-    }, []);
-
-    const jumpToBlock = useCallback((id: number) => {
-        const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
-        const col = id % GRID_WIDTH;
-        const row = Math.floor(id / GRID_WIDTH);
-        const targetX = col * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
-        const targetY = row * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
-        const scale = 2.0;
-        transformRef.current?.setTransform(
-            -targetX * scale + window.innerWidth / 2,
-            -targetY * scale + window.innerHeight / 2,
-            scale,
-            400,
-        );
-        setSelectedBlock(blocks[id]);
-        setSidebarMode('view');
-    }, [blocks, setSelectedBlock, setSidebarMode]);
-
     const handleSidebarPrev = useCallback(() => {
         if (!selectedBlock || selectedBlock.id <= 0) return;
         setSelectedBlock(blocks[selectedBlock.id - 1]);
@@ -297,14 +275,6 @@ export const Grid = () => {
                     />
                 </TransformComponent>
             </TransformWrapper>
-
-            <MiniMapOverlay
-                blocks={blocks}
-                visibleBounds={visibleBounds}
-                canvasRes={CANVAS_RES}
-                onResetView={resetView}
-                onJumpToBlock={jumpToBlock}
-            />
 
             {hoveredBlock && !isMobileViewport && (
                 <div

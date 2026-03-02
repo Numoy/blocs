@@ -108,6 +108,15 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
         }
     }, [initialMode, initForm, isOwner]);
 
+    // Escape key to close
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
     if (!block) return null;
 
     const handleEditToggle = () => {
@@ -327,6 +336,22 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
         }
     };
 
+    const statusBadgeClass = !block.owner
+        ? `${styles.statusBadge} ${styles.statusAvailable}`
+        : block.isForSale && !isOwner
+            ? `${styles.statusBadge} ${styles.statusForSale}`
+            : isOwner
+                ? `${styles.statusBadge} ${styles.statusOwned}`
+                : `${styles.statusBadge} ${styles.statusAvailable}`;
+
+    const statusLabel = !block.owner
+        ? "Available"
+        : block.isForSale && !isOwner
+            ? "For Sale"
+            : isOwner
+                ? "Yours"
+                : "Owned";
+
     return (
         <>
             <div className={styles.overlay} onClick={onClose} aria-hidden="true" />
@@ -339,9 +364,17 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                         aria-label="Previous block"
                     >←</button>
                     <div className={styles.titleGroup}>
-                        <h2 id="sidebar-title" className={styles.title}>Block #{block.id}</h2>
-                        <div className={styles.coordinates}>
-                            Row {Math.floor(block.id / GRID_WIDTH) + 1}, Col {(block.id % GRID_WIDTH) + 1}
+                        <div className={styles.titleLine}>
+                            {block.color && (
+                                <span className={styles.colorSwatch} style={{ background: block.color }} />
+                            )}
+                            <h2 id="sidebar-title" className={styles.title}>Block #{block.id}</h2>
+                        </div>
+                        <div className={styles.titleMeta}>
+                            <span className={styles.coordinates}>
+                                Row {Math.floor(block.id / GRID_WIDTH) + 1}, Col {(block.id % GRID_WIDTH) + 1}
+                            </span>
+                            <span className={statusBadgeClass}>{statusLabel}</span>
                         </div>
                     </div>
                     <button
@@ -350,64 +383,75 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                         disabled={!onNext || block.id === GRID_SIZE - 1}
                         aria-label="Next block"
                     >→</button>
-                    <button className={styles.closeButton} onClick={onClose} aria-label="Close sidebar">×</button>
+                    <button className={styles.closeButton} onClick={onClose} aria-label="Close sidebar">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            <line x1="1" y1="1" x2="13" y2="13" />
+                            <line x1="13" y1="1" x2="1" y2="13" />
+                        </svg>
+                    </button>
                 </div>
+
+                <div className={styles.divider} />
 
                 {!isEditing ? (
                     <>
                         {/* View Mode */}
                         {safeBlockImageUrl && (
-                            <div className={styles.section}>
+                            <div className={`${styles.section} ${styles.imagePadless}`}>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                     src={safeBlockImageUrl}
-                                    alt={`Block ${block.id} `}
+                                    alt={`Block ${block.id}`}
                                     className={styles.image}
                                 />
                             </div>
                         )}
 
                         <div className={styles.section}>
-                            <span className={styles.label}>Owner</span>
-                            <div className={styles.value}>
-                                {block.owner
-                                    ? block.owner === publicKey?.toBase58()
-                                        ? "You"
-                                        : onViewOwnerBlocks
-                                            ? <button
-                                                className={styles.ownerButton}
-                                                onClick={() => onViewOwnerBlocks(block.owner!)}
-                                              >
-                                                {block.owner.slice(0, 4)}...{block.owner.slice(-4)}
-                                              </button>
-                                            : block.owner
-                                    : "Available"}
+                            <div className={styles.infoRow}>
+                                <span className={styles.infoRowLabel}>Owner</span>
+                                <div className={styles.infoRowValue}>
+                                    {block.owner
+                                        ? block.owner === publicKey?.toBase58()
+                                            ? "You"
+                                            : onViewOwnerBlocks
+                                                ? <button
+                                                    className={styles.ownerButton}
+                                                    onClick={() => onViewOwnerBlocks(block.owner!)}
+                                                  >
+                                                    {block.owner.slice(0, 4)}...{block.owner.slice(-4)}
+                                                  </button>
+                                                : block.owner
+                                        : "Available"}
+                                </div>
                             </div>
+                            {block.text && (
+                                <div className={styles.infoRow}>
+                                    <span className={styles.infoRowLabel}>Message</span>
+                                    <div className={styles.infoRowValue}>{block.text}</div>
+                                </div>
+                            )}
+                            {block.url && (
+                                <div className={styles.infoRow}>
+                                    <span className={styles.infoRowLabel}>Link</span>
+                                    <div className={styles.infoRowValue}>
+                                        {safeBlockUrl ? (
+                                            <a href={safeBlockUrl} target="_blank" rel="noopener noreferrer" className={styles.link}>
+                                                {block.url}
+                                            </a>
+                                        ) : (
+                                            block.url
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                            {!block.text && !block.url && !block.imageUrl && (
+                                <div className={styles.emptyNote}>No content yet</div>
+                            )}
                         </div>
-
-                        {block.text && (
-                            <div className={styles.section}>
-                                <span className={styles.label}>Message</span>
-                                <div className={styles.value}>{block.text}</div>
-                            </div>
-                        )}
-
-                        {block.url && (
-                            <div className={styles.section}>
-                                <span className={styles.label}>Link</span>
-                                {safeBlockUrl ? (
-                                    <a href={safeBlockUrl} target="_blank" rel="noopener noreferrer" className={styles.link}>
-                                        {block.url}
-                                    </a>
-                                ) : (
-                                    <div className={styles.value}>{block.url}</div>
-                                )}
-                            </div>
-                        )}
 
                         {block.isForSale && (block.price !== null) && !isOwner && (
                             <div className={styles.section}>
-                                <span className={styles.label}>Price</span>
                                 {(!block.owner && rentFee) ? (
                                     <div className={styles.priceBreakdown}>
                                         <div className={styles.priceRow}>
@@ -428,7 +472,6 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                                         {block.price} SOL
                                     </div>
                                 )}
-
                                 <button
                                     className={`${styles.button} uiButton uiButtonPrimary`}
                                     onClick={async () => {
@@ -461,47 +504,47 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                             </div>
                         )}
 
-                        {isOwner && (
-                            <button className={`${styles.button} uiButton uiButtonSecondary`} onClick={handleEditToggle}>
-                                Edit Block
-                            </button>
-                        )}
-
-                        <button
-                            className={`${styles.button} uiButton uiButtonGhost`}
-                            onClick={async () => {
-                                const url = `${window.location.origin}/block/${block.id}`;
-                                try {
-                                    if (navigator.share) {
-                                        await navigator.share({
-                                            title: `Block #${block.id} on Blocs`,
-                                            text: "Check out this block on the Blocs grid.",
-                                            url,
-                                        });
+                        <div className={styles.actionsGroup}>
+                            {isOwner && (
+                                <button className={`${styles.button} uiButton uiButtonSecondary`} onClick={handleEditToggle}>
+                                    Edit Block
+                                </button>
+                            )}
+                            <button
+                                className={`${styles.button} uiButton uiButtonGhost`}
+                                onClick={async () => {
+                                    const url = `${window.location.origin}/block/${block.id}`;
+                                    try {
+                                        if (navigator.share) {
+                                            await navigator.share({
+                                                title: `Block #${block.id} on Blocs`,
+                                                text: "Check out this block on the Blocs grid.",
+                                                url,
+                                            });
+                                            trackPlausibleEvent("share_block_link_clicked", {
+                                                block_id: block.id,
+                                                ui_source: "sidebar",
+                                                method: "native_share",
+                                            });
+                                            return;
+                                        }
+                                        await navigator.clipboard.writeText(url);
                                         trackPlausibleEvent("share_block_link_clicked", {
                                             block_id: block.id,
                                             ui_source: "sidebar",
-                                            method: "native_share",
+                                            method: "clipboard",
                                         });
-                                        return;
+                                        toast.success("Link copied to clipboard!");
+                                    } catch (error) {
+                                        const abortError = error as DOMException;
+                                        if (abortError?.name === "AbortError") return;
+                                        toast.error("Could not share this block right now.");
                                     }
-
-                                    await navigator.clipboard.writeText(url);
-                                    trackPlausibleEvent("share_block_link_clicked", {
-                                        block_id: block.id,
-                                        ui_source: "sidebar",
-                                        method: "clipboard",
-                                    });
-                                    toast.success("Link copied to clipboard!");
-                                } catch (error) {
-                                    const abortError = error as DOMException;
-                                    if (abortError?.name === "AbortError") return;
-                                    toast.error("Could not share this block right now.");
-                                }
-                            }}
-                        >
-                            Share Block
-                        </button>
+                                }}
+                            >
+                                Share Block
+                            </button>
+                        </div>
                     </>
                 ) : (
                     <>
@@ -510,7 +553,7 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                             label="Message"
                             value={text}
                             onChange={setText}
-                            maxLength={64}
+                            maxBytes={64}
                         />
 
                         {/* Image Management */}
@@ -528,22 +571,16 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
 
                             {imageUrl ? (
                                 <div className={styles.imagePreviewWrap}>
-                                    {/* Preview */}
-                                    <div className={styles.imagePreviewWrap}>
-                                        {safeEditingImageUrl ? (
-                                            <>
-                                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                <img
-                                                    src={safeEditingImageUrl}
-                                                    alt="Preview"
-                                                    className={styles.imagePreview}
-                                                />
-                                            </>
-                                        ) : (
-                                            <div className={styles.value}>Invalid image URL format.</div>
-                                        )}
-                                    </div>
-
+                                    {safeEditingImageUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                            src={safeEditingImageUrl}
+                                            alt="Preview"
+                                            className={styles.imagePreview}
+                                        />
+                                    ) : (
+                                        <div className={styles.value}>Invalid image URL format.</div>
+                                    )}
                                     <button
                                         className={`${styles.button} uiButton uiButtonGhost`}
                                         onClick={() => setImageUrl("")}
@@ -553,10 +590,8 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                                 </div>
                             ) : (
                                 <div className={styles.uploadArea}>
-                                    <label
-                                        className={`${styles.uploadLabel} uiButton uiButtonSecondary`}
-                                    >
-                                        {isUploading ? "Uploading..." : "Upload New Image"}
+                                    <label className={`${styles.uploadLabel} uiButton uiButtonSecondary`}>
+                                        {isUploading ? "Uploading..." : "Upload Image"}
                                         <input
                                             type="file"
                                             accept="image/png,image/jpeg,image/gif,image/webp"
@@ -565,7 +600,6 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                                             onChange={handleFileUpload}
                                         />
                                     </label>
-                                    {isUploading && <span className={styles.uploadHint}>Uploading...</span>}
                                 </div>
                             )}
                         </div>
@@ -577,7 +611,7 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                         />
 
                         <div className={styles.section}>
-                            <span className={styles.label}>Price (SOL) - Leave empty to stop selling</span>
+                            <span className={styles.label}>Price (SOL)</span>
                             <input
                                 className={styles.input}
                                 type="number"
@@ -585,7 +619,11 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                                 onChange={(e) => setPrice(e.target.value)}
                                 min="0"
                                 step="0.000000001"
+                                placeholder="Leave empty to stop selling"
                             />
+                            <div className={styles.inputFooter}>
+                                <span className={styles.inputHelper}>Leave empty to delist</span>
+                            </div>
                         </div>
 
                         <div className={styles.splitActions}>
