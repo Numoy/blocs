@@ -9,6 +9,10 @@ interface SidebarInputProps {
     placeholder?: string;
     type?: string;
     helperText?: string;
+    isInvalid?: boolean;
+    invalidText?: string;
+    min?: string;
+    step?: string;
 }
 
 export const SidebarInput: React.FC<SidebarInputProps> = ({
@@ -19,6 +23,10 @@ export const SidebarInput: React.FC<SidebarInputProps> = ({
     placeholder,
     type = "text",
     helperText,
+    isInvalid,
+    invalidText,
+    min,
+    step,
 }) => {
     const byteLen = new TextEncoder().encode(value).length;
     const isNear = maxBytes !== undefined && byteLen >= maxBytes * 0.8;
@@ -30,16 +38,23 @@ export const SidebarInput: React.FC<SidebarInputProps> = ({
             ? `${styles.charCounter} ${styles.charCounterNear}`
             : styles.charCounter;
 
+    const inputClass = isInvalid ? `${styles.input} ${styles.inputError}` : styles.input;
+
     return (
         <div className={styles.section}>
             <span className={styles.label}>{label}</span>
             <input
-                className={styles.input}
+                className={inputClass}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
                 type={type}
+                min={min}
+                step={step}
             />
+            {isInvalid && invalidText && (
+                <div className={styles.errorText}>{invalidText}</div>
+            )}
             {(maxBytes !== undefined || helperText) && (
                 <div className={styles.inputFooter}>
                     <span className={styles.inputHelper}>{helperText}</span>

@@ -10,6 +10,24 @@
     animation: fadeIn 0.3s ease;
 }
 
+/* Custom scrollbar for sidebar */
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 .sidebar {
     position: fixed;
     top: 80px;
@@ -75,7 +93,7 @@
 .title {
     font-size: 1.25rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--foreground);
     margin-bottom: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -121,7 +139,7 @@
 .statusForSale {
     background: rgba(20, 241, 149, 0.14);
     border: 1px solid rgba(20, 241, 149, 0.3);
-    color: #14F195;
+    color: var(--accent-secondary);
 }
 
 .statusAvailable {
@@ -133,7 +151,7 @@
 .statusOwned {
     background: rgba(153, 69, 255, 0.12);
     border: 1px solid rgba(153, 69, 255, 0.3);
-    color: #c084fc;
+    color: var(--accent);
 }
 
 /* ── Divider ─────────────────────────────────────────────────────── */
@@ -166,7 +184,7 @@
 .navButton:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.3);
-    color: #fff;
+    color: var(--foreground);
 }
 
 .navButton:disabled {
@@ -196,7 +214,7 @@
 }
 
 .closeButton:hover {
-    color: #fff;
+    color: var(--foreground);
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.3);
 }
@@ -261,7 +279,7 @@
 }
 
 .infoRowValue {
-    color: #fff;
+    color: var(--foreground);
     font-size: 0.9rem;
     word-break: break-word;
     flex: 1;
@@ -402,24 +420,17 @@
     gap: 10px;
 }
 
-.splitActions > button {
+.splitActions>button {
     margin-top: 0;
 }
 
 /* ── Link ────────────────────────────────────────────────────────── */
 
 .link {
-    color: #83f9cf;
+    color: var(--accent-secondary);
     word-break: break-all;
     text-decoration: underline;
     text-underline-offset: 2px;
-}
-
-/* ── Value (legacy, keep for edit mode) ─────────────────────────── */
-.value {
-    color: #fff;
-    font-size: 0.95rem;
-    word-break: break-word;
 }
 
 /* ── Inputs ──────────────────────────────────────────────────────── */
@@ -429,10 +440,25 @@
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.2);
     padding: 0.8rem;
-    color: #fff;
+    color: var(--foreground);
     border-radius: var(--radius-sm);
     font-size: 0.95rem;
     outline: none;
+    transition: border-color 0.2s;
+}
+
+.inputError {
+    border-color: #ef4444 !important;
+}
+
+.inputError:focus {
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.errorText {
+    color: #ef4444;
+    font-size: 0.72rem;
+    margin-top: 4px;
 }
 
 .input:focus {
@@ -483,6 +509,23 @@
 
 .uploadInput {
     display: none;
+}
+
+.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.invalidText {
+    color: #ef4444;
+    font-size: 0.95rem;
+    word-break: break-word;
+    text-align: center;
+    padding: 2rem;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: var(--radius-sm);
+    border: 1px dashed rgba(239, 68, 68, 0.3);
 }
 
 .uploadHint {

@@ -61,33 +61,36 @@ describe('Sidebar Component', () => {
         mockGetMinimumBalanceForRentExemption.mockResolvedValue(1000000);
     });
 
-    const renderSidebar = async (block: BlockData | null, overrides?: { onClose?: () => void; onBuy?: (block: BlockData) => void }) => {
+    const renderSidebar = (block: BlockData | null, overrides?: { onClose?: () => void; onBuy?: (block: BlockData) => Promise<void> }) => {
         const onClose = overrides?.onClose ?? vi.fn();
-        const onBuy = overrides?.onBuy ?? vi.fn();
+        const onBuy = overrides?.onBuy ?? vi.fn().mockResolvedValue(undefined);
         const rendered = render(<Sidebar block={block} onClose={onClose} onBuy={onBuy} />);
-        await waitFor(() => expect(mockGetMinimumBalanceForRentExemption).toHaveBeenCalled());
         return { ...rendered, onClose, onBuy };
     };
 
-    it('should not render if no block provided', async () => {
-        const { container } = await renderSidebar(null);
+    it('should not render if no block provided', () => {
+        const { container } = renderSidebar(null);
         expect(container).toBeEmptyDOMElement();
     });
 
     it('should render block details correctly', async () => {
-        await renderSidebar(mockBlock);
+        renderSidebar(mockBlock);
 
-        expect(screen.getByText('Block #1')).toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByText('Block #1')).toBeInTheDocument();
+        });
         expect(screen.getByText('Hello World')).toBeInTheDocument();
     });
 
     it('should show Buy button for for-sale blocks not owned by user', async () => {
         const onBuy = vi.fn().mockResolvedValue(undefined);
-        await renderSidebar(mockBlock, { onBuy });
+        renderSidebar(mockBlock, { onBuy });
+
+        await waitFor(() => {
+            expect(screen.getByText('Buy Block')).toBeInTheDocument();
+        });
 
         const buyButton = screen.getByText('Buy Block');
-        expect(buyButton).toBeInTheDocument();
-
         await act(async () => {
             fireEvent.click(buyButton);
         });
@@ -96,15 +99,21 @@ describe('Sidebar Component', () => {
     });
 
     it('should show Edit button for owned blocks', async () => {
-        await renderSidebar(mockOwnedBlock);
+        renderSidebar(mockOwnedBlock);
 
-        expect(screen.getByText('Edit Block')).toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByText('Edit Block')).toBeInTheDocument();
+        });
         expect(screen.queryByText('Buy Block')).not.toBeInTheDocument();
     });
 
     it('should call onClose when close button clicked', async () => {
         const onClose = vi.fn();
-        await renderSidebar(mockBlock, { onClose });
+        renderSidebar(mockBlock, { onClose });
+
+        await waitFor(() => {
+            expect(screen.getByLabelText('Close sidebar')).toBeInTheDocument();
+        });
 
         fireEvent.click(screen.getByLabelText('Close sidebar'));
         expect(onClose).toHaveBeenCalled();
