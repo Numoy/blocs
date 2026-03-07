@@ -8,9 +8,11 @@ interface UseGridCanvasProps {
     blocks: BlockData[];
     visibleBounds: VisibleBounds;
     CANVAS_RES: number;
+    hoveredBlockId: number | null;
+    selectedBlockId: number | null;
 }
 
-export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, CANVAS_RES }: UseGridCanvasProps) => {
+export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, CANVAS_RES, hoveredBlockId, selectedBlockId }: UseGridCanvasProps) => {
     const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
     const animationFrameRef = useRef<number | null>(null);
     const MAX_IMAGE_CACHE_SIZE = 2000;
@@ -80,6 +82,28 @@ export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, CANVAS_RES }: 
                     }
                 }
             }
+
+            // --- Hover highlight ---
+            if (hoveredBlockId !== null && hoveredBlockId !== selectedBlockId) {
+                const hCol = hoveredBlockId % GRID_WIDTH;
+                const hRow = Math.floor(hoveredBlockId / GRID_WIDTH);
+                const hx = hCol * BLOCK_SIZE;
+                const hy = hRow * BLOCK_SIZE;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(hx + 1.5, hy + 1.5, BLOCK_SIZE - 3, BLOCK_SIZE - 3);
+            }
+
+            // --- Selection highlight ---
+            if (selectedBlockId !== null) {
+                const sCol = selectedBlockId % GRID_WIDTH;
+                const sRow = Math.floor(selectedBlockId / GRID_WIDTH);
+                const sx = sCol * BLOCK_SIZE;
+                const sy = sRow * BLOCK_SIZE;
+                ctx.strokeStyle = '#14F195';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(sx + 2, sy + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
+            }
         });
 
         return () => {
@@ -88,7 +112,7 @@ export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, CANVAS_RES }: 
                 animationFrameRef.current = null;
             }
         };
-    }, [blocks, visibleBounds, CANVAS_RES, canvasRef]);
+    }, [blocks, visibleBounds, CANVAS_RES, canvasRef, hoveredBlockId, selectedBlockId]);
 
     useEffect(() => {
         const cache = imageCache.current;

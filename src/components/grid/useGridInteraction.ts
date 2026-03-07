@@ -7,9 +7,10 @@ interface UseGridInteractionProps {
     canvasRef: React.RefObject<HTMLCanvasElement | null>;
     blocks: BlockData[];
     CANVAS_RES: number;
+    onBlockSelect?: (blockId: number) => void;
 }
 
-export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES }: UseGridInteractionProps) => {
+export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES, onBlockSelect }: UseGridInteractionProps) => {
     const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null);
     const [hoveredBlockId, setHoveredBlockId] = useState<number | null>(null);
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
@@ -130,15 +131,18 @@ export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES }: UseGridInt
                     }
                     setSelectedBlockId(newId);
                     setSidebarMode('view');
+                    onBlockSelect?.(newId);
                 }
             }
         }
-    }, [selectedBlockId, blocks]);
+    }, [selectedBlockId, blocks, onBlockSelect]);
 
     return {
         selectedBlock,
         setSelectedBlock,
+        selectedBlockId,
         hoveredBlock,
+        hoveredBlockId,
         cursorPos,
         sidebarMode,
         setSidebarMode,

@@ -90,18 +90,32 @@ export const Grid = () => {
         canvasRes: CANVAS_RES,
         margin: CANVAS_MARGIN,
     });
+    const zoomToBlock = useCallback((blockId: number) => {
+        const ref = transformRef.current;
+        if (!ref) return;
 
-    useGridCanvas({
-        canvasRef,
-        blocks,
-        visibleBounds,
-        CANVAS_RES,
-    });
+        const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
+        const col = blockId % GRID_WIDTH;
+        const row = Math.floor(blockId / GRID_WIDTH);
+
+        const targetX = col * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
+        const targetY = row * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
+        const scale = Math.max(ref.state.scale, 2.0);
+
+        const winW = window.innerWidth;
+        const winH = window.innerHeight;
+
+        const posX = -targetX * scale + winW / 2;
+        const posY = -targetY * scale + winH / 2;
+
+        ref.setTransform(posX, posY, scale, 300, 'easeOut');
+    }, [CANVAS_RES]);
 
     const {
         selectedBlock,
         setSelectedBlock,
         hoveredBlock,
+        hoveredBlockId,
         cursorPos,
         sidebarMode,
         setSidebarMode,
@@ -115,6 +129,16 @@ export const Grid = () => {
         canvasRef,
         blocks,
         CANVAS_RES,
+        onBlockSelect: zoomToBlock,
+    });
+
+    useGridCanvas({
+        canvasRef,
+        blocks,
+        visibleBounds,
+        CANVAS_RES,
+        hoveredBlockId: isMobileViewport ? null : hoveredBlockId,
+        selectedBlockId: selectedBlock?.id ?? null,
     });
 
     const safeHoveredImageUrl = toSafeExternalUrl(hoveredBlock?.imageUrl);
@@ -198,13 +222,17 @@ export const Grid = () => {
 
     const handleSidebarPrev = useCallback(() => {
         if (!selectedBlock || selectedBlock.id <= 0) return;
-        setSelectedBlock(blocks[selectedBlock.id - 1]);
-    }, [selectedBlock, blocks, setSelectedBlock]);
+        const prevBlock = blocks[selectedBlock.id - 1];
+        setSelectedBlock(prevBlock);
+        if (prevBlock) zoomToBlock(prevBlock.id);
+    }, [selectedBlock, blocks, setSelectedBlock, zoomToBlock]);
 
     const handleSidebarNext = useCallback(() => {
         if (!selectedBlock || selectedBlock.id >= GRID_SIZE - 1) return;
-        setSelectedBlock(blocks[selectedBlock.id + 1]);
-    }, [selectedBlock, blocks, setSelectedBlock]);
+        const nextBlock = blocks[selectedBlock.id + 1];
+        setSelectedBlock(nextBlock);
+        if (nextBlock) zoomToBlock(nextBlock.id);
+    }, [selectedBlock, blocks, setSelectedBlock, zoomToBlock]);
 
     const handleCloseOnboarding = useCallback(() => {
         localStorage.setItem('blocs_has_visited', '1');
@@ -220,7 +248,7 @@ export const Grid = () => {
 
     const viewingOwnerBlocks = useMemo(() =>
         viewingOwner ? blocks.filter(b => b.owner === viewingOwner) : [],
-    [blocks, viewingOwner]);
+        [blocks, viewingOwner]);
 
     return (
         <div
@@ -355,6 +383,7 @@ export const Grid = () => {
                     });
                     setSelectedBlock(block);
                     setSidebarMode('edit');
+                    zoomToBlock(block.id);
                 }}
             />
 
@@ -367,6 +396,7 @@ export const Grid = () => {
                         onSelectBlock={(block) => {
                             setSelectedBlock(block);
                             setSidebarMode('view');
+                            zoomToBlock(block.id);
                         }}
                     />
                 </div>
