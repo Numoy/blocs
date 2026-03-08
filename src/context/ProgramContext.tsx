@@ -39,10 +39,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         return asBlocsProgram(new Program(idl as Idl, provider));
     }, [connection, providerWallet]);
 
-    const openWalletSelectorModal = useCallback((_currentUrl: string) => {
-        // Privy handles wallet connection for both desktop and mobile
-        login();
-    }, [login]);
 
     const {
         blocks,
@@ -72,7 +68,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         refreshBlockById,
         queueGridSync,
         updateBlockInState,
-        openWalletSelectorModal,
     });
 
     const refreshBlock = useCallback(async () => {

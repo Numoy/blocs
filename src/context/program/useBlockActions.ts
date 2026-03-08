@@ -45,7 +45,6 @@ type UseBlockActionsOptions = {
     refreshBlockById: (id: number) => Promise<void>;
     queueGridSync: (delayMs?: number) => void;
     updateBlockInState: UpdateBlockInState;
-    openWalletSelectorModal: (currentUrl: string) => void;
 };
 
 type UseBlockActionsResult = {
@@ -67,7 +66,6 @@ export const useBlockActions = ({
     refreshBlockById,
     queueGridSync,
     updateBlockInState,
-    openWalletSelectorModal,
 }: UseBlockActionsOptions): UseBlockActionsResult => {
     const buyBlock = useCallback(async (
         id: number,
@@ -251,7 +249,6 @@ export const useBlockActions = ({
         connection,
         fetchGrid,
         gridAdmin,
-        openWalletSelectorModal,
         program,
         publicKey,
         refreshBlockById,
