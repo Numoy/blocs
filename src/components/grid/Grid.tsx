@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { usePrivy } from '@privy-io/react-auth';
 import { useSearchParams } from 'next/navigation';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import type { ReactZoomPanPinchRef } from "react-zoom-pan-pinch";
@@ -24,8 +25,10 @@ import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
 import { parseGridBlockId } from '@/utils/numberParsing';
 
 export const Grid = () => {
-    const { blocks, buyBlock, isLoading, isSyncing } = useProgram();
-    const { publicKey } = useWallet();
+    const { blocks, buyBlock, isLoading, isSyncing, openWalletModal } = useProgram();
+    const { publicKey, connected, connecting } = useWallet();
+    const { authenticated } = usePrivy();
+    const pendingBuyRef = useRef<{ block: BlockData; source: BuySource } | null>(null);
     const [successBlock, setSuccessBlock] = useState<BlockData | null>(null);
     const [isMobileViewport, setIsMobileViewport] = useState(false);
     const [isMobileBuying, setIsMobileBuying] = useState(false);
@@ -147,7 +150,17 @@ export const Grid = () => {
     const showMobileSheet = Boolean(selectedBlock) && isMobileViewport && sidebarMode === 'view';
 
     const handleBuyBlock = useCallback(async (block: BlockData, source: BuySource = "grid_sidebar") => {
-        if (!block.price) return;
+        if (connecting) {
+            // Wallet is mid-connection after Privy login — queue and auto-proceed when ready
+            pendingBuyRef.current = { block, source };
+            toast.info("Connecting wallet, your purchase will proceed automatically...");
+            return;
+        }
+
+        if (!connected && !authenticated) {
+            openWalletModal();
+            return;
+        }
 
         trackPlausibleEvent("buy_flow_requested", {
             block_id: block.id,
@@ -156,7 +169,7 @@ export const Grid = () => {
         });
 
         try {
-            await buyBlock(block.id, block.price, undefined, source);
+            await buyBlock(block.id, block.price ?? 0, undefined, source);
             setSuccessBlock(block);
         } catch (error) {
             trackPlausibleEvent("buy_flow_failed", {
@@ -166,7 +179,16 @@ export const Grid = () => {
             });
             console.error("Failed to buy block:", error);
         }
-    }, [buyBlock]);
+    }, [buyBlock, connecting, connected, authenticated, openWalletModal]);
+
+    // Auto-trigger queued buy once wallet finishes connecting
+    useEffect(() => {
+        if (connected && pendingBuyRef.current) {
+            const pending = pendingBuyRef.current;
+            pendingBuyRef.current = null;
+            handleBuyBlock(pending.block, pending.source);
+        }
+    }, [connected, handleBuyBlock]);
 
     const handleMobileBuy = useCallback(async () => {
         if (!selectedBlock) {

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useProgram } from '@/context/ProgramContext';
 import { toast } from 'sonner';
 import { trackPlausibleEvent } from '@/utils/analytics';
 import { toSafeExternalUrl } from '@/utils/url';
@@ -25,7 +24,6 @@ export const SidebarView = ({
     onViewOwnerBlocks,
 }: SidebarViewProps) => {
     const { publicKey } = useWallet();
-    const { openWalletModal } = useProgram();
     const [isBuying, setIsBuying] = useState(false);
 
     const safeBlockUrl = toSafeExternalUrl(block.url);
@@ -68,10 +66,6 @@ export const SidebarView = ({
             wallet_connected: Boolean(publicKey),
             price_sol: block.price || 0,
         });
-        if (!publicKey) {
-            openWalletModal("sidebar_buy");
-            return;
-        }
         setIsBuying(true);
         try {
             await onBuy(block);
