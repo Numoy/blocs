@@ -26,7 +26,7 @@ import { parseGridBlockId } from '@/utils/numberParsing';
 
 export const Grid = () => {
     const { blocks, buyBlock, isLoading, isSyncing, openWalletModal } = useProgram();
-    const { publicKey, connected, connecting } = useWallet();
+    const { publicKey, connected } = useWallet();
     const { authenticated } = usePrivy();
     const pendingBuyRef = useRef<{ block: BlockData; source: BuySource } | null>(null);
     const [successBlock, setSuccessBlock] = useState<BlockData | null>(null);
@@ -150,15 +150,14 @@ export const Grid = () => {
     const showMobileSheet = Boolean(selectedBlock) && isMobileViewport && sidebarMode === 'view';
 
     const handleBuyBlock = useCallback(async (block: BlockData, source: BuySource = "grid_sidebar") => {
-        if (connecting) {
-            // Wallet is mid-connection after Privy login — queue and auto-proceed when ready
+        if (!connected) {
+            if (!authenticated) {
+                openWalletModal();
+                return;
+            }
+            // Authenticated but wallet-adapter not yet connected — queue and auto-proceed
             pendingBuyRef.current = { block, source };
             toast.info("Connecting wallet, your purchase will proceed automatically...");
-            return;
-        }
-
-        if (!connected && !authenticated) {
-            openWalletModal();
             return;
         }
 
@@ -179,7 +178,7 @@ export const Grid = () => {
             });
             console.error("Failed to buy block:", error);
         }
-    }, [buyBlock, connecting, connected, authenticated, openWalletModal]);
+    }, [buyBlock, connected, authenticated, openWalletModal]);
 
     // Auto-trigger queued buy once wallet finishes connecting
     useEffect(() => {

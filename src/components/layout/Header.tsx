@@ -9,6 +9,7 @@ import { ClientOnly } from "@/components/utils/ClientOnly";
 import { InfoModal } from "@/components/modals/InfoModal";
 import { useProgram } from '@/context/ProgramContext';
 import { trackPlausibleEvent } from "@/utils/analytics";
+import { toast } from 'sonner';
 
 export const Header = () => {
     const [isInfoOpen, setIsInfoOpen] = useState(false);
@@ -74,12 +75,19 @@ export const Header = () => {
     }, [walletAddress]);
 
     const handleFundWallet = useCallback(async () => {
-        if (!walletAddress) return;
+        if (!walletAddress) {
+            toast.error("No wallet address found. Please connect a wallet first.");
+            return;
+        }
         setIsDropdownOpen(false);
         trackPlausibleEvent("fund_wallet_opened");
         try {
             await fundWallet({ address: walletAddress });
         } catch (error) {
+            const msg = (error as Error)?.message || "";
+            if (!msg.toLowerCase().includes("user cancelled") && !msg.toLowerCase().includes("user rejected")) {
+                toast.error("Could not open funding flow. Make sure on-ramp is enabled in your Privy dashboard.");
+            }
             console.error("Fund wallet error:", error);
         }
     }, [walletAddress, fundWallet]);
