@@ -112,7 +112,6 @@ describe('WalletContextProvider', () => {
     it('configures Privy with dark theme and solana-only wallets', async () => {
         process.env.NEXT_PUBLIC_PRIVY_APP_ID = 'test-id';
 
-        vi.resetModules();
         const { WalletContextProvider } = await import('../WalletContextProvider');
 
         render(
@@ -131,7 +130,6 @@ describe('WalletContextProvider', () => {
     it('configures Solana embedded wallet to create on login', async () => {
         process.env.NEXT_PUBLIC_PRIVY_APP_ID = 'test-id';
 
-        vi.resetModules();
         const { WalletContextProvider } = await import('../WalletContextProvider');
 
         render(
@@ -149,7 +147,6 @@ describe('WalletContextProvider', () => {
     it('includes social login methods', async () => {
         process.env.NEXT_PUBLIC_PRIVY_APP_ID = 'test-id';
 
-        vi.resetModules();
         const { WalletContextProvider } = await import('../WalletContextProvider');
 
         render(
