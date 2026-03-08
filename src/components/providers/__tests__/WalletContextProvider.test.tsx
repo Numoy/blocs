@@ -52,25 +52,25 @@ import { render, screen } from '@testing-library/react';
 describe('WalletContextProvider', () => {
     const ORIGINAL_ENV = process.env;
 
+    beforeEach(() => {
+        vi.resetModules();
+        process.env = {
+            ...ORIGINAL_ENV,
+            NEXT_PUBLIC_SOLANA_RPC_URL: 'https://api.devnet.solana.com'
+        };
+    });
+
     afterEach(() => {
-        process.env = { ...ORIGINAL_ENV };
+        process.env = ORIGINAL_ENV;
     });
 
     it('throws if NEXT_PUBLIC_PRIVY_APP_ID is missing', async () => {
         delete process.env.NEXT_PUBLIC_PRIVY_APP_ID;
         const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
-        // Dynamic import to re-evaluate the module fresh
-        vi.resetModules();
-        const { WalletContextProvider } = await import('../WalletContextProvider');
-
-        expect(() =>
-            render(
-                <WalletContextProvider>
-                    <div>test</div>
-                </WalletContextProvider>
-            )
-        ).toThrow('NEXT_PUBLIC_PRIVY_APP_ID');
+        // Since validation happens in src/env.ts at module level, 
+        // importing the component (which imports env) will throw.
+        await expect(import('../WalletContextProvider')).rejects.toThrow();
 
         consoleSpy.mockRestore();
     });
@@ -78,7 +78,6 @@ describe('WalletContextProvider', () => {
     it('renders full provider stack when NEXT_PUBLIC_PRIVY_APP_ID is set', async () => {
         process.env.NEXT_PUBLIC_PRIVY_APP_ID = 'test-privy-app-id';
 
-        vi.resetModules();
         const { WalletContextProvider } = await import('../WalletContextProvider');
 
         render(
@@ -98,7 +97,6 @@ describe('WalletContextProvider', () => {
     it('passes correct appId to PrivyProvider', async () => {
         process.env.NEXT_PUBLIC_PRIVY_APP_ID = 'my-app-id-123';
 
-        vi.resetModules();
         const { WalletContextProvider } = await import('../WalletContextProvider');
 
         render(

@@ -235,6 +235,7 @@ jobs:
           push: true
           build-args: |
             NEXT_PUBLIC_SOLANA_RPC_URL=${{ steps.validate_config.outputs.next_public_solana_rpc_url }}
+            NEXT_PUBLIC_PRIVY_APP_ID=${{ vars.NEXT_PUBLIC_PRIVY_APP_ID || secrets.NEXT_PUBLIC_PRIVY_APP_ID }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 

@@ -6,6 +6,7 @@ import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import '@solana/wallet-adapter-react-ui/styles.css';
+import { env } from "@/env";
 import { resolveSolanaRpcEndpoint } from "@/utils/rpc";
 import { PrivyWalletBridge } from "@/components/providers/PrivyWalletBridge";
 
@@ -13,7 +14,7 @@ const solanaConnectors = toSolanaWalletConnectors();
 
 export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const endpoint = useMemo(() => {
-        return resolveSolanaRpcEndpoint(process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
+        return resolveSolanaRpcEndpoint(env.NEXT_PUBLIC_SOLANA_RPC_URL);
     }, []);
 
     const wallets = useMemo(
@@ -21,10 +22,7 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
         []
     );
 
-    const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-    if (!privyAppId) {
-        throw new Error("NEXT_PUBLIC_PRIVY_APP_ID environment variable is required");
-    }
+    const privyAppId = env.NEXT_PUBLIC_PRIVY_APP_ID;
 
     return (
         <PrivyProvider
