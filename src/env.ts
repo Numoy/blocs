@@ -15,6 +15,7 @@ const optionalUrl = z
 
 const envSchema = z
   .object({
+    NEXT_PUBLIC_PRIVY_APP_ID: z.string().trim().min(1),
     NEXT_PUBLIC_SOLANA_RPC_URL: z.string().trim().url(),
     NEXT_PUBLIC_SITE_URL: optionalUrl,
     SOLANA_RPC_URL: optionalUrl,
@@ -32,10 +33,10 @@ const envSchema = z
   .superRefine((value, ctx) => {
     const hasHetznerConfig = Boolean(
       value.HETZNER_ACCESS_KEY_ID ||
-        value.HETZNER_SECRET_ACCESS_KEY ||
-        value.HETZNER_BUCKET_NAME ||
-        value.HETZNER_ENDPOINT ||
-        value.HETZNER_PUBLIC_BASE_URL,
+      value.HETZNER_SECRET_ACCESS_KEY ||
+      value.HETZNER_BUCKET_NAME ||
+      value.HETZNER_ENDPOINT ||
+      value.HETZNER_PUBLIC_BASE_URL,
     );
 
     if (hasHetznerConfig) {
@@ -74,6 +75,7 @@ const envSchema = z
   });
 
 export const env = envSchema.parse({
+  NEXT_PUBLIC_PRIVY_APP_ID: process.env.NEXT_PUBLIC_PRIVY_APP_ID,
   NEXT_PUBLIC_SOLANA_RPC_URL: process.env.NEXT_PUBLIC_SOLANA_RPC_URL,
   NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
   SOLANA_RPC_URL: process.env.SOLANA_RPC_URL,

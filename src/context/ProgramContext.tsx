@@ -1,14 +1,13 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { usePrivy } from "@privy-io/react-auth";
 import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
-import { isMobile, isWalletBrowser } from "@/utils/mobile";
 import { trackPlausibleEvent } from "@/utils/analytics";
-import { WalletSelectorModal } from "@/components/modals";
+import { isMobile, isWalletBrowser } from "@/utils/mobile";
 import { asBlocsProgram } from "@/utils/programTypes";
 import {
     type BuySource,
@@ -25,10 +24,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
     const { sendTransaction, publicKey, connected } = useWallet();
-    const { setVisible } = useWalletModal();
-
-    const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
-    const [walletModalUrl, setWalletModalUrl] = useState("");
+    const { login } = usePrivy();
 
     const providerWallet = useMemo(() => (
         wallet || {
@@ -43,10 +39,10 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         return asBlocsProgram(new Program(idl as Idl, provider));
     }, [connection, providerWallet]);
 
-    const openWalletSelectorModal = useCallback((currentUrl: string) => {
-        setWalletModalUrl(currentUrl);
-        setIsWalletModalOpen(true);
-    }, []);
+    const openWalletSelectorModal = useCallback((_currentUrl: string) => {
+        // Privy handles wallet connection for both desktop and mobile
+        login();
+    }, [login]);
 
     const {
         blocks,
@@ -90,13 +86,9 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             is_wallet_browser: isWalletBrowser(),
         });
 
-        if (isMobile() && !isWalletBrowser()) {
-            openWalletSelectorModal(window.location.href);
-            return;
-        }
-
-        setVisible(true);
-    }, [openWalletSelectorModal, setVisible]);
+        // Privy handles both mobile and desktop login/wallet connection
+        login();
+    }, [login]);
 
     return (
         <ProgramContext.Provider
@@ -112,11 +104,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             }}
         >
             {children}
-            <WalletSelectorModal
-                isOpen={isWalletModalOpen}
-                onClose={() => setIsWalletModalOpen(false)}
-                currentUrl={walletModalUrl}
-            />
         </ProgramContext.Provider>
     );
 };

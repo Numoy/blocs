@@ -7,7 +7,6 @@ import { SendTransactionOptions } from "@solana/wallet-adapter-base";
 import { isContentAllowed } from "@/utils/moderation";
 import { toast } from "sonner";
 import { GRID_PUBKEY } from "@/utils/constants";
-import { isMobile, isWalletBrowser } from "@/utils/mobile";
 import { hexToRgb } from "@/utils/colors";
 import { parseSolToLamports } from "@/utils/sol";
 import { toSafeExternalUrl } from "@/utils/url";
@@ -236,16 +235,6 @@ export const useBlockActions = ({
                 console.error("Sim Logs:", err.logs);
             }
 
-            if (isMobile() && !isWalletBrowser()) {
-                toast.dismiss(toastId);
-                openWalletSelectorModal(window.location.href);
-                trackPlausibleEvent("wallet_modal_opened", {
-                    source,
-                    is_mobile: true,
-                    is_wallet_browser: false,
-                });
-                throw error;
-            }
 
             trackPlausibleEvent("buy_block_failed", {
                 block_id: id,

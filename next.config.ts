@@ -24,7 +24,7 @@ assetOrigins.delete("");
 
 const analyticsOrigin = "https://analytics.marvinmaerz.com";
 // Allow secure RPC backends that may be injected at build/runtime without hardcoding every provider domain.
-const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com", analyticsOrigin];
+const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com", analyticsOrigin, "https://auth.privy.io", "https://*.privy.io"];
 const imgSrc = ["'self'", "data:", "blob:", ...assetOrigins, "https:"];
 const mediaSrc = ["'self'", "data:", "blob:"];
 const workerSrc = ["'self'", "blob:"];
@@ -45,7 +45,7 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  "frame-src 'none'",
+  "frame-src https://auth.privy.io https://*.privy.io",
   `script-src ${scriptSrc.join(" ")}`,
   "script-src-attr 'none'",
   `style-src ${styleSrc.join(" ")}`,
