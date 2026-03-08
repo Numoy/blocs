@@ -5,7 +5,7 @@ import "./env-init";
 import "./globals.css";
 // import { Inter } from "next/font/google";
 import "@solana/wallet-adapter-react-ui/styles.css";
-import { WalletContextProvider } from "@/components/providers/WalletContextProvider";
+import { ClientRoot } from "@/components/providers/ClientRoot";
 import { Header } from "@/components/layout/Header";
 import { ProgramProvider } from "@/context/ProgramContext";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
@@ -109,7 +109,7 @@ export default function RootLayout({
             src: "https://analytics.marvinmaerz.com/js/pa-3HPsBPc6MtBPaeuGOplYw.js",
           }}
         >
-          <WalletContextProvider>
+          <ClientRoot>
             <ProgramProvider>
               <ErrorBoundary>
                 <Header />
@@ -117,7 +117,7 @@ export default function RootLayout({
               </ErrorBoundary>
               <Toaster position="bottom-right" theme="dark" />
             </ProgramProvider>
-          </WalletContextProvider>
+          </ClientRoot>
         </PlausibleProvider>
       </body>
     </html>
