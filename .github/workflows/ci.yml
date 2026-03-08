@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 30
     env:
       NEXT_PUBLIC_SOLANA_RPC_URL: https://api.devnet.solana.com
-      NEXT_PUBLIC_PRIVY_APP_ID: test_id
+      NEXT_PUBLIC_PRIVY_APP_ID: ${{ vars.NEXT_PUBLIC_PRIVY_APP_ID }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

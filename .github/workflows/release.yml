@@ -102,6 +102,7 @@ jobs:
           HETZNER_BUCKET_NAME: ${{ vars.HETZNER_BUCKET_NAME }}
           RAW_HETZNER_ENDPOINT: ${{ vars.HETZNER_ENDPOINT || secrets.HETZNER_ENDPOINT }}
           RAW_HETZNER_PUBLIC_BASE_URL: ${{ vars.HETZNER_PUBLIC_BASE_URL || secrets.HETZNER_PUBLIC_BASE_URL }}
+          RAW_NEXT_PUBLIC_PRIVY_APP_ID: ${{ vars.NEXT_PUBLIC_PRIVY_APP_ID }}
         run: |
           set -euo pipefail
 
@@ -156,6 +157,7 @@ jobs:
             fi
           }
 
+          require_non_empty "NEXT_PUBLIC_PRIVY_APP_ID" "${RAW_NEXT_PUBLIC_PRIVY_APP_ID:-}"
           require_non_empty "HETZNER_ACCESS_KEY_ID" "${HETZNER_ACCESS_KEY_ID:-}"
           require_non_empty "HETZNER_SECRET_ACCESS_KEY" "${HETZNER_SECRET_ACCESS_KEY:-}"
           require_non_empty "HETZNER_BUCKET_NAME" "${HETZNER_BUCKET_NAME:-}"
@@ -197,6 +199,7 @@ jobs:
 
           echo "next_public_solana_rpc_url=${next_public_rpc}" >> "$GITHUB_OUTPUT"
           echo "solana_rpc_url=${solana_rpc}" >> "$GITHUB_OUTPUT"
+          echo "next_public_privy_app_id=${RAW_NEXT_PUBLIC_PRIVY_APP_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the Container registry
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2
@@ -222,7 +225,7 @@ jobs:
           push: true
           build-args: |
             NEXT_PUBLIC_SOLANA_RPC_URL=${{ steps.validate_config.outputs.next_public_solana_rpc_url }}
-            NEXT_PUBLIC_PRIVY_APP_ID=${{ secrets.NEXT_PUBLIC_PRIVY_APP_ID }}
+            NEXT_PUBLIC_PRIVY_APP_ID=${{ steps.validate_config.outputs.next_public_privy_app_id }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
