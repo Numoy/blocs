@@ -26,9 +26,10 @@ import { parseGridBlockId } from '@/utils/numberParsing';
 
 export const Grid = () => {
     const { blocks, buyBlock, isLoading, isSyncing, openWalletModal } = useProgram();
-    const { publicKey, connected } = useWallet();
+    const { publicKey, connected, connect, wallet: adapterWallet } = useWallet();
     const { authenticated } = usePrivy();
     const pendingBuyRef = useRef<{ block: BlockData; source: BuySource } | null>(null);
+    const pendingBuyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [successBlock, setSuccessBlock] = useState<BlockData | null>(null);
     const [isMobileViewport, setIsMobileViewport] = useState(false);
     const [isMobileBuying, setIsMobileBuying] = useState(false);
@@ -149,15 +150,33 @@ export const Grid = () => {
     const showDesktopSidebar = Boolean(selectedBlock) && (!isMobileViewport || sidebarMode === 'edit');
     const showMobileSheet = Boolean(selectedBlock) && isMobileViewport && sidebarMode === 'view';
 
+    const queuePendingBuy = useCallback((block: BlockData, source: BuySource) => {
+        pendingBuyRef.current = { block, source };
+        toast.info("Connecting wallet, your purchase will proceed automatically...");
+
+        // Explicitly connect if a wallet adapter is already selected (helps on mobile)
+        if (adapterWallet) {
+            connect().catch(() => { /* timeout below handles the failure UX */ });
+        }
+
+        // Safety timeout: if wallet never connects, clear the pending buy
+        if (pendingBuyTimeoutRef.current) clearTimeout(pendingBuyTimeoutRef.current);
+        pendingBuyTimeoutRef.current = setTimeout(() => {
+            if (pendingBuyRef.current) {
+                pendingBuyRef.current = null;
+                toast.error("Wallet did not connect in time. Please try again.");
+            }
+        }, 15_000);
+    }, [adapterWallet, connect]);
+
     const handleBuyBlock = useCallback(async (block: BlockData, source: BuySource = "grid_sidebar") => {
         if (!connected) {
+            // Queue the buy before opening the modal so it auto-fires once the wallet connects,
+            // whether the user was unauthenticated (needs login) or just not yet connected.
+            queuePendingBuy(block, source);
             if (!authenticated) {
                 openWalletModal();
-                return;
             }
-            // Authenticated but wallet-adapter not yet connected — queue and auto-proceed
-            pendingBuyRef.current = { block, source };
-            toast.info("Connecting wallet, your purchase will proceed automatically...");
             return;
         }
 
@@ -176,13 +195,17 @@ export const Grid = () => {
                 ui_source: source,
                 error_category: toErrorCategory(error),
             });
-            console.error("Failed to buy block:", error);
+            // buyBlock already shows the user-facing error toast; no additional toast here
         }
-    }, [buyBlock, connected, authenticated, openWalletModal]);
+    }, [buyBlock, connected, authenticated, openWalletModal, queuePendingBuy]);
 
     // Auto-trigger queued buy once wallet finishes connecting
     useEffect(() => {
         if (connected && pendingBuyRef.current) {
+            if (pendingBuyTimeoutRef.current) {
+                clearTimeout(pendingBuyTimeoutRef.current);
+                pendingBuyTimeoutRef.current = null;
+            }
             const pending = pendingBuyRef.current;
             pendingBuyRef.current = null;
             handleBuyBlock(pending.block, pending.source);

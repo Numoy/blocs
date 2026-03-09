@@ -302,6 +302,8 @@ export const useGridFetch = ({ connection, providerWallet }: UseGridFetchOptions
         }, Math.max(0, nextRunAt - now));
     }, [fetchGrid]);
 
+    const fetchGridWithTimeoutRef = useRef<(() => Promise<void>) | null>(null);
+
     const fetchGridWithTimeout = useCallback(async () => {
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
         const timeout = new Promise<never>((_, reject) => {
@@ -311,13 +313,21 @@ export const useGridFetch = ({ connection, providerWallet }: UseGridFetchOptions
         try {
             await Promise.race([fetchGrid(), timeout]);
         } catch (err) {
-            console.error("Grid Load Timeout/Error:", err);
             trackPlausibleEvent("grid_load_timeout_or_error", {
                 rpc_endpoint: connection.rpcEndpoint,
                 error_category: toErrorCategory(err),
             });
             if (isMountedRef.current) {
-                toast.error("Failed to load grid. Please check RPC endpoint or network.");
+                toast.error("Failed to load grid. Please check your network.", {
+                    action: {
+                        label: "Retry",
+                        onClick: () => {
+                            if (fetchGridWithTimeoutRef.current) {
+                                void fetchGridWithTimeoutRef.current();
+                            }
+                        },
+                    },
+                });
                 if (!hasLoadedOnceRef.current) {
                     setIsLoading(false);
                 } else {
@@ -330,6 +340,8 @@ export const useGridFetch = ({ connection, providerWallet }: UseGridFetchOptions
             }
         }
     }, [connection.rpcEndpoint, fetchGrid]);
+
+    fetchGridWithTimeoutRef.current = fetchGridWithTimeout;
 
     useEffect(() => {
         void fetchGridWithTimeout();

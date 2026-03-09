@@ -91,6 +91,22 @@
     padding: 0 10px 10px;
 }
 
+.walletHint {
+    grid-column: 1 / -1;
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+    text-align: center;
+    margin: 0;
+}
+
+.notForSaleNote {
+    margin-top: 10px;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    text-align: center;
+}
+
 .actionRow {
     margin-top: 12px;
     display: grid;

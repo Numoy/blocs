@@ -63,7 +63,10 @@ export const Header = () => {
             await logout();
             trackPlausibleEvent("wallet_disconnected");
         } catch (error) {
-            console.error("Disconnect error:", error);
+            const msg = (error as Error)?.message?.toLowerCase() ?? "";
+            if (!msg.includes("user cancelled") && !msg.includes("user rejected")) {
+                toast.error("Failed to disconnect. Please try again.");
+            }
         }
     }, [connected, disconnect, logout]);
 
@@ -88,7 +91,6 @@ export const Header = () => {
             if (!msg.toLowerCase().includes("user cancelled") && !msg.toLowerCase().includes("user rejected")) {
                 toast.error("Could not open funding flow. Make sure on-ramp is enabled in your Privy dashboard.");
             }
-            console.error("Fund wallet error:", error);
         }
     }, [walletAddress, fundWallet]);
 
@@ -98,7 +100,10 @@ export const Header = () => {
         try {
             await exportWallet();
         } catch (error) {
-            console.error("Export wallet error:", error);
+            const msg = (error as Error)?.message?.toLowerCase() ?? "";
+            if (!msg.includes("user cancelled") && !msg.includes("user rejected")) {
+                toast.error("Could not export wallet. Please try again.");
+            }
         }
     }, [exportWallet]);
 

@@ -2,7 +2,9 @@
 
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { usePrivy } from "@privy-io/react-auth";
+import { useFundWallet } from "@privy-io/react-auth/solana";
 import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
@@ -24,7 +26,11 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
     const { sendTransaction, publicKey, connected } = useWallet();
+    const { setVisible: setWalletModalVisible } = useWalletModal();
     const { login } = usePrivy();
+    const { fundWallet } = useFundWallet();
+
+    const walletAddress = publicKey?.toBase58();
 
     const providerWallet = useMemo(() => (
         wallet || {
@@ -38,7 +44,6 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         const provider = new AnchorProvider(connection, providerWallet, { preflightCommitment: "confirmed" });
         return asBlocsProgram(new Program(idl as Idl, provider));
     }, [connection, providerWallet]);
-
 
     const {
         blocks,
@@ -55,6 +60,17 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         program,
     });
 
+    // Called when a buy fails due to insufficient SOL — opens on-ramp to fund with real money
+    const onFundWallet = useCallback(async () => {
+        if (!walletAddress) {
+            login();
+            return;
+        }
+        try {
+            await fundWallet({ address: walletAddress });
+        } catch { /* user cancelled, ignore */ }
+    }, [fundWallet, walletAddress, login]);
+
     const { buyBlock, updateBlock, sellBlock } = useBlockActions({
         connected,
         publicKey,
@@ -68,6 +84,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         refreshBlockById,
         queueGridSync,
         updateBlockInState,
+        onFundWallet,
     });
 
     const refreshBlock = useCallback(async () => {
@@ -81,9 +98,17 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             is_wallet_browser: isWalletBrowser(),
         });
 
-        // Privy handles both mobile and desktop login/wallet connection
-        login();
-    }, [login]);
+        if (isWalletBrowser()) {
+            // Wallet extension/injection detected (Phantom desktop, Phantom in-app browser, Backpack, etc.)
+            // → open the standard wallet-adapter modal for direct connection, no Privy required
+            setWalletModalVisible(true);
+        } else {
+            // No injected wallet detected: mobile browser or desktop without extension.
+            // Privy handles WalletConnect (deep-links to wallet app on mobile) and
+            // social/email login (creates an embedded wallet for users without one).
+            login();
+        }
+    }, [login, setWalletModalVisible]);
 
     return (
         <ProgramContext.Provider

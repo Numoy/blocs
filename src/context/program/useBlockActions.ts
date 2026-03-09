@@ -45,6 +45,7 @@ type UseBlockActionsOptions = {
     refreshBlockById: (id: number) => Promise<void>;
     queueGridSync: (delayMs?: number) => void;
     updateBlockInState: UpdateBlockInState;
+    onFundWallet: () => void;
 };
 
 type UseBlockActionsResult = {
@@ -66,6 +67,7 @@ export const useBlockActions = ({
     refreshBlockById,
     queueGridSync,
     updateBlockInState,
+    onFundWallet,
 }: UseBlockActionsOptions): UseBlockActionsResult => {
     const buyBlock = useCallback(async (
         id: number,
@@ -233,14 +235,27 @@ export const useBlockActions = ({
                 console.error("Sim Logs:", err.logs);
             }
 
-
             trackPlausibleEvent("buy_block_failed", {
                 block_id: id,
                 sale_type: saleType,
                 ui_source: source,
                 error_category: toErrorCategory(error),
             });
-            toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
+
+            const isInsufficientFunds =
+                msg.includes("insufficient funds") ||
+                msg.includes("insufficient lamports") ||
+                msg.includes("not enough sol") ||
+                msg.includes("attempt to debit an account but found no record");
+
+            if (isInsufficientFunds) {
+                toast.error("Not enough SOL to complete this purchase.", {
+                    id: toastId,
+                    action: { label: "Add SOL", onClick: onFundWallet },
+                });
+            } else {
+                toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });
+            }
             throw error;
         }
     }, [
@@ -249,6 +264,7 @@ export const useBlockActions = ({
         connection,
         fetchGrid,
         gridAdmin,
+        onFundWallet,
         program,
         publicKey,
         refreshBlockById,

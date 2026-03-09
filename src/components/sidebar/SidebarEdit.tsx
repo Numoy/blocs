@@ -167,7 +167,6 @@ export const SidebarEdit = ({ block, onEditToggle }: SidebarEditProps) => {
                 toast.success("Image uploaded!");
             }
         } catch (error) {
-            console.error(error);
             trackPlausibleEvent("upload_image_failed", {
                 block_id: block.id,
                 file_type: file.type || "unknown",

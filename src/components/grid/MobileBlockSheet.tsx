@@ -60,11 +60,20 @@ export const MobileBlockSheet = ({
                     </div>
                 </div>
 
+                {!block.isForSale && !isOwner && (
+                    <p className={styles.notForSaleNote}>
+                        {block.owner ? "This block is not listed for sale." : "This block has not been claimed yet."}
+                    </p>
+                )}
+
                 <div className={styles.actionRow}>
                     {block.isForSale && !isOwner && (
                         <button type="button" className="uiButton uiButtonPrimary" disabled={isBuying} onClick={onBuy}>
                             {isBuying ? "Processing..." : "Buy"}
                         </button>
+                    )}
+                    {isBuying && (
+                        <p className={styles.walletHint}>Check your wallet to confirm.</p>
                     )}
 
                     {isOwner && (
