@@ -118,6 +118,11 @@ describe('createDefaultBlockData', () => {
     it('price increases with id (each block is unique)', () => {
         const price0 = createDefaultBlockData(0).price;
         const price1 = createDefaultBlockData(1).price;
+        expect(price0).not.toBeNull();
+        expect(price1).not.toBeNull();
+        if (price0 === null || price1 === null) {
+            throw new Error('default block prices should not be null');
+        }
         expect(price1).toBeGreaterThan(price0);
     });
 });
