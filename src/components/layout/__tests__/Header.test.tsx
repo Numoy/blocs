@@ -3,17 +3,16 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Header } from '../Header';
 
 // ---------- Privy mock ----------
-const mockLogin = vi.fn();
 const mockLogout = vi.fn();
 const mockExportWallet = vi.fn();
 const mockFundWallet = vi.fn();
+const mockOpenWalletModal = vi.fn();
 let mockAuthenticated = false;
 let mockPrivyReady = true;
 let mockPrivyUser: { wallet?: { address: string }, google?: boolean, twitter?: boolean, apple?: boolean, email?: boolean } | null = null;
 
 vi.mock('@privy-io/react-auth', () => ({
     usePrivy: () => ({
-        login: mockLogin,
         logout: mockLogout,
         authenticated: mockAuthenticated,
         ready: mockPrivyReady,
@@ -45,6 +44,7 @@ vi.mock('@/context/ProgramContext', () => ({
     useProgram: () => ({
         blocks: [],
         isLoading: false,
+        openWalletModal: mockOpenWalletModal,
     }),
 }));
 
@@ -81,10 +81,10 @@ describe('Header (Privy integration)', () => {
         expect(screen.getByText('Connect')).toBeInTheDocument();
     });
 
-    it('calls Privy login() when Connect is clicked', () => {
+    it('opens the shared wallet dialog when Connect is clicked', () => {
         render(<Header />);
         fireEvent.click(screen.getByText('Connect'));
-        expect(mockLogin).toHaveBeenCalledTimes(1);
+        expect(mockOpenWalletModal).toHaveBeenCalledWith('header_connect');
     });
 
     it('shows truncated wallet address when external wallet is connected', () => {

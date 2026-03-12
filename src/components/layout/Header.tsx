@@ -15,8 +15,8 @@ export const Header = () => {
     const [isInfoOpen, setIsInfoOpen] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const { blocks, isLoading } = useProgram();
-    const { login, logout, authenticated, ready: privyReady, user } = usePrivy();
+    const { blocks, isLoading, openWalletModal } = useProgram();
+    const { logout, authenticated, ready: privyReady, user } = usePrivy();
     const { publicKey, connected, disconnect } = useWallet();
     const { exportWallet } = useExportWallet();
     const { fundWallet } = useFundWallet();
@@ -198,7 +198,7 @@ export const Header = () => {
                             ) : (
                                 <button
                                     className={styles.walletButton}
-                                    onClick={login}
+                                    onClick={() => openWalletModal("header_connect")}
                                 >
                                     Connect
                                 </button>

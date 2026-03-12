@@ -16,3 +16,17 @@ export const isWalletBrowser = (): boolean => {
     const win = window as WalletWindow;
     return Boolean(win.solana || win.backpack || win.ethereum || win.phantom);
 };
+
+export type WalletConnectEntryPoint = "wallet_adapter" | "privy_connect_wallet" | "privy_login";
+
+export const getWalletConnectEntryPoint = (): WalletConnectEntryPoint => {
+    if (isWalletBrowser()) {
+        return "wallet_adapter";
+    }
+
+    if (isMobile()) {
+        return "privy_connect_wallet";
+    }
+
+    return "privy_login";
+};

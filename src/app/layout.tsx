@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from 'sonner';
 import PlausibleProvider from "next-plausible";
-import "./env-init";
 import "./globals.css";
 // import { Inter } from "next/font/google";
 import "@solana/wallet-adapter-react-ui/styles.css";

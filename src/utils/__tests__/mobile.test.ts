@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { isMobile, isWalletBrowser } from '@/utils/mobile';
+import { getWalletConnectEntryPoint, isMobile, isWalletBrowser } from '@/utils/mobile';
 
 const setUserAgent = (ua: string) => {
     Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true });
@@ -80,5 +80,26 @@ describe('isWalletBrowser', () => {
         setWindowProp('solana', undefined);
         setWindowProp('phantom', undefined);
         expect(isWalletBrowser()).toBe(false);
+    });
+});
+
+describe('getWalletConnectEntryPoint', () => {
+    it('prefers the wallet adapter when already inside a wallet browser', () => {
+        setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15');
+        setWindowProp('solana', { isPhantom: true });
+
+        expect(getWalletConnectEntryPoint()).toBe('wallet_adapter');
+    });
+
+    it('uses Privy wallet connect in mobile browsers without an injected wallet', () => {
+        setUserAgent('Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile');
+
+        expect(getWalletConnectEntryPoint()).toBe('privy_connect_wallet');
+    });
+
+    it('falls back to the standard Privy login flow on desktop browsers', () => {
+        setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0');
+
+        expect(getWalletConnectEntryPoint()).toBe('privy_login');
     });
 });

@@ -3,13 +3,13 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { usePrivy } from "@privy-io/react-auth";
+import { useConnectWallet, usePrivy } from "@privy-io/react-auth";
 import { useFundWallet } from "@privy-io/react-auth/solana";
 import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
 import { trackPlausibleEvent } from "@/utils/analytics";
-import { isMobile, isWalletBrowser } from "@/utils/mobile";
+import { getWalletConnectEntryPoint, isMobile, isWalletBrowser } from "@/utils/mobile";
 import { asBlocsProgram } from "@/utils/programTypes";
 import {
     type BuySource,
@@ -28,6 +28,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { sendTransaction, publicKey, connected } = useWallet();
     const { setVisible: setWalletModalVisible } = useWalletModal();
     const { login } = usePrivy();
+    const { connectWallet } = useConnectWallet();
     const { fundWallet } = useFundWallet();
 
     const walletAddress = publicKey?.toBase58();
@@ -92,23 +93,38 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     }, [fetchGrid]);
 
     const openWalletModal = useCallback((source: WalletModalSource = "unknown") => {
+        const entryPoint = getWalletConnectEntryPoint();
+
         trackPlausibleEvent("wallet_modal_opened", {
             source,
             is_mobile: isMobile(),
             is_wallet_browser: isWalletBrowser(),
+            entry_point: entryPoint,
         });
 
-        if (isWalletBrowser()) {
+        if (entryPoint === "wallet_adapter") {
             // Wallet extension/injection detected (Phantom desktop, Phantom in-app browser, Backpack, etc.)
             // → open the standard wallet-adapter modal for direct connection, no Privy required
             setWalletModalVisible(true);
-        } else {
-            // No injected wallet detected: mobile browser or desktop without extension.
-            // Privy handles WalletConnect (deep-links to wallet app on mobile) and
-            // social/email login (creates an embedded wallet for users without one).
-            login();
+            return;
         }
-    }, [login, setWalletModalVisible]);
+
+        if (entryPoint === "privy_connect_wallet") {
+            // Mobile browsers without an injected wallet need Privy's wallet flow so the user
+            // can jump into Phantom/Backpack/Solflare and return after approval.
+            connectWallet({
+                walletChainType: "solana-only",
+                description: "Choose a mobile wallet to continue.",
+            });
+            return;
+        }
+
+        // Desktop browsers without an injected wallet should still have access to broader
+        // login methods like social/email, which create an embedded wallet when needed.
+        login({
+            walletChainType: "solana-only",
+        });
+    }, [connectWallet, login, setWalletModalVisible]);
 
     return (
         <ProgramContext.Provider
