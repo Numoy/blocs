@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/context/ProgramContext';
 import { toast } from 'sonner';
@@ -36,6 +36,11 @@ export const SidebarEdit = ({ block, onEditToggle }: SidebarEditProps) => {
 
     const [isUploading, setIsUploading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const uploadAbortRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        return () => { uploadAbortRef.current?.abort(); };
+    }, []);
 
     // Form State mapped to unified state
     const [form, setForm] = useState({
@@ -119,6 +124,8 @@ export const SidebarEdit = ({ block, onEditToggle }: SidebarEditProps) => {
             file_size_kb: Math.round(file.size / 1024),
         });
         setIsUploading(true);
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
         const formData = new FormData();
         formData.append("file", file);
 
@@ -141,6 +148,7 @@ export const SidebarEdit = ({ block, onEditToggle }: SidebarEditProps) => {
             const response = await fetch("/api/upload", {
                 method: "POST",
                 body: formData,
+                signal: controller.signal,
             });
 
             if (!response.ok) {
@@ -167,6 +175,7 @@ export const SidebarEdit = ({ block, onEditToggle }: SidebarEditProps) => {
                 toast.success("Image uploaded!");
             }
         } catch (error) {
+            if ((error as DOMException)?.name === "AbortError") return;
             trackPlausibleEvent("upload_image_failed", {
                 block_id: block.id,
                 file_type: file.type || "unknown",

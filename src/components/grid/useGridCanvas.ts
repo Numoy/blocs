@@ -1,18 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { BlockData } from '@/types';
 import { VisibleBounds } from './useGridVisibility';
-import { GRID_WIDTH } from '@/utils/constants';
+import { GRID_WIDTH, CANVAS_RES, BLOCK_SIZE, BLOCK_EMPTY_COLOR } from '@/utils/constants';
 
 interface UseGridCanvasProps {
     canvasRef: React.RefObject<HTMLCanvasElement | null>;
     blocks: BlockData[];
     visibleBounds: VisibleBounds;
-    CANVAS_RES: number;
     hoveredBlockId: number | null;
     selectedBlockId: number | null;
 }
 
-export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, CANVAS_RES, hoveredBlockId, selectedBlockId }: UseGridCanvasProps) => {
+export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, hoveredBlockId, selectedBlockId }: UseGridCanvasProps) => {
     const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
     const animationFrameRef = useRef<number | null>(null);
     const MAX_IMAGE_CACHE_SIZE = 2000;
@@ -31,8 +30,6 @@ export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, CANVAS_RES, ho
             ctx.fillStyle = '#1e1e1e';
             ctx.fillRect(0, 0, CANVAS_RES, CANVAS_RES);
 
-            const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
-
             // --- OPTIMIZATION: Render only visible area ---
             const startCol = Math.max(0, Math.floor(visibleBounds.minX / BLOCK_SIZE));
             const endCol = Math.min(GRID_WIDTH - 1, Math.ceil(visibleBounds.maxX / BLOCK_SIZE));
@@ -48,7 +45,7 @@ export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, CANVAS_RES, ho
                     const x = col * BLOCK_SIZE;
                     const y = row * BLOCK_SIZE;
 
-                    const displayColor = block.color === '#000000' ? '#2d2d2d' : (block.color || '#2d2d2d');
+                    const displayColor = block.color === '#000000' ? BLOCK_EMPTY_COLOR : (block.color || BLOCK_EMPTY_COLOR);
                     ctx.fillStyle = displayColor;
 
                     ctx.fillRect(x + 1, y + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);

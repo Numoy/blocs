@@ -1,4 +1,3 @@
-import React from 'react';
 import styles from './Sidebar.module.css';
 
 interface SidebarInputProps {
@@ -15,7 +14,7 @@ interface SidebarInputProps {
     step?: string;
 }
 
-export const SidebarInput: React.FC<SidebarInputProps> = ({
+export const SidebarInput = ({
     label,
     value,
     onChange,
@@ -27,7 +26,7 @@ export const SidebarInput: React.FC<SidebarInputProps> = ({
     invalidText,
     min,
     step,
-}) => {
+}: SidebarInputProps) => {
     const byteLen = new TextEncoder().encode(value).length;
     const isNear = maxBytes !== undefined && byteLen >= maxBytes * 0.8;
     const isOver = maxBytes !== undefined && byteLen > maxBytes;

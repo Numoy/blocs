@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { toast } from 'sonner';
 import { trackPlausibleEvent } from '@/utils/analytics';
 import { toSafeExternalUrl } from '@/utils/url';
+import { shareBlock } from '@/utils/shareBlock';
 import { BlockData } from '@/types';
 import styles from './Sidebar.module.css';
 
@@ -29,35 +29,7 @@ export const SidebarView = ({
     const safeBlockUrl = toSafeExternalUrl(block.url);
     const safeBlockImageUrl = toSafeExternalUrl(block.imageUrl);
 
-    const handleShare = async () => {
-        const url = `${window.location.origin}/block/${block.id}`;
-        try {
-            if (navigator.share) {
-                await navigator.share({
-                    title: `Block #${block.id} on Blocs`,
-                    text: "Check out this block on the Blocs grid.",
-                    url,
-                });
-                trackPlausibleEvent("share_block_link_clicked", {
-                    block_id: block.id,
-                    ui_source: "sidebar",
-                    method: "native_share",
-                });
-                return;
-            }
-            await navigator.clipboard.writeText(url);
-            trackPlausibleEvent("share_block_link_clicked", {
-                block_id: block.id,
-                ui_source: "sidebar",
-                method: "clipboard",
-            });
-            toast.success("Link copied to clipboard!");
-        } catch (error) {
-            const abortError = error as DOMException;
-            if (abortError?.name === "AbortError") return;
-            toast.error("Could not share this block right now.");
-        }
-    };
+    const handleShare = () => shareBlock(block.id, "sidebar");
 
     const handleBuyClick = async () => {
         trackPlausibleEvent("buy_cta_clicked", {

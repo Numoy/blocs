@@ -1,4 +1,3 @@
-import React from 'react';
 import { BlockData } from '@/types';
 import styles from './PurchaseSuccessModal.module.css';
 import { useAccessibleDialog } from './useAccessibleDialog';
@@ -10,7 +9,7 @@ interface PurchaseSuccessModalProps {
     onEdit: () => void;
 }
 
-export const PurchaseSuccessModal: React.FC<PurchaseSuccessModalProps> = ({ block, isOpen, onClose, onEdit }) => {
+export const PurchaseSuccessModal = ({ block, isOpen, onClose, onEdit }: PurchaseSuccessModalProps) => {
     const { dialogRef } = useAccessibleDialog({ isOpen, onClose });
 
     if (!isOpen || !block) return null;

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { BlockData } from '@/types';
 import styles from './MyBlocksList.module.css';
 import { toSafeExternalUrl } from '@/utils/url';
+import { BLOCK_EMPTY_COLOR } from '@/utils/constants';
 
 interface MyBlocksListProps {
     blocks: BlockData[];
@@ -11,13 +12,13 @@ interface MyBlocksListProps {
     onClear?: () => void;
 }
 
-export const MyBlocksList: React.FC<MyBlocksListProps> = ({
+export const MyBlocksList = ({
     blocks,
     onSelectBlock,
     isWalletConnected,
     title,
     onClear,
-}) => {
+}: MyBlocksListProps) => {
     const [isOpen, setIsOpen] = useState(false);
 
     // External owner view with 0 blocks → hide
@@ -70,7 +71,7 @@ export const MyBlocksList: React.FC<MyBlocksListProps> = ({
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={safeImageUrl} alt="" className={styles.thumbnail} />
                                 ) : (
-                                    <div className={styles.placeholder} style={{ backgroundColor: block.color || '#333' }} />
+                                    <div className={styles.placeholder} style={{ backgroundColor: block.color || BLOCK_EMPTY_COLOR }} />
                                 )}
                                 <div className={styles.info}>
                                     <span className={styles.id}>Block #{block.id}</span>

@@ -19,9 +19,10 @@ import { MyBlocksList } from './MyBlocksList';
 import { MobileBlockSheet } from './MobileBlockSheet';
 import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
 import { OnboardingModal } from "@/components/modals/OnboardingModal";
-import { GRID_WIDTH, GRID_SIZE } from '@/utils/constants';
+import { GRID_WIDTH, GRID_SIZE, CANVAS_RES, CANVAS_MARGIN, BLOCK_SIZE } from '@/utils/constants';
 import { toSafeExternalUrl } from '@/utils/url';
 import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
+import { shareBlock } from '@/utils/shareBlock';
 import { parseGridBlockId } from '@/utils/numberParsing';
 
 export const Grid = () => {
@@ -44,9 +45,6 @@ export const Grid = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const transformRef = useRef<ReactZoomPanPinchRef | null>(null);
 
-    const CANVAS_RES = 3000;
-    const CANVAS_MARGIN = 200;
-
     useEffect(() => {
         if (typeof window === 'undefined') {
             return;
@@ -68,7 +66,6 @@ export const Grid = () => {
         if (blockParam) {
             const id = parseGridBlockId(blockParam);
             if (id !== null) {
-                const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
                 const col = id % GRID_WIDTH;
                 const row = Math.floor(id / GRID_WIDTH);
 
@@ -90,15 +87,11 @@ export const Grid = () => {
         return { scale: 0.6, positionX: 0, positionY: 0 };
     }, [blockParam]);
 
-    const { visibleBounds, updateVisibility } = useGridVisibility({
-        canvasRes: CANVAS_RES,
-        margin: CANVAS_MARGIN,
-    });
+    const { visibleBounds, updateVisibility } = useGridVisibility();
     const zoomToBlock = useCallback((blockId: number) => {
         const ref = transformRef.current;
         if (!ref) return;
 
-        const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
         const col = blockId % GRID_WIDTH;
         const row = Math.floor(blockId / GRID_WIDTH);
 
@@ -113,7 +106,7 @@ export const Grid = () => {
         const posY = -targetY * scale + winH / 2;
 
         ref.setTransform(posX, posY, scale, 300, 'easeOut');
-    }, [CANVAS_RES]);
+    }, []);
 
     const {
         selectedBlock,
@@ -132,7 +125,6 @@ export const Grid = () => {
     } = useGridInteraction({
         canvasRef,
         blocks,
-        CANVAS_RES,
         onBlockSelect: zoomToBlock,
     });
 
@@ -140,7 +132,6 @@ export const Grid = () => {
         canvasRef,
         blocks,
         visibleBounds,
-        CANVAS_RES,
         hoveredBlockId: isMobileViewport ? null : hoveredBlockId,
         selectedBlockId: selectedBlock?.id ?? null,
     });
@@ -174,8 +165,8 @@ export const Grid = () => {
             // Queue the buy before opening the modal so it auto-fires once the wallet connects,
             // whether the user was unauthenticated (needs login) or just not yet connected.
             queuePendingBuy(block, source);
-            if (!authenticated) {
-                openWalletModal();
+            if (!authenticated || !adapterWallet) {
+                openWalletModal(source === "block_detail" ? "block_detail_buy" : "sidebar_buy");
             }
             return;
         }
@@ -197,7 +188,7 @@ export const Grid = () => {
             });
             // buyBlock already shows the user-facing error toast; no additional toast here
         }
-    }, [buyBlock, connected, authenticated, openWalletModal, queuePendingBuy]);
+    }, [adapterWallet, authenticated, buyBlock, connected, openWalletModal, queuePendingBuy]);
 
     // Auto-trigger queued buy once wallet finishes connecting
     useEffect(() => {
@@ -226,43 +217,9 @@ export const Grid = () => {
     }, [handleBuyBlock, selectedBlock]);
 
     const handleShareSelectedBlock = useCallback(async () => {
-        if (!selectedBlock || typeof window === "undefined") {
-            return;
-        }
-
-        const shareUrl = `${window.location.origin}/block/${selectedBlock.id}`;
-        const shareTitle = `Block #${selectedBlock.id} on Blocs`;
-
-        try {
-            if (navigator.share && isMobileViewport) {
-                await navigator.share({
-                    title: shareTitle,
-                    text: "Check out this block on the Blocs grid.",
-                    url: shareUrl,
-                });
-                trackPlausibleEvent("share_block_link_clicked", {
-                    block_id: selectedBlock.id,
-                    ui_source: "mobile_sheet",
-                    method: "native_share",
-                });
-                return;
-            }
-
-            await navigator.clipboard.writeText(shareUrl);
-            trackPlausibleEvent("share_block_link_clicked", {
-                block_id: selectedBlock.id,
-                ui_source: isMobileViewport ? "mobile_sheet" : "sidebar",
-                method: "clipboard",
-            });
-            toast.success("Link copied to clipboard!");
-        } catch (error) {
-            const abortError = error as DOMException;
-            if (abortError?.name === "AbortError") {
-                return;
-            }
-            toast.error("Could not share this block right now.");
-        }
-    }, [isMobileViewport, selectedBlock]);
+        if (!selectedBlock) return;
+        await shareBlock(selectedBlock.id, "mobile_sheet");
+    }, [selectedBlock]);
 
     const handleSidebarPrev = useCallback(() => {
         if (!selectedBlock || selectedBlock.id <= 0) return;
@@ -352,12 +309,12 @@ export const Grid = () => {
                 <div
                     className={styles.hoverCard}
                     style={{
-                        ...((cursorPos.y > (typeof window !== 'undefined' ? window.innerHeight * 0.7 : 600))
-                            ? { top: 'auto', bottom: (typeof window !== 'undefined' ? window.innerHeight - cursorPos.y + 20 : 20) }
+                        ...(cursorPos.y > window.innerHeight * 0.7
+                            ? { top: 'auto', bottom: window.innerHeight - cursorPos.y + 20 }
                             : { top: cursorPos.y + 20, bottom: 'auto' }),
 
-                        ...((cursorPos.x > (typeof window !== 'undefined' ? window.innerWidth * 0.7 : 800))
-                            ? { left: 'auto', right: (typeof window !== 'undefined' ? window.innerWidth - cursorPos.x + 20 : 20) }
+                        ...(cursorPos.x > window.innerWidth * 0.7
+                            ? { left: 'auto', right: window.innerWidth - cursorPos.x + 20 }
                             : { left: cursorPos.x + 20, right: 'auto' }),
                     }}
                 >

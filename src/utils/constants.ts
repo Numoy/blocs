@@ -9,6 +9,10 @@ export const GRID_PUBKEY = new PublicKey("31Eqr9MZMJVcGJwTkd3bkvybV8HWJ6EADuSEPJ
 // Grid Configuration
 export const GRID_SIZE = 10000;
 export const GRID_WIDTH = 100;
+export const CANVAS_RES = 3000;
+export const CANVAS_MARGIN = 200;
+export const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
+export const BLOCK_EMPTY_COLOR = '#2d2d2d';
 export const BLOCK_BASE_PRICE_LAMPORTS = 10_000_000;
 export const BLOCK_BASE_PRICE_SOL = BLOCK_BASE_PRICE_LAMPORTS / LAMPORTS_PER_SOL;
 export const BLOCK_TEXT_MAX_BYTES = 64;

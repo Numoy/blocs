@@ -1,16 +1,15 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { BlockData } from '@/types';
-import { GRID_WIDTH } from '@/utils/constants';
+import { GRID_WIDTH, CANVAS_RES, BLOCK_SIZE } from '@/utils/constants';
 import { trackPlausibleEvent } from '@/utils/analytics';
 
 interface UseGridInteractionProps {
     canvasRef: React.RefObject<HTMLCanvasElement | null>;
     blocks: BlockData[];
-    CANVAS_RES: number;
     onBlockSelect?: (blockId: number) => void;
 }
 
-export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES, onBlockSelect }: UseGridInteractionProps) => {
+export const useGridInteraction = ({ canvasRef, blocks, onBlockSelect }: UseGridInteractionProps) => {
     const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null);
     const [hoveredBlockId, setHoveredBlockId] = useState<number | null>(null);
     const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
@@ -43,8 +42,6 @@ export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES, onBlockSelec
         const canvasX = (e.clientX - rect.left) / scaleX;
         const canvasY = (e.clientY - rect.top) / scaleY;
 
-        const BLOCK_SIZE = CANVAS_RES / GRID_WIDTH;
-
         const col = Math.floor(canvasX / BLOCK_SIZE);
         const row = Math.floor(canvasY / BLOCK_SIZE);
 
@@ -52,7 +49,7 @@ export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES, onBlockSelec
 
         const index = row * GRID_WIDTH + col;
         return blocks[index];
-    }, [blocks, CANVAS_RES, canvasRef]);
+    }, [blocks, canvasRef]);
 
     const handleCanvasClick = useCallback((e: React.MouseEvent) => {
         const dx = e.clientX - dragStart.current.x;
@@ -140,7 +137,6 @@ export const useGridInteraction = ({ canvasRef, blocks, CANVAS_RES, onBlockSelec
     return {
         selectedBlock,
         setSelectedBlock,
-        selectedBlockId,
         hoveredBlock,
         hoveredBlockId,
         cursorPos,

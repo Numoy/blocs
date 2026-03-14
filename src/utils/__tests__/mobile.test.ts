@@ -91,10 +91,16 @@ describe('getWalletConnectEntryPoint', () => {
         expect(getWalletConnectEntryPoint()).toBe('wallet_adapter');
     });
 
-    it('uses Privy wallet connect in mobile browsers without an injected wallet', () => {
+    it('opens the mobile choice flow in mobile browsers without an injected wallet', () => {
         setUserAgent('Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile');
 
-        expect(getWalletConnectEntryPoint()).toBe('privy_connect_wallet');
+        expect(getWalletConnectEntryPoint()).toBe('mobile_choice');
+    });
+
+    it('uses wallet-only Privy login for authenticated mobile users without an injected wallet', () => {
+        setUserAgent('Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile');
+
+        expect(getWalletConnectEntryPoint({ isAuthenticated: true })).toBe('privy_wallet_login');
     });
 
     it('falls back to the standard Privy login flow on desktop browsers', () => {

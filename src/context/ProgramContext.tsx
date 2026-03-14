@@ -1,9 +1,9 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { useConnectWallet, usePrivy } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useFundWallet } from "@privy-io/react-auth/solana";
 import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
@@ -11,6 +11,7 @@ import idl from "@/utils/idl.json";
 import { trackPlausibleEvent } from "@/utils/analytics";
 import { getWalletConnectEntryPoint, isMobile, isWalletBrowser } from "@/utils/mobile";
 import { asBlocsProgram } from "@/utils/programTypes";
+import { MobileWalletOptionsModal } from "@/components/modals/MobileWalletOptionsModal";
 import {
     type BuySource,
     type ProgramContextState,
@@ -27,9 +28,9 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const wallet = useAnchorWallet();
     const { sendTransaction, publicKey, connected } = useWallet();
     const { setVisible: setWalletModalVisible } = useWalletModal();
-    const { login } = usePrivy();
-    const { connectWallet } = useConnectWallet();
+    const { login, authenticated } = usePrivy();
     const { fundWallet } = useFundWallet();
+    const [isMobileWalletOptionsOpen, setIsMobileWalletOptionsOpen] = useState(false);
 
     const walletAddress = publicKey?.toBase58();
 
@@ -92,8 +93,24 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         await fetchGrid();
     }, [fetchGrid]);
 
+    const openSocialLogin = useCallback(() => {
+        setIsMobileWalletOptionsOpen(false);
+        login({
+            loginMethods: ["email", "google", "twitter", "apple"],
+            walletChainType: "solana-only",
+        });
+    }, [login]);
+
+    const openWalletLogin = useCallback(() => {
+        setIsMobileWalletOptionsOpen(false);
+        login({
+            loginMethods: ["wallet"],
+            walletChainType: "solana-only",
+        });
+    }, [login]);
+
     const openWalletModal = useCallback((source: WalletModalSource = "unknown") => {
-        const entryPoint = getWalletConnectEntryPoint();
+        const entryPoint = getWalletConnectEntryPoint({ isAuthenticated: authenticated });
 
         trackPlausibleEvent("wallet_modal_opened", {
             source,
@@ -109,13 +126,13 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
 
-        if (entryPoint === "privy_connect_wallet") {
-            // Mobile browsers without an injected wallet need Privy's wallet flow so the user
-            // can jump into Phantom/Backpack/Solflare and return after approval.
-            connectWallet({
-                walletChainType: "solana-only",
-                description: "Choose a mobile wallet to continue.",
-            });
+        if (entryPoint === "mobile_choice") {
+            setIsMobileWalletOptionsOpen(true);
+            return;
+        }
+
+        if (entryPoint === "privy_wallet_login") {
+            openWalletLogin();
             return;
         }
 
@@ -124,7 +141,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         login({
             walletChainType: "solana-only",
         });
-    }, [connectWallet, login, setWalletModalVisible]);
+    }, [authenticated, login, openWalletLogin, setWalletModalVisible]);
 
     return (
         <ProgramContext.Provider
@@ -140,6 +157,12 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             }}
         >
             {children}
+            <MobileWalletOptionsModal
+                isOpen={isMobileWalletOptionsOpen}
+                onClose={() => setIsMobileWalletOptionsOpen(false)}
+                onOpenSocialLogin={openSocialLogin}
+                onOpenWalletLogin={openWalletLogin}
+            />
         </ProgramContext.Provider>
     );
 };

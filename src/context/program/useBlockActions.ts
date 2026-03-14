@@ -354,7 +354,7 @@ export const useBlockActions = ({
             toast.success("Block updated!", { id: toastId });
             queueGridSync(EVENTUAL_GRID_SYNC_DELAY_MS);
         } catch (error) {
-            console.error(error);
+            console.error("Update block error:", error);
             queueGridSync(0);
             trackPlausibleEvent("update_block_failed", {
                 block_id: id,
@@ -419,7 +419,7 @@ export const useBlockActions = ({
             toast.success(saleAction === "list" ? "Block listed for sale!" : "Block removed from sale.", { id: toastId });
             queueGridSync(EVENTUAL_GRID_SYNC_DELAY_MS);
         } catch (error) {
-            console.error(error);
+            console.error("Set sale error:", error);
             queueGridSync(0);
             trackPlausibleEvent("set_sale_failed", {
                 block_id: id,

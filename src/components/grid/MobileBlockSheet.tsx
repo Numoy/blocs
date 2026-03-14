@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { toSafeExternalUrl } from "@/utils/url";
+import { BLOCK_EMPTY_COLOR } from "@/utils/constants";
 import type { BlockData } from "@/types";
 import styles from "./MobileBlockSheet.module.css";
 
@@ -49,7 +50,7 @@ export const MobileBlockSheet = ({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={safeImageUrl} alt="" className={styles.previewImage} />
                     ) : (
-                        <div className={styles.emptyPreview} style={{ backgroundColor: block.color || "#222" }}>No Image</div>
+                        <div className={styles.emptyPreview} style={{ backgroundColor: block.color || BLOCK_EMPTY_COLOR }}>No Image</div>
                     )}
 
                     <p className={styles.message}>{block.text || "No message set"}</p>
