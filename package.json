@@ -60,6 +60,7 @@
   },
   "license": "MIT",
   "overrides": {
-    "fast-xml-parser": "^5.3.8"
+    "fast-xml-parser": "^5.3.8",
+    "undici": "^7.24.2"
   }
 }
