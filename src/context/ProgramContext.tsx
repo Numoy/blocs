@@ -9,9 +9,9 @@ import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
 import { trackPlausibleEvent } from "@/utils/analytics";
-import { getWalletConnectEntryPoint, isMobile, isWalletBrowser } from "@/utils/mobile";
+import { isMobile, isWalletBrowser } from "@/utils/mobile";
 import { asBlocsProgram } from "@/utils/programTypes";
-import { MobileWalletOptionsModal } from "@/components/modals/MobileWalletOptionsModal";
+import { ConnectWalletModal } from "@/components/modals/ConnectWalletModal";
 import {
     type BuySource,
     type ProgramContextState,
@@ -30,7 +30,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { setVisible: setWalletModalVisible } = useWalletModal();
     const { login, authenticated } = usePrivy();
     const { fundWallet } = useFundWallet();
-    const [isMobileWalletOptionsOpen, setIsMobileWalletOptionsOpen] = useState(false);
+    const [isConnectWalletModalOpen, setIsConnectWalletModalOpen] = useState(false);
 
     const walletAddress = publicKey?.toBase58();
 
@@ -94,15 +94,20 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     }, [fetchGrid]);
 
     const openSocialLogin = useCallback(() => {
-        setIsMobileWalletOptionsOpen(false);
+        setIsConnectWalletModalOpen(false);
         login({
             loginMethods: ["email", "google", "twitter", "apple"],
             walletChainType: "solana-only",
         });
     }, [login]);
 
-    const openWalletLogin = useCallback(() => {
-        setIsMobileWalletOptionsOpen(false);
+    const openBrowserWallet = useCallback(() => {
+        setIsConnectWalletModalOpen(false);
+        setWalletModalVisible(true);
+    }, [setWalletModalVisible]);
+
+    const openWalletApp = useCallback(() => {
+        setIsConnectWalletModalOpen(false);
         login({
             loginMethods: ["wallet"],
             walletChainType: "solana-only",
@@ -110,38 +115,13 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     }, [login]);
 
     const openWalletModal = useCallback((source: WalletModalSource = "unknown") => {
-        const entryPoint = getWalletConnectEntryPoint({ isAuthenticated: authenticated });
-
         trackPlausibleEvent("wallet_modal_opened", {
             source,
             is_mobile: isMobile(),
             is_wallet_browser: isWalletBrowser(),
-            entry_point: entryPoint,
         });
-
-        if (entryPoint === "wallet_adapter") {
-            // Wallet extension/injection detected (Phantom desktop, Phantom in-app browser, Backpack, etc.)
-            // → open the standard wallet-adapter modal for direct connection, no Privy required
-            setWalletModalVisible(true);
-            return;
-        }
-
-        if (entryPoint === "mobile_choice") {
-            setIsMobileWalletOptionsOpen(true);
-            return;
-        }
-
-        if (entryPoint === "privy_wallet_login") {
-            openWalletLogin();
-            return;
-        }
-
-        // Desktop browsers without an injected wallet should still have access to broader
-        // login methods like social/email, which create an embedded wallet when needed.
-        login({
-            walletChainType: "solana-only",
-        });
-    }, [authenticated, login, openWalletLogin, setWalletModalVisible]);
+        setIsConnectWalletModalOpen(true);
+    }, []);
 
     return (
         <ProgramContext.Provider
@@ -157,11 +137,12 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
             }}
         >
             {children}
-            <MobileWalletOptionsModal
-                isOpen={isMobileWalletOptionsOpen}
-                onClose={() => setIsMobileWalletOptionsOpen(false)}
+            <ConnectWalletModal
+                isOpen={isConnectWalletModalOpen}
+                onClose={() => setIsConnectWalletModalOpen(false)}
                 onOpenSocialLogin={openSocialLogin}
-                onOpenWalletLogin={openWalletLogin}
+                onOpenBrowserWallet={isWalletBrowser() ? openBrowserWallet : undefined}
+                onOpenWalletApp={isMobile() && !isWalletBrowser() ? openWalletApp : undefined}
             />
         </ProgramContext.Provider>
     );

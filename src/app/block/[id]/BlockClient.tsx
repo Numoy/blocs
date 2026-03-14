@@ -134,7 +134,7 @@ export default function BlockClient() {
                             alt={`Block ${id}`}
                         />
                     ) : (
-                        <div className={styles.empty}>Empty</div>
+                        <div className={styles.empty}>No image</div>
                     )}
                 </div>
 
@@ -142,7 +142,7 @@ export default function BlockClient() {
                     <div>
                         <div className={styles.metaLabel}>Message</div>
                         <div className={`${styles.message} ${!block.text ? styles.messageEmpty : ''}`}>
-                            {block.text ? `"${block.text}"` : "No message set."}
+                            {block.text ? `"${block.text}"` : "No message"}
                         </div>
                     </div>
 
@@ -166,7 +166,7 @@ export default function BlockClient() {
                         <div>
                             <div className={styles.metaLabel}>Owner</div>
                             <div className={styles.ownerValue}>
-                                {block.owner ? `${block.owner.slice(0, 4)}...${block.owner.slice(-4)}` : 'None'}
+                                {block.owner ? `${block.owner.slice(0, 4)}...${block.owner.slice(-4)}` : 'Unclaimed'}
                             </div>
                         </div>
 
@@ -176,7 +176,7 @@ export default function BlockClient() {
                                 <div className={styles.priceValue}>{block.price} SOL</div>
                             </div>
                         ) : (
-                            <div className={styles.notForSale}>Not For Sale</div>
+                            <div className={styles.notForSale}>Not for sale</div>
                         )}
                     </div>
 
@@ -229,7 +229,7 @@ export default function BlockClient() {
                 }}
                 className={`${styles.closeButton} uiButton uiButtonGhost`}
             >
-                Close and Return to Grid
+                Back to Grid
             </button>
         </div>
     );

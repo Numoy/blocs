@@ -53,17 +53,17 @@ export const MobileBlockSheet = ({
                         <div className={styles.emptyPreview} style={{ backgroundColor: block.color || BLOCK_EMPTY_COLOR }}>No Image</div>
                     )}
 
-                    <p className={styles.message}>{block.text || "No message set"}</p>
+                    <p className={styles.message}>{block.text || "No message"}</p>
 
                     <div className={styles.metaRow}>
                         <span className="uiChip">{block.isForSale && block.price !== null ? `${block.price} SOL` : "Not for sale"}</span>
-                        {block.url && <span className="uiChipMuted">Has link</span>}
+                        {block.url && <span className="uiChipMuted">Link</span>}
                     </div>
                 </div>
 
                 {!block.isForSale && !isOwner && (
                     <p className={styles.notForSaleNote}>
-                        {block.owner ? "This block is not listed for sale." : "This block has not been claimed yet."}
+                        {block.owner ? "Not listed for sale." : "Not claimed yet — be the first to own it."}
                     </p>
                 )}
 

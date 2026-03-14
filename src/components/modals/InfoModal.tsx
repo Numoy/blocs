@@ -41,15 +41,15 @@ export const InfoModal = ({ isOpen, onClose }: InfoModalProps) => {
                     </p>
 
                     <p>
-                        Blocs is a decentralized experiment on the Solana blockchain.
-                        There are exactly 10,000 blocks available. No more will ever be created.
+                        Blocs is a permanent on-chain grid built on Solana.
+                        There are exactly 10,000 blocks — no more will ever be created.
                     </p>
 
                     <h3 className={styles.subtitle}>How it works</h3>
                     <ul className={styles.list}>
                         <li><strong>Buy:</strong> Select an available block (black) and purchase it for SOL.</li>
                         <li><strong>Own:</strong> Once bought, the block belongs to your wallet address.</li>
-                        <li><strong>Customize:</strong> Set the image and link of your block.</li>
+                        <li><strong>Customize:</strong> Set the image, message, and link for your block.</li>
                         <li><strong>Trade:</strong> List your block for sale at any price. Resales incur a 5% royalty fee.</li>
                     </ul>
 

@@ -90,12 +90,12 @@ describe('MobileBlockSheet', () => {
 
     it('shows "not listed for sale" note when block has owner but is not for sale', () => {
         render(<MobileBlockSheet {...defaultProps} block={{ ...baseBlock, isForSale: false, owner: 'someone' }} isOwner={false} />);
-        expect(screen.getByText('This block is not listed for sale.')).toBeInTheDocument();
+        expect(screen.getByText('Not listed for sale.')).toBeInTheDocument();
     });
 
     it('shows "not claimed yet" note when block has no owner and is not for sale', () => {
         render(<MobileBlockSheet {...defaultProps} block={{ ...baseBlock, isForSale: false, owner: null }} isOwner={false} />);
-        expect(screen.getByText('This block has not been claimed yet.')).toBeInTheDocument();
+        expect(screen.getByText('Not claimed yet — be the first to own it.')).toBeInTheDocument();
     });
 
     it('does not show the not-for-sale note when block is for sale', () => {

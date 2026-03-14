@@ -98,7 +98,7 @@ export const SidebarView = ({
                     </div>
                 )}
                 {!block.text && !block.url && !block.imageUrl && (
-                    <div className={styles.emptyNote}>No content yet</div>
+                    <div className={styles.emptyNote}>Nothing here yet</div>
                 )}
             </div>
 
@@ -116,7 +116,7 @@ export const SidebarView = ({
                     </button>
                     {isBuying && (
                         <p className={styles.helperText}>
-                            Please confirm the transaction in your wallet.
+                            Confirm in your wallet to complete.
                         </p>
                     )}
                 </div>

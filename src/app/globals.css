@@ -96,7 +96,6 @@ a {
 
 .uiButtonPrimary {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
-  color: #030303;
 }
 
 .uiButtonSecondary {
