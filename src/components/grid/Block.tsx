@@ -24,7 +24,7 @@ export const Block = memo(({ data, onClick, onMouseEnter, onMouseLeave }: BlockP
             onMouseEnter={(e) => onMouseEnter(data, e)}
             onMouseLeave={onMouseLeave}
             style={{
-                backgroundColor: safeImageUrl ? 'transparent' : (data.color || undefined),
+                backgroundColor: safeImageUrl ? 'transparent' : undefined,
                 backgroundImage: safeImageUrl ? `url(${safeImageUrl})` : undefined,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',

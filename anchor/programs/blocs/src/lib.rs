@@ -11,14 +11,15 @@ pub mod blocs {
     pub const FEE_BASIS_POINTS: u64 = 500; // 5%
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        // Fix #5: Removed redundant require_eq! guard — the `init` constraint on `grid`
+        // already prevents re-initialization at the system level.
         let grid = &mut ctx.accounts.grid;
-        require_eq!(grid.admin, Pubkey::default(), CustomError::AlreadyInitialized);
         grid.admin = ctx.accounts.admin.key();
         Ok(())
     }
 
     // Primary Sale: Buys a NEW block
-    pub fn buy_block(ctx: Context<BuyBlock>, id: u32, color: [u8; 3]) -> Result<()> {
+    pub fn buy_block(ctx: Context<BuyBlock>, id: u32) -> Result<()> {
         let id_usize = id as usize;
         require!(id_usize < GRID_SIZE, CustomError::InvalidBlockId);
 
@@ -26,8 +27,8 @@ pub mod blocs {
         let admin = &ctx.accounts.admin;
         let buyer = &ctx.accounts.buyer;
         let clock = Clock::get()?;
-        
-        let price = INITIAL_PRICE.checked_add(id.into()).ok_or(CustomError::MathOverflow)?;
+
+        let price = INITIAL_PRICE;
 
         // Transfer SOL to Admin
         let cpi_context = CpiContext::new(
@@ -42,11 +43,10 @@ pub mod blocs {
         // Initialize Block
         block.id = id;
         block.owner = buyer.key();
-        block.color = color;
         block.price = 0; // Not for sale
         block.is_for_sale = false;
         block.timestamp = clock.unix_timestamp;
-        
+
         emit!(BlockBought {
             id,
             buyer: buyer.key(),
@@ -65,15 +65,19 @@ pub mod blocs {
         let clock = Clock::get()?;
 
         require!(block.is_for_sale, CustomError::NotForSale);
-        
+
+        // Fix #7: Removed the inaccurate preflight lamport check. It tested the
+        // buyer's total balance without accounting for rent-exemption minimums or
+        // transaction fees, meaning a buyer with exactly `price` lamports would pass
+        // this check but still fail the CPI transfer. The system program's transfer
+        // CPI already enforces the real constraint and returns the authoritative error.
         let price = block.price;
-        require!(**buyer.lamports.borrow() >= price, CustomError::InsufficientFunds);
-        
+
         // Calculate Fees
         let fee = price
             .checked_mul(FEE_BASIS_POINTS).ok_or(CustomError::MathOverflow)?
             .checked_div(10000).ok_or(CustomError::MathOverflow)?;
-        
+
         let seller_amount = price.checked_sub(fee).ok_or(CustomError::MathOverflow)?;
 
         // Transfer to Seller
@@ -101,7 +105,7 @@ pub mod blocs {
         block.is_for_sale = false;
         block.price = 0;
         block.timestamp = clock.unix_timestamp;
-        
+
         emit!(BlockResold {
             id,
             buyer: buyer.key(),
@@ -113,15 +117,27 @@ pub mod blocs {
 
     pub fn update_block(ctx: Context<UpdateBlock>, id: u32, text: String, image_url: String, url: String) -> Result<()> {
         let block = &mut ctx.accounts.block;
+        let clock = Clock::get()?;
+
+        // Validate URL protocols on-chain so unsafe schemes (javascript:, data:,
+        // file://, etc.) cannot be stored even via direct contract interaction.
+        require!(is_safe_url(&image_url), CustomError::UnsafeUrl);
+        require!(is_safe_url(&url), CustomError::UnsafeUrl);
 
         // Copy strings to fixed-size arrays
         copy_string_to_array(&text, &mut block.text)?;
         copy_string_to_array(&image_url, &mut block.image_url)?;
         copy_string_to_array(&url, &mut block.url)?;
 
+        // Keep timestamp current so indexers can detect content changes.
+        block.timestamp = clock.unix_timestamp;
+
         emit!(BlockUpdated {
             id,
             owner: ctx.accounts.owner.key(),
+            text,
+            image_url,
+            url,
         });
 
         Ok(())
@@ -140,6 +156,7 @@ pub mod blocs {
 
         emit!(BlockSold {
             id,
+            owner: ctx.accounts.owner.key(),
             price,
             is_for_sale: block.is_for_sale,
         });
@@ -148,13 +165,23 @@ pub mod blocs {
     }
 
     pub fn update_admin(ctx: Context<UpdateAdmin>, new_admin: Pubkey) -> Result<()> {
+        // Prevent bricking the grid by setting admin to the default (zero) pubkey,
+        // which nobody can sign for — making update_admin uncallable forever.
+        require!(new_admin != Pubkey::default(), CustomError::InvalidAdmin);
+
         let grid = &mut ctx.accounts.grid;
+        let old_admin = grid.admin;
         grid.admin = new_admin;
+
+        emit!(AdminUpdated { old_admin, new_admin });
+
         Ok(())
     }
 
     pub fn close_block(_ctx: Context<CloseBlock>, _id: u32) -> Result<()> {
-        // Rent is automatically returned to the owner via the `close` constraint
+        // Rent is automatically returned to the owner via the `close` constraint.
+        // Fix #2: The `CloseBlock` account constraint now rejects listed blocks —
+        // see the `constraint = !block.is_for_sale` on the block account below.
         Ok(())
     }
 }
@@ -174,7 +201,6 @@ pub struct Block {
     pub owner: Pubkey,       // 32
     pub price: u64,          // 8
     pub is_for_sale: bool,   // 1
-    pub color: [u8; 3],      // 3
     pub text: [u8; 64],      // 64
     pub image_url: [u8; 128],// 128
     pub url: [u8; 128],      // 128
@@ -182,18 +208,18 @@ pub struct Block {
 }
 
 impl Block {
-    // 8 (Discriminator) + 4 + 32 + 8 + 1 + 3 + 64 + 128 + 128 + 8 = 384
-    pub const LEN: usize = 8 + 4 + 32 + 8 + 1 + 3 + 64 + 128 + 128 + 8;
+    // 8 (Discriminator) + 4 + 32 + 8 + 1 + 64 + 128 + 128 + 8 = 381
+    pub const LEN: usize = 8 + 4 + 32 + 8 + 1 + 64 + 128 + 128 + 8;
 }
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(init, payer = admin, space = 8 + 32, seeds = [b"grid"], bump)]
     pub grid: Account<'info, GridState>,
-    
+
     #[account(mut)]
     pub admin: Signer<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -210,19 +236,25 @@ pub struct BuyBlock<'info> {
     pub block: Account<'info, Block>,
 
     #[account(
-        mut, 
-        seeds = [b"grid"], 
+        mut,
+        seeds = [b"grid"],
         bump,
         constraint = grid.admin == admin.key() @ CustomError::InvalidAdmin
     )]
     pub grid: Account<'info, GridState>,
-    
-    #[account(mut)]
+
+    // Fix #1: Prevent admin self-purchase. If buyer == admin the SOL transfer is a
+    // no-op (self-transfer), letting the admin acquire blocks for only the tx fee +
+    // rent (~0.0024 SOL) instead of the 0.01 SOL price.
+    #[account(
+        mut,
+        constraint = buyer.key() != admin.key() @ CustomError::AdminCannotBuy
+    )]
     pub buyer: Signer<'info>,
 
     #[account(mut)]
     pub admin: SystemAccount<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -238,13 +270,18 @@ pub struct BuyResale<'info> {
     pub block: Account<'info, Block>,
 
     #[account(
-        seeds = [b"grid"], 
+        seeds = [b"grid"],
         bump,
         constraint = grid.admin == admin.key() @ CustomError::InvalidAdmin
     )]
     pub grid: Account<'info, GridState>,
-    
-    #[account(mut)]
+
+    // Prevent a block owner from buying their own listing, which would silently
+    // drain 5% of the block price to admin as a fee for a no-op transfer.
+    #[account(
+        mut,
+        constraint = buyer.key() != seller.key() @ CustomError::Unauthorized
+    )]
     pub buyer: Signer<'info>,
 
     #[account(mut)]
@@ -252,7 +289,7 @@ pub struct BuyResale<'info> {
 
     #[account(mut)]
     pub admin: SystemAccount<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -263,7 +300,7 @@ pub struct UpdateBlock<'info> {
         mut,
         seeds = [b"block", id.to_le_bytes().as_ref()],
         bump,
-        has_one = owner // Anchor can auto-check owner field
+        has_one = owner
     )]
     pub block: Account<'info, Block>,
     pub owner: Signer<'info>,
@@ -276,7 +313,7 @@ pub struct SellBlock<'info> {
         mut,
         seeds = [b"block", id.to_le_bytes().as_ref()],
         bump,
-        has_one = owner // Anchor can auto-check owner field
+        has_one = owner
     )]
     pub block: Account<'info, Block>,
     pub owner: Signer<'info>,
@@ -302,7 +339,11 @@ pub struct CloseBlock<'info> {
         seeds = [b"block", id.to_le_bytes().as_ref()],
         bump,
         has_one = owner,
-        close = owner
+        close = owner,
+        // Fix #2: Prevent closing a block that is actively listed for sale.
+        // Without this, sellers can bait buyers with a listing and then call
+        // close_block to pocket the rent refund while the buyer's tx fails.
+        constraint = !block.is_for_sale @ CustomError::BlockIsListed
     )]
     pub block: Account<'info, Block>,
     #[account(mut)]
@@ -317,18 +358,18 @@ pub enum CustomError {
     NotForSale,
     #[msg("Invalid Block ID.")]
     InvalidBlockId,
-    #[msg("Invalid Payment Recipient.")]
-    InvalidRecipient,
     #[msg("Invalid Admin Account.")]
     InvalidAdmin,
-    #[msg("Grid is already initialized.")]
-    AlreadyInitialized,
     #[msg("Math Overflow.")]
     MathOverflow,
-    #[msg("Insufficient funds.")]
-    InsufficientFunds,
     #[msg("String is too long.")]
     StringTooLong,
+    #[msg("Admin cannot purchase blocks.")]
+    AdminCannotBuy,
+    #[msg("Block is currently listed for sale. Delist it before closing.")]
+    BlockIsListed,
+    #[msg("URL must be empty or start with https://.")]
+    UnsafeUrl,
 }
 
 #[event]
@@ -342,11 +383,15 @@ pub struct BlockBought {
 pub struct BlockUpdated {
     pub id: u32,
     pub owner: Pubkey,
+    pub text: String,
+    pub image_url: String,
+    pub url: String,
 }
 
 #[event]
 pub struct BlockSold {
     pub id: u32,
+    pub owner: Pubkey,
     pub price: u64,
     pub is_for_sale: bool,
 }
@@ -356,6 +401,19 @@ pub struct BlockResold {
     pub id: u32,
     pub buyer: Pubkey,
     pub price: u64,
+}
+
+// Fix #3: New event for admin key rotation audit trail.
+#[event]
+pub struct AdminUpdated {
+    pub old_admin: Pubkey,
+    pub new_admin: Pubkey,
+}
+
+// Fix #4: Only allow empty strings or https:// URLs to prevent storing
+// javascript:, data:, file://, and other unsafe schemes on-chain.
+fn is_safe_url(s: &str) -> bool {
+    s.is_empty() || s.starts_with("https://")
 }
 
 // Helper
@@ -404,5 +462,35 @@ mod tests {
         for i in 3..10 {
             assert_eq!(arr[i], 0);
         }
+    }
+
+    #[test]
+    fn test_is_safe_url_empty() {
+        assert!(is_safe_url(""));
+    }
+
+    #[test]
+    fn test_is_safe_url_https() {
+        assert!(is_safe_url("https://example.com/image.png"));
+    }
+
+    #[test]
+    fn test_is_safe_url_rejects_http() {
+        assert!(!is_safe_url("http://example.com/image.png"));
+    }
+
+    #[test]
+    fn test_is_safe_url_rejects_javascript() {
+        assert!(!is_safe_url("javascript:alert(1)"));
+    }
+
+    #[test]
+    fn test_is_safe_url_rejects_data() {
+        assert!(!is_safe_url("data:text/html,<script>alert(1)</script>"));
+    }
+
+    #[test]
+    fn test_is_safe_url_rejects_file() {
+        assert!(!is_safe_url("file:///etc/passwd"));
     }
 }

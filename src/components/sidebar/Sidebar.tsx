@@ -85,9 +85,6 @@ export const Sidebar = ({ block, onClose, onBuy, initialMode = 'view', onPrev, o
                     >←</button>
                     <div className={styles.titleGroup}>
                         <div className={styles.titleLine}>
-                            {block.color && (
-                                <span className={styles.colorSwatch} style={{ background: block.color }} />
-                            )}
                             <h2 id="sidebar-title" className={styles.title}>Block #{block.id}</h2>
                         </div>
                         <div className={styles.titleMeta}>

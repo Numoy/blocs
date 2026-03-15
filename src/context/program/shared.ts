@@ -2,7 +2,7 @@ import type { BlockData } from "@/types";
 
 export interface ProgramContextState {
     blocks: BlockData[];
-    buyBlock: (id: number, price: number, color?: string, source?: BuySource) => Promise<void>;
+    buyBlock: (id: number, price: number, source?: BuySource) => Promise<void>;
     updateBlock: (id: number, text: string, imageUrl: string, url: string) => Promise<void>;
     sellBlock: (id: number, priceInput: string) => Promise<void>;
     refreshBlock: () => Promise<void>;

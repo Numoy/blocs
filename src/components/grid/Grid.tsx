@@ -178,7 +178,7 @@ export const Grid = () => {
         });
 
         try {
-            await buyBlock(block.id, block.price ?? 0, undefined, source);
+            await buyBlock(block.id, block.price ?? 0, source);
             setSuccessBlock(block);
         } catch (error) {
             trackPlausibleEvent("buy_flow_failed", {

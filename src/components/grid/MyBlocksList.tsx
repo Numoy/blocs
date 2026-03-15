@@ -71,7 +71,7 @@ export const MyBlocksList = ({
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img src={safeImageUrl} alt="" className={styles.thumbnail} />
                                 ) : (
-                                    <div className={styles.placeholder} style={{ backgroundColor: block.color || BLOCK_EMPTY_COLOR }} />
+                                    <div className={styles.placeholder} style={{ backgroundColor: BLOCK_EMPTY_COLOR }} />
                                 )}
                                 <div className={styles.info}>
                                     <span className={styles.id}>Block #{block.id}</span>

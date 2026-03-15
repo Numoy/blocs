@@ -126,7 +126,7 @@ export default function BlockClient() {
             </div>
 
             <article className={`${styles.card} uiCard`}>
-                <div className={styles.media} style={{ backgroundColor: safeBlockImageUrl ? 'transparent' : (block.color || '#222') }}>
+                <div className={styles.media} style={{ backgroundColor: safeBlockImageUrl ? 'transparent' : '#222' }}>
                     {safeBlockImageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -198,7 +198,7 @@ export default function BlockClient() {
                                 }
                                 setIsBuying(true);
                                 try {
-                                    await buyBlock(block.id, block.price || 0, undefined, "block_detail");
+                                    await buyBlock(block.id, block.price || 0, "block_detail");
                                 } catch (error) {
                                     trackPlausibleEvent("buy_flow_failed", {
                                         block_id: block.id,

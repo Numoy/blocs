@@ -50,7 +50,7 @@ export const MobileBlockSheet = ({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={safeImageUrl} alt="" className={styles.previewImage} />
                     ) : (
-                        <div className={styles.emptyPreview} style={{ backgroundColor: block.color || BLOCK_EMPTY_COLOR }}>No Image</div>
+                        <div className={styles.emptyPreview} style={{ backgroundColor: BLOCK_EMPTY_COLOR }}>No Image</div>
                     )}
 
                     <p className={styles.message}>{block.text || "No message"}</p>

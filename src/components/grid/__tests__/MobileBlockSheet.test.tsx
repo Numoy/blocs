@@ -14,7 +14,6 @@ const baseBlock: BlockData = {
     owner: 'other-owner-key',
     price: 1.5,
     isForSale: true,
-    color: '#9945FF',
     text: 'Buy me!',
     imageUrl: '',
     url: '',

@@ -7,7 +7,6 @@ import { SendTransactionOptions } from "@solana/wallet-adapter-base";
 import { isContentAllowed } from "@/utils/moderation";
 import { toast } from "sonner";
 import { GRID_PUBKEY } from "@/utils/constants";
-import { hexToRgb } from "@/utils/colors";
 import { parseSolToLamports } from "@/utils/sol";
 import { toSafeExternalUrl } from "@/utils/url";
 import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
@@ -49,7 +48,7 @@ type UseBlockActionsOptions = {
 };
 
 type UseBlockActionsResult = {
-    buyBlock: (id: number, price: number, color?: string, source?: BuySource) => Promise<void>;
+    buyBlock: (id: number, price: number, source?: BuySource) => Promise<void>;
     updateBlock: (id: number, text: string, imageUrl: string, url: string) => Promise<void>;
     sellBlock: (id: number, priceInput: string) => Promise<void>;
 };
@@ -72,7 +71,6 @@ export const useBlockActions = ({
     const buyBlock = useCallback(async (
         id: number,
         price: number,
-        color: string = "#9945FF",
         source: BuySource = "unknown",
     ) => {
         if (!connected || !publicKey) {
@@ -88,7 +86,6 @@ export const useBlockActions = ({
         let saleType: "primary" | "resale" | "unknown" = "unknown";
 
         try {
-            const rgb = hexToRgb(color);
             const targetBlock = blocks.find((b) => b.id === id);
             if (!targetBlock) {
                 await fetchGrid();
@@ -150,7 +147,7 @@ export const useBlockActions = ({
 
                 if (!adminKey) throw new Error("Grid admin not found");
 
-                ix = await program.methods.buyBlock(id, rgb)
+                ix = await program.methods.buyBlock(id)
                     .accounts({
                         block: blockPda,
                         grid: GRID_PUBKEY,
@@ -186,7 +183,6 @@ export const useBlockActions = ({
                 owner: publicKey.toBase58(),
                 price: 0,
                 isForSale: false,
-                color,
             }));
 
             await connection.confirmTransaction({

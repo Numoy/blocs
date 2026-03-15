@@ -21,7 +21,6 @@ const makeRaw = (overrides: Partial<RawBlockAccount> = {}): RawBlockAccount => (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     price: bn(0) as any,
     isForSale: false,
-    color: [0x22, 0x22, 0x22],
     text: [],
     imageUrl: [],
     url: [],

@@ -2,7 +2,6 @@ import { web3 } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 import type { BlockData } from "@/types";
 import { GRID_SIZE, getPrimaryBlockPriceSol } from "@/utils/constants";
-import { parseColor } from "@/utils/colors";
 import { toSafeExternalUrl } from "@/utils/url";
 import type { BlockAccountEntry, RawBlockAccount } from "@/utils/programTypes";
 
@@ -27,7 +26,6 @@ export const mapRawBlockAccountToBlockData = (data: RawBlockAccount): BlockData 
         owner: data.owner.toBase58(),
         price: data.price.toNumber() / web3.LAMPORTS_PER_SOL,
         isForSale: data.isForSale,
-        color: parseColor(data.color ?? []),
         text: parseProgramString(data.text ?? []),
         imageUrl: parsedImageUrl || "",
         url: parseProgramString(data.url ?? []),
@@ -44,7 +42,6 @@ export const createDefaultBlockData = (id: number): BlockData => ({
     owner: null,
     price: getPrimaryBlockPriceSol(id),
     isForSale: true,
-    color: "#222222",
     text: "",
     imageUrl: "",
     url: "",

@@ -10,7 +10,6 @@ export interface RawBlockAccount {
     owner: PublicKey;
     price: BN;
     isForSale: boolean;
-    color: number[];
     text: number[];
     imageUrl: number[];
     url: number[];

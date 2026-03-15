@@ -43,7 +43,6 @@ const mockBlock: BlockData = {
     owner: 'other-owner',
     price: 1.5,
     isForSale: true,
-    color: '#ffffff',
     text: 'Hello World',
     imageUrl: '',
     url: 'https://example.com',

@@ -20,9 +20,6 @@ vi.mock('@/utils/analytics', () => ({
     trackPlausibleEvent: vi.fn(),
     toErrorCategory: vi.fn().mockReturnValue('unknown'),
 }));
-vi.mock('@/utils/colors', () => ({
-    hexToRgb: vi.fn().mockReturnValue([153, 69, 255]),
-}));
 vi.mock('@/utils/moderation', () => ({
     isContentAllowed: vi.fn().mockReturnValue(true),
 }));
@@ -77,7 +74,6 @@ const unclaimedBlock = {
     owner: null,
     price: 0.01,
     isForSale: true,
-    color: '#9945FF',
     text: '',
     imageUrl: '',
     url: '',
@@ -145,7 +141,7 @@ describe('buyBlock — pre-flight checks', () => {
 describe('buyBlock — primary purchase (unclaimed block)', () => {
     it('shows loading toast and sends transaction', async () => {
         const { result, sendTransaction } = buildHook();
-        await result.current.buyBlock(5, 0.01, '#9945FF', 'grid_sidebar');
+        await result.current.buyBlock(5, 0.01, 'grid_sidebar');
         expect(mockToast.loading).toHaveBeenCalledWith('Buying block...');
         expect(sendTransaction).toHaveBeenCalledTimes(1);
     });

@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { BlockData } from '@/types';
 import { VisibleBounds } from './useGridVisibility';
 import { GRID_WIDTH, CANVAS_RES, BLOCK_SIZE, BLOCK_EMPTY_COLOR } from '@/utils/constants';
+import { toSafeExternalUrl } from '@/utils/url';
+
 
 interface UseGridCanvasProps {
     canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -45,36 +47,38 @@ export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, hoveredBlockId
                     const x = col * BLOCK_SIZE;
                     const y = row * BLOCK_SIZE;
 
-                    const displayColor = block.color === '#000000' ? BLOCK_EMPTY_COLOR : (block.color || BLOCK_EMPTY_COLOR);
-                    ctx.fillStyle = displayColor;
+                    ctx.fillStyle = BLOCK_EMPTY_COLOR;
 
                     ctx.fillRect(x + 1, y + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
 
                     if (block.imageUrl) {
-                        const cached = imageCache.current.get(block.imageUrl);
-                        if (cached && cached.complete) {
-                            if (cached.naturalWidth > 0) {
-                                ctx.drawImage(cached, x, y, BLOCK_SIZE, BLOCK_SIZE);
+                        const safeImageUrl = toSafeExternalUrl(block.imageUrl);
+                        if (safeImageUrl) {
+                            const cached = imageCache.current.get(safeImageUrl);
+                            if (cached && cached.complete) {
+                                if (cached.naturalWidth > 0) {
+                                    ctx.drawImage(cached, x, y, BLOCK_SIZE, BLOCK_SIZE);
+                                }
+                            } else if (!cached) {
+                                const img = new Image();
+                                img.onload = () => {
+                                    const liveCanvas = canvasRef.current;
+                                    const liveCtx = liveCanvas?.getContext('2d', { alpha: false });
+                                    if (!liveCtx || img.naturalWidth === 0) return;
+                                    requestAnimationFrame(() => {
+                                        liveCtx.drawImage(img, x, y, BLOCK_SIZE, BLOCK_SIZE);
+                                    });
+                                };
+                                img.onerror = () => {
+                                    img.dataset.broken = "true";
+                                };
+                                if (imageCache.current.size >= MAX_IMAGE_CACHE_SIZE) {
+                                    const oldestKey = imageCache.current.keys().next().value;
+                                    if (oldestKey) imageCache.current.delete(oldestKey);
+                                }
+                                imageCache.current.set(safeImageUrl, img);
+                                img.src = safeImageUrl;
                             }
-                        } else if (!cached) {
-                            const img = new Image();
-                            img.onload = () => {
-                                const liveCanvas = canvasRef.current;
-                                const liveCtx = liveCanvas?.getContext('2d', { alpha: false });
-                                if (!liveCtx || img.naturalWidth === 0) return;
-                                requestAnimationFrame(() => {
-                                    liveCtx.drawImage(img, x, y, BLOCK_SIZE, BLOCK_SIZE);
-                                });
-                            };
-                            img.onerror = () => {
-                                img.dataset.broken = "true";
-                            };
-                            if (imageCache.current.size >= MAX_IMAGE_CACHE_SIZE) {
-                                const oldestKey = imageCache.current.keys().next().value;
-                                if (oldestKey) imageCache.current.delete(oldestKey);
-                            }
-                            imageCache.current.set(block.imageUrl, img);
-                            img.src = block.imageUrl;
                         }
                     }
                 }
