@@ -2,7 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { assert } from "chai";
-import { Blocs } from "../target/types/blocs";
+import type { Blocs } from "../target/types/blocs";
 
 const INITIAL_PRICE_LAMPORTS = 10_000_000; // Must match on-chain constant.
 const RESALE_FEE_BPS = 500;                // Must match on-chain constant.
