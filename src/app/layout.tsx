@@ -22,7 +22,6 @@ const defaultOgImage = {
   alt: "Blocs: 10,000 ownable blocks on Solana",
 };
 
-const parsePlausibleDomain = () => metadataBase.hostname;
 
 export const metadata: Metadata = {
   metadataBase,
@@ -102,11 +101,8 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteStructuredData) }}
         />
         <PlausibleProvider
-          domain={parsePlausibleDomain()}
+          src="https://analytics.marvinmaerz.com/js/pa-3HPsBPc6MtBPaeuGOplYw.js"
           enabled={process.env.NODE_ENV === "production"}
-          scriptProps={{
-            src: "https://analytics.marvinmaerz.com/js/pa-3HPsBPc6MtBPaeuGOplYw.js",
-          }}
         >
           <ClientRoot>
             <ProgramProvider>
