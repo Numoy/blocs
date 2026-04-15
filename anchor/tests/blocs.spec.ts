@@ -1,6 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import BN from "bn.js";
 import { assert } from "chai";
 import type { Blocs } from "../target/types/blocs";
 
@@ -18,13 +19,13 @@ const EMPTY_PUBKEY = new PublicKey("11111111111111111111111111111111");
 interface BlockBoughtEvent {
     id: number;
     buyer: PublicKey | string;
-    price: anchor.BN | number;
+    price: BN | number;
 }
 
 interface BlockSoldEvent {
     id: number;
     owner?: PublicKey | string;
-    price: anchor.BN | number;
+    price: BN | number;
     isForSale?: boolean;
     is_for_sale?: boolean;
 }
@@ -32,7 +33,7 @@ interface BlockSoldEvent {
 interface BlockResoldEvent {
     id: number;
     buyer: PublicKey | string;
-    price: anchor.BN | number;
+    price: BN | number;
 }
 
 interface BlockUpdatedEvent {
@@ -57,8 +58,8 @@ const decodeFixedString = (value: number[] | Uint8Array): string =>
 const toLamportsNumber = (value: unknown): number => {
     if (typeof value === "number") return value;
     if (typeof value === "bigint") return Number(value);
-    if (value && typeof (value as anchor.BN).toNumber === "function") {
-        return (value as anchor.BN).toNumber();
+    if (value && typeof (value as BN).toNumber === "function") {
+        return (value as BN).toNumber();
     }
     return Number(value ?? 0);
 };
@@ -158,7 +159,7 @@ describe("blocs", () => {
 
     const findBlockPda = (id: number): PublicKey =>
         PublicKey.findProgramAddressSync(
-            [Buffer.from("block"), new anchor.BN(id).toArrayLike(Buffer, "le", 4)],
+            [Buffer.from("block"), new BN(id).toArrayLike(Buffer, "le", 4)],
             program.programId,
         )[0];
 
@@ -306,7 +307,7 @@ describe("blocs", () => {
         assert.equal(blockAccount.id, blockId);
         assert.ok(blockAccount.owner.equals(user1.publicKey));
         assert.ok(!blockAccount.isForSale);
-        assert.ok(blockAccount.price.eq(new anchor.BN(0)));
+        assert.ok(blockAccount.price.eq(new BN(0)));
     });
 
     it("rejects buying a block that is already owned", async () => {
@@ -456,7 +457,7 @@ describe("blocs", () => {
 
     it("rejects listing by non-owner", async () => {
         await expectAnchorErrorOneOf(
-            program.methods.sellBlock(blockId, new anchor.BN(resalePriceLamports))
+            program.methods.sellBlock(blockId, new BN(resalePriceLamports))
                 .accounts({ block: blockPda, owner: user2.publicKey } as any)
                 .signers([user2])
                 .rpc(),
@@ -465,7 +466,7 @@ describe("blocs", () => {
     });
 
     it("lists and delists block for sale while emitting expected events", async () => {
-        const salePrice = new anchor.BN(resalePriceLamports);
+        const salePrice = new BN(resalePriceLamports);
 
         const listSignature = await program.methods.sellBlock(blockId, salePrice)
             .accounts({ block: blockPda, owner: user1.publicKey } as any)
@@ -486,7 +487,7 @@ describe("blocs", () => {
         assert.ok(listedBlock.isForSale);
         assert.ok(listedBlock.price.eq(salePrice));
 
-        const delistSignature = await program.methods.sellBlock(blockId, new anchor.BN(0))
+        const delistSignature = await program.methods.sellBlock(blockId, new BN(0))
             .accounts({ block: blockPda, owner: user1.publicKey } as any)
             .signers([user1])
             .rpc();
@@ -503,7 +504,7 @@ describe("blocs", () => {
 
         const delistedBlock = await program.account.block.fetch(blockPda);
         assert.ok(!delistedBlock.isForSale);
-        assert.ok(delistedBlock.price.eq(new anchor.BN(0)));
+        assert.ok(delistedBlock.price.eq(new BN(0)));
     });
 
     // ── buy_resale ───────────────────────────────────────────────────────────
@@ -526,7 +527,7 @@ describe("blocs", () => {
     });
 
     it("rejects resale with wrong seller account", async () => {
-        await program.methods.sellBlock(blockId, new anchor.BN(resalePriceLamports))
+        await program.methods.sellBlock(blockId, new BN(resalePriceLamports))
             .accounts({ block: blockPda, owner: user1.publicKey } as any)
             .signers([user1])
             .rpc();
@@ -626,7 +627,7 @@ describe("blocs", () => {
         const blockAccount = await program.account.block.fetch(blockPda);
         assert.ok(blockAccount.owner.equals(user2.publicKey));
         assert.ok(!blockAccount.isForSale);
-        assert.ok(blockAccount.price.eq(new anchor.BN(0)));
+        assert.ok(blockAccount.price.eq(new BN(0)));
     });
 
     // ── close_block ──────────────────────────────────────────────────────────
@@ -659,7 +660,7 @@ describe("blocs", () => {
     });
 
     it("rejects close_block when block is listed for sale", async () => {
-        await program.methods.sellBlock(secondaryBlockId, new anchor.BN(resalePriceLamports))
+        await program.methods.sellBlock(secondaryBlockId, new BN(resalePriceLamports))
             .accounts({ block: secondaryBlockPda, owner: user1.publicKey } as any)
             .signers([user1])
             .rpc();
@@ -678,7 +679,7 @@ describe("blocs", () => {
 
     it("closes a delisted block and returns rent to owner", async () => {
         // Delist first (block is still listed from the previous test).
-        await program.methods.sellBlock(secondaryBlockId, new anchor.BN(0))
+        await program.methods.sellBlock(secondaryBlockId, new BN(0))
             .accounts({ block: secondaryBlockPda, owner: user1.publicKey } as any)
             .signers([user1])
             .rpc();
