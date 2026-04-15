@@ -95,7 +95,7 @@ jobs:
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7
         with:
           path: ~/.cargo/bin/anchor
-          key: anchor-${{ runner.os }}-v0.32.1
+          key: anchor-${{ runner.os }}-v1.0.0
 
       - name: Install System Dependencies
         run: |
@@ -113,7 +113,7 @@ jobs:
         if: steps.cache-anchor.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.cargo/bin
-          curl -sSfL https://github.com/solana-foundation/anchor/releases/download/v0.32.1/anchor-0.32.1-x86_64-unknown-linux-gnu -o ~/.cargo/bin/anchor
+          curl -sSfL https://github.com/solana-foundation/anchor/releases/download/v1.0.0/anchor-1.0.0-x86_64-unknown-linux-gnu -o ~/.cargo/bin/anchor
           chmod +x ~/.cargo/bin/anchor
 
       # Set Paths - This applies to all subsequent steps

@@ -32,7 +32,7 @@ pub mod blocs {
 
         // Transfer SOL to Admin
         let cpi_context = CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.system_program.key(),
             anchor_lang::system_program::Transfer {
                 from: buyer.to_account_info(),
                 to: admin.to_account_info(),
@@ -82,7 +82,7 @@ pub mod blocs {
 
         // Transfer to Seller
         let cpi_ctx_seller = CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.system_program.key(),
             anchor_lang::system_program::Transfer {
                 from: buyer.to_account_info(),
                 to: seller.to_account_info(),
@@ -92,7 +92,7 @@ pub mod blocs {
 
         // Transfer to Admin
         let cpi_ctx_admin = CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.system_program.key(),
             anchor_lang::system_program::Transfer {
                 from: buyer.to_account_info(),
                 to: admin.to_account_info(),
