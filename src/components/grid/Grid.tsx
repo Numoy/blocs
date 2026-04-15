@@ -281,8 +281,7 @@ export const Grid = () => {
                 limitToBounds={true}
                 wheel={{ step: 0.1 }}
                 panning={{ velocityDisabled: false }}
-                alignmentAnimation={{ animationTime: 200 }}
-                onTransformed={(ref) => updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY)}
+                onTransform={(ref) => updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY)}
                 onInit={(ref) => {
                     transformRef.current = ref;
                     updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY);

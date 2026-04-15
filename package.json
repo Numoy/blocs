@@ -31,7 +31,7 @@
     "next-plausible": "^4.0.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-zoom-pan-pinch": "^3.7.0",
+    "react-zoom-pan-pinch": "^4.0.3",
     "sharp": "^0.34.5",
     "sonner": "^2.0.7",
     "zod": "^4.3.6"
@@ -47,13 +47,13 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.2",
+    "eslint-config-next": "^16.2.3",
     "husky": "^9.1.7",
-    "jsdom": "^29.0.1",
+    "jsdom": "^29.0.2",
     "lint-staged": "^16.4.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.8",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.4"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -64,6 +64,7 @@
   "license": "MIT",
   "overrides": {
     "fast-xml-parser": "^5.3.8",
+    "typescript": "^6.0.2",
     "undici": "^7.24.2"
   }
 }
