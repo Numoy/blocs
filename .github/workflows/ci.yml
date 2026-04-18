@@ -72,7 +72,7 @@ jobs:
 
       # Cache Cargo Registry (Speeds up Rust builds)
       - name: Cache Cargo registry + index
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: |
             ~/.cargo/registry
@@ -83,7 +83,7 @@ jobs:
       # Cache Solana CLI (Restored and fixed)
       - name: Cache Solana CLI
         id: cache-solana
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: |
             ~/solana-release
@@ -92,7 +92,7 @@ jobs:
       # Cache Anchor CLI
       - name: Cache Anchor CLI
         id: cache-anchor
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: ~/.cargo/bin/anchor
           key: anchor-${{ runner.os }}-v1.0.0
