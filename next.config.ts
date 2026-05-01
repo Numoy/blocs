@@ -9,10 +9,19 @@ const toOrigin = (value: string | undefined): string | null => {
   }
 };
 
+const toWssOrigin = (value: string | undefined): string | null => {
+  const origin = toOrigin(value);
+  if (!origin) return null;
+  return origin.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
+};
+
 const rpcOrigins = new Set<string>([
   toOrigin(process.env.NEXT_PUBLIC_SOLANA_RPC_URL) || "",
   toOrigin(process.env.SOLANA_RPC_URL) || "",
+  toWssOrigin(process.env.NEXT_PUBLIC_SOLANA_RPC_URL) || "",
+  toWssOrigin(process.env.SOLANA_RPC_URL) || "",
   "https://api.devnet.solana.com",
+  "wss://api.devnet.solana.com",
 ]);
 rpcOrigins.delete("");
 
