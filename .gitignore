@@ -58,6 +58,9 @@ blocs-keypair.json
 *.key
 *.pem
 
+# Generated Anchor artifacts
+anchor/grid_pubkey.txt
+
 # IDEs
 .vscode
 .idea
