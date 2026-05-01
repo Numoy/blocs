@@ -24,7 +24,22 @@ assetOrigins.delete("");
 
 const analyticsOrigin = "https://analytics.marvinmaerz.com";
 // Allow secure RPC backends that may be injected at build/runtime without hardcoding every provider domain.
-const connectSrc = ["'self'", ...rpcOrigins, "https://*.solana.com", "wss://*.solana.com", analyticsOrigin, "https://auth.privy.io", "https://*.privy.io"];
+const connectSrc = [
+  "'self'",
+  ...rpcOrigins,
+  "https://*.solana.com",
+  "wss://*.solana.com",
+  analyticsOrigin,
+  "https://auth.privy.io",
+  "https://*.privy.io",
+  "wss://*.privy.io",
+  // WalletConnect registry + relay
+  "https://explorer-api.walletconnect.com",
+  "https://*.walletconnect.com",
+  "wss://*.walletconnect.com",
+  "https://*.walletconnect.org",
+  "wss://*.walletconnect.org",
+];
 const imgSrc = ["'self'", "data:", "blob:", ...assetOrigins, "https:"];
 const mediaSrc = ["'self'", "data:", "blob:"];
 const workerSrc = ["'self'", "blob:"];
