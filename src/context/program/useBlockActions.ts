@@ -14,6 +14,8 @@ import { deriveBlockPda } from "@/context/program/helpers";
 import {
     EVENTUAL_GRID_SYNC_DELAY_MS,
     PRICE_EPSILON_SOL,
+    TRANSACTION_CONFIRM_POLL_INTERVAL_MS,
+    TRANSACTION_CONFIRM_TIMEOUT_MS,
     type BuySource,
 } from "@/context/program/shared";
 import { asBlocsProgram } from "@/utils/programTypes";
@@ -51,6 +53,66 @@ type UseBlockActionsResult = {
     buyBlock: (id: number, price: number, source?: BuySource) => Promise<void>;
     updateBlock: (id: number, text: string, imageUrl: string, url: string) => Promise<void>;
     sellBlock: (id: number, priceInput: string) => Promise<void>;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const hasReachedCommitment = (
+    confirmationStatus: "processed" | "confirmed" | "finalized" | null | undefined,
+    commitment: "processed" | "confirmed" | "finalized",
+): boolean => {
+    if (!confirmationStatus) {
+        return false;
+    }
+    if (commitment === "processed") {
+        return true;
+    }
+    if (commitment === "confirmed") {
+        return confirmationStatus === "confirmed" || confirmationStatus === "finalized";
+    }
+    return confirmationStatus === "finalized";
+};
+
+const confirmTransactionByPolling = async ({
+    connection,
+    signature,
+    lastValidBlockHeight,
+    commitment = "confirmed",
+}: {
+    connection: Connection;
+    signature: string;
+    lastValidBlockHeight?: number;
+    commitment?: "processed" | "confirmed" | "finalized";
+}) => {
+    const startedAt = Date.now();
+
+    while (true) {
+        const { value } = await connection.getSignatureStatuses([signature]);
+        const status = value[0];
+
+        if (status?.err) {
+            throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+        }
+
+        const confirmationStatus = status?.confirmationStatus ?? (
+            status?.confirmations === null ? "finalized" : null
+        );
+
+        if (hasReachedCommitment(confirmationStatus, commitment)) {
+            return status;
+        }
+
+        if (lastValidBlockHeight !== undefined) {
+            const currentBlockHeight = await connection.getBlockHeight(commitment);
+            if (currentBlockHeight > lastValidBlockHeight) {
+                throw new Error("Transaction expired before confirmation.");
+            }
+        } else if (Date.now() - startedAt > TRANSACTION_CONFIRM_TIMEOUT_MS) {
+            throw new Error("Transaction confirmation timed out.");
+        }
+
+        await sleep(TRANSACTION_CONFIRM_POLL_INTERVAL_MS);
+    }
 };
 
 export const useBlockActions = ({
@@ -185,11 +247,11 @@ export const useBlockActions = ({
                 isForSale: false,
             }));
 
-            await connection.confirmTransaction({
-                blockhash,
-                lastValidBlockHeight,
+            await confirmTransactionByPolling({
+                connection,
                 signature,
-            }, "confirmed");
+                lastValidBlockHeight,
+            });
 
             trackPlausibleEvent("buy_block_succeeded", {
                 block_id: id,
@@ -320,12 +382,24 @@ export const useBlockActions = ({
         try {
             const blockPda = deriveBlockPda(id, program.programId);
 
-            const tx = await program.methods.updateBlock(id, text, normalizedImageUrl, normalizedUrl)
+            const ix = await program.methods.updateBlock(id, text, normalizedImageUrl, normalizedUrl)
                 .accounts({
                     block: blockPda,
                     owner: wallet.publicKey,
                 })
-                .rpc();
+                .instruction();
+
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            const transaction = new Transaction({
+                feePayer: wallet.publicKey,
+                blockhash,
+                lastValidBlockHeight,
+            }).add(ix);
+
+            const signature = await sendTransaction(transaction, connection, {
+                skipPreflight: false,
+                maxRetries: 3,
+            });
 
             updateBlockInState(id, (existing) => ({
                 ...existing,
@@ -334,7 +408,11 @@ export const useBlockActions = ({
                 url: normalizedUrl,
             }));
 
-            await connection.confirmTransaction(tx, "confirmed");
+            await confirmTransactionByPolling({
+                connection,
+                signature,
+                lastValidBlockHeight,
+            });
             trackPlausibleEvent("update_block_succeeded", {
                 block_id: id,
                 has_text: Boolean(text.trim()),
@@ -359,7 +437,7 @@ export const useBlockActions = ({
             toast.error("Update failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
-    }, [connected, connection, program, queueGridSync, refreshBlockById, updateBlockInState, wallet]);
+    }, [connected, connection, program, queueGridSync, refreshBlockById, sendTransaction, updateBlockInState, wallet]);
 
     const sellBlock = useCallback(async (id: number, priceInput: string) => {
         if (!connected || !wallet) {
@@ -387,12 +465,24 @@ export const useBlockActions = ({
 
             const blockPda = deriveBlockPda(id, program.programId);
 
-            const tx = await program.methods.sellBlock(id, lamports)
+            const ix = await program.methods.sellBlock(id, lamports)
                 .accounts({
                     block: blockPda,
                     owner: wallet.publicKey,
                 })
-                .rpc();
+                .instruction();
+
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            const transaction = new Transaction({
+                feePayer: wallet.publicKey,
+                blockhash,
+                lastValidBlockHeight,
+            }).add(ix);
+
+            const signature = await sendTransaction(transaction, connection, {
+                skipPreflight: false,
+                maxRetries: 3,
+            });
 
             updateBlockInState(id, (existing) => ({
                 ...existing,
@@ -400,7 +490,11 @@ export const useBlockActions = ({
                 isForSale: normalizedPrice > 0,
             }));
 
-            await connection.confirmTransaction(tx, "confirmed");
+            await confirmTransactionByPolling({
+                connection,
+                signature,
+                lastValidBlockHeight,
+            });
             trackPlausibleEvent("set_sale_succeeded", {
                 block_id: id,
                 action: saleAction,
@@ -426,7 +520,7 @@ export const useBlockActions = ({
             toast.error("Listing failed: " + ((error as Error).message || "Unknown error"), { id: toastId });
             throw error;
         }
-    }, [connected, connection, program, queueGridSync, refreshBlockById, updateBlockInState, wallet]);
+    }, [connected, connection, program, queueGridSync, refreshBlockById, sendTransaction, updateBlockInState, wallet]);
 
     return {
         buyBlock,

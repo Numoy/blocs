@@ -38,6 +38,8 @@ const connectSrc = [
   ...rpcOrigins,
   "https://*.solana.com",
   "wss://*.solana.com",
+  "https://*.helius-rpc.com",
+  "wss://*.helius-rpc.com",
   analyticsOrigin,
   "https://auth.privy.io",
   "https://*.privy.io",

@@ -14,6 +14,7 @@ import {
     type GridStateAccount,
 } from "@/utils/programTypes";
 import {
+    GRID_BACKGROUND_SYNC_INTERVAL_MS,
     GRID_LOAD_TIMEOUT_MS,
     GRID_MIN_SYNC_INTERVAL_MS,
     GRID_READ_TIMEOUT_MS,
@@ -302,6 +303,20 @@ export const useGridFetch = ({ connection, providerWallet }: UseGridFetchOptions
         }, Math.max(0, nextRunAt - now));
     }, [fetchGrid]);
 
+    useEffect(() => {
+        if (GRID_BACKGROUND_SYNC_INTERVAL_MS <= 0) {
+            return;
+        }
+
+        const intervalId = setInterval(() => {
+            if (hasLoadedOnceRef.current) {
+                queueGridSync(0);
+            }
+        }, GRID_BACKGROUND_SYNC_INTERVAL_MS);
+
+        return () => clearInterval(intervalId);
+    }, [queueGridSync]);
+
     const fetchGridWithTimeoutRef = useRef<(() => Promise<void>) | null>(null);
 
     const fetchGridWithTimeout = useCallback(async () => {
@@ -341,7 +356,14 @@ export const useGridFetch = ({ connection, providerWallet }: UseGridFetchOptions
         }
     }, [connection.rpcEndpoint, fetchGrid]);
 
-    fetchGridWithTimeoutRef.current = fetchGridWithTimeout;
+    useEffect(() => {
+        fetchGridWithTimeoutRef.current = fetchGridWithTimeout;
+        return () => {
+            if (fetchGridWithTimeoutRef.current === fetchGridWithTimeout) {
+                fetchGridWithTimeoutRef.current = null;
+            }
+        };
+    }, [fetchGridWithTimeout]);
 
     useEffect(() => {
         void fetchGridWithTimeout();

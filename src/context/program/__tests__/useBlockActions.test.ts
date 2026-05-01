@@ -51,12 +51,8 @@ const makeMockProgram = () => ({
     methods: {
         buyBlock: vi.fn().mockReturnValue(makeInstructionChain()),
         buyResale: vi.fn().mockReturnValue(makeInstructionChain()),
-        updateBlock: vi.fn().mockReturnValue({
-            accounts: vi.fn().mockReturnValue({ rpc: vi.fn().mockResolvedValue('tx-sig') }),
-        }),
-        sellBlock: vi.fn().mockReturnValue({
-            accounts: vi.fn().mockReturnValue({ rpc: vi.fn().mockResolvedValue('tx-sig') }),
-        }),
+        updateBlock: vi.fn().mockReturnValue(makeInstructionChain()),
+        sellBlock: vi.fn().mockReturnValue(makeInstructionChain()),
     },
     account: {
         gridState: { fetch: vi.fn().mockResolvedValue({ admin: ADMIN }) },
@@ -66,7 +62,10 @@ const makeMockProgram = () => ({
 
 const makeMockConnection = () => ({
     getLatestBlockhash: vi.fn().mockResolvedValue({ blockhash: 'fakehash', lastValidBlockHeight: 100 }),
-    confirmTransaction: vi.fn().mockResolvedValue({ value: { err: null } }),
+    getSignatureStatuses: vi.fn().mockResolvedValue({
+        value: [{ err: null, confirmationStatus: 'confirmed' }],
+    }),
+    getBlockHeight: vi.fn().mockResolvedValue(99),
 });
 
 const unclaimedBlock = {
@@ -157,8 +156,9 @@ describe('buyBlock — primary purchase (unclaimed block)', () => {
     });
 
     it('shows success toast after on-chain confirmation', async () => {
-        const { result } = buildHook();
+        const { result, connection } = buildHook();
         await result.current.buyBlock(5, 0.01);
+        expect(connection.getSignatureStatuses).toHaveBeenCalledWith(['tx-signature']);
         expect(mockToast.success).toHaveBeenCalledWith(
             'Block purchased!',
             expect.objectContaining({ id: mockToastId })

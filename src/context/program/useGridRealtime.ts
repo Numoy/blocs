@@ -24,6 +24,10 @@ export const useGridRealtime = ({
     updateBlockInState,
 }: UseGridRealtimeOptions) => {
     useEffect(() => {
+        if (process.env.NEXT_PUBLIC_ENABLE_GRID_REALTIME !== "true") {
+            return;
+        }
+
         let disposed = false;
         const listenerIds: number[] = [];
 
