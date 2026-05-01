@@ -26,6 +26,9 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
     useEffect(() => {
         if (!authenticated || wallet || hasAutoSelected.current) return;
 
+        console.debug('[PrivyWalletBridge] adapterWallets:', adapterWallets.map(w => w.adapter.name));
+        console.debug('[PrivyWalletBridge] standardWallets count:', standardWallets.length);
+
         const walletClientType = user?.wallet?.walletClientType;
         const isEmbedded = !walletClientType || walletClientType === "privy";
 
@@ -60,7 +63,10 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
     // after a programmatic select(). Explicitly connect once the wallet is selected.
     useEffect(() => {
         if (!wallet || connected || connecting) return;
-        connect().catch(() => {});
+        console.debug('[PrivyWalletBridge] calling connect() on wallet:', wallet.adapter.name);
+        connect().catch((err) => {
+            console.warn('[PrivyWalletBridge] connect() failed:', err);
+        });
     }, [wallet, connected, connecting, connect]);
 
     // Reset auto-select flag on logout
