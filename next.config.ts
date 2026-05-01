@@ -41,6 +41,7 @@ const connectSrc = [
   analyticsOrigin,
   "https://auth.privy.io",
   "https://*.privy.io",
+  "https://*.rpc.privy.systems",
   "wss://*.privy.io",
   // WalletConnect registry + relay
   "https://explorer-api.walletconnect.com",
@@ -48,6 +49,7 @@ const connectSrc = [
   "wss://*.walletconnect.com",
   "https://*.walletconnect.org",
   "wss://*.walletconnect.org",
+  "wss://www.walletlink.org",
   // Privy payment method probes (Apple Pay / Google Pay availability checks)
   "https://apple.com",
   "https://*.apple.com",
@@ -63,6 +65,7 @@ const scriptSrc = [
   "'self'",
   "'unsafe-inline'",
   analyticsOrigin,
+  "https://challenges.cloudflare.com",
 ];
 const isDev = process.env.NODE_ENV !== "production";
 if (isDev) {
@@ -74,7 +77,8 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  "frame-src https://auth.privy.io https://*.privy.io",
+  "child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org",
+  "frame-src https://auth.privy.io https://*.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com",
   `script-src ${scriptSrc.join(" ")}`,
   "script-src-attr 'none'",
   `style-src ${styleSrc.join(" ")}`,

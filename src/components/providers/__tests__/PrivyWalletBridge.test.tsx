@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, act } from '@testing-library/react';
 
 // vi.mock factory cannot reference top-level variables.
@@ -24,8 +24,28 @@ vi.mock('@solana/wallet-adapter-react', () => ({
 // Import after mocks so they take effect
 import { PrivyWalletBridge } from '../PrivyWalletBridge';
 
+const privyStandardWallet = (accounts = [{}]) => ({
+    name: 'Privy',
+    isPrivyWallet: true,
+    accounts,
+});
+
 describe('PrivyWalletBridge', () => {
-    it('calls useStandardWallets to register embedded wallet', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockUseStandardWallets.mockReturnValue({ ready: true, wallets: [] });
+        mockUsePrivy.mockReturnValue({ authenticated: false, user: null });
+        mockUseWallet.mockReturnValue({
+            select: vi.fn(),
+            connect: vi.fn(),
+            wallet: null,
+            connected: false,
+            connecting: false,
+            wallets: [],
+        });
+    });
+
+    it('calls useStandardWallets to track embedded wallet readiness', () => {
         render(
             <PrivyWalletBridge>
                 <div data-testid="child">content</div>
@@ -59,6 +79,10 @@ describe('PrivyWalletBridge', () => {
         const mockSelect = vi.fn();
         const privyAdapter = { adapter: { name: 'Privy' } };
 
+        mockUseStandardWallets.mockReturnValue({
+            ready: true,
+            wallets: [privyStandardWallet()],
+        });
         mockUsePrivy.mockReturnValue({
             authenticated: true,
             user: { wallet: { walletClientType: 'privy' } },
@@ -71,6 +95,39 @@ describe('PrivyWalletBridge', () => {
 
         await act(async () => {
             render(<PrivyWalletBridge><div /></PrivyWalletBridge>);
+        });
+
+        expect(mockSelect).toHaveBeenCalledWith('Privy');
+    });
+
+    it('waits for the Privy embedded account before selecting the adapter', async () => {
+        const mockSelect = vi.fn();
+        const privyAdapter = { adapter: { name: 'Privy' } };
+
+        mockUsePrivy.mockReturnValue({
+            authenticated: true,
+            user: { wallet: { walletClientType: 'privy' } },
+        });
+        mockUseWallet.mockReturnValue({
+            select: mockSelect,
+            wallet: null,
+            wallets: [privyAdapter],
+        });
+        mockUseStandardWallets.mockReturnValue({
+            ready: true,
+            wallets: [privyStandardWallet([])],
+        });
+
+        const { rerender } = render(<PrivyWalletBridge><div /></PrivyWalletBridge>);
+        expect(mockSelect).not.toHaveBeenCalled();
+
+        mockUseStandardWallets.mockReturnValue({
+            ready: true,
+            wallets: [privyStandardWallet()],
+        });
+
+        await act(async () => {
+            rerender(<PrivyWalletBridge><div /></PrivyWalletBridge>);
         });
 
         expect(mockSelect).toHaveBeenCalledWith('Privy');
@@ -102,6 +159,10 @@ describe('PrivyWalletBridge', () => {
         const mockSelect = vi.fn();
         const privyAdapter = { adapter: { name: 'Privy' } };
 
+        mockUseStandardWallets.mockReturnValue({
+            ready: true,
+            wallets: [privyStandardWallet()],
+        });
         mockUsePrivy.mockReturnValue({
             authenticated: true,
             user: { wallet: { walletClientType: 'backpack' } },

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 
+const { mockRegister, mockUseStandardWallets } = vi.hoisted(() => ({
+    mockRegister: vi.fn(() => vi.fn()),
+    mockUseStandardWallets: vi.fn<() => { ready: boolean; wallets: unknown[] }>(() => ({ ready: true, wallets: [] })),
+}));
+
 // ---------- Mock PrivyProvider ----------
 vi.mock('@privy-io/react-auth', () => ({
     PrivyProvider: ({ children, appId, config }: {
@@ -19,6 +24,13 @@ vi.mock('@privy-io/react-auth', () => ({
 
 vi.mock('@privy-io/react-auth/solana', () => ({
     toSolanaWalletConnectors: () => 'mock-solana-connectors',
+    useStandardWallets: mockUseStandardWallets,
+}));
+
+vi.mock('@wallet-standard/app', () => ({
+    getWallets: () => ({
+        register: mockRegister,
+    }),
 }));
 
 // ---------- Mock wallet adapter ----------
@@ -54,6 +66,8 @@ describe('WalletContextProvider', () => {
 
     beforeEach(() => {
         vi.resetModules();
+        vi.clearAllMocks();
+        mockUseStandardWallets.mockReturnValue({ ready: true, wallets: [] });
         process.env = {
             ...ORIGINAL_ENV,
             NEXT_PUBLIC_SOLANA_RPC_URL: 'https://api.devnet.solana.com'
@@ -92,6 +106,27 @@ describe('WalletContextProvider', () => {
         expect(screen.getByTestId('wallet-modal-provider')).toBeInTheDocument();
         expect(screen.getByTestId('privy-wallet-bridge')).toBeInTheDocument();
         expect(screen.getByTestId('app-child')).toHaveTextContent('hello');
+    });
+
+    it('registers Privy Solana standard wallet for wallet-adapter discovery', async () => {
+        process.env.NEXT_PUBLIC_PRIVY_APP_ID = 'test-id';
+        const privyWallet = { name: 'Privy', isPrivyWallet: true };
+        const phantomWallet = { name: 'Phantom' };
+        mockUseStandardWallets.mockReturnValue({
+            ready: true,
+            wallets: [privyWallet, phantomWallet],
+        });
+
+        const { WalletContextProvider } = await import('../WalletContextProvider');
+
+        render(
+            <WalletContextProvider>
+                <div>test</div>
+            </WalletContextProvider>
+        );
+
+        expect(mockRegister).toHaveBeenCalledWith(privyWallet);
+        expect(mockRegister).not.toHaveBeenCalledWith(phantomWallet);
     });
 
     it('passes correct appId to PrivyProvider', async () => {

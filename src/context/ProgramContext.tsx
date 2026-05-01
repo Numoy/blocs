@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { usePrivy } from "@privy-io/react-auth";
-import { useFundWallet } from "@privy-io/react-auth/solana";
+import { useFundWallet, useWallets as usePrivySolanaWallets } from "@privy-io/react-auth/solana";
 import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
