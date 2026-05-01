@@ -162,10 +162,11 @@ export const Grid = () => {
 
     const handleBuyBlock = useCallback(async (block: BlockData, source: BuySource = "grid_sidebar") => {
         if (!connected) {
-            // Queue the buy before opening the modal so it auto-fires once the wallet connects,
-            // whether the user was unauthenticated (needs login) or just not yet connected.
+            // Queue the buy before opening the modal so it auto-fires once the wallet connects.
+            // If authenticated, PrivyWalletBridge will connect the embedded wallet automatically —
+            // don't open the modal, just wait for the pending buy to fire.
             queuePendingBuy(block, source);
-            if (!authenticated || !adapterWallet) {
+            if (!authenticated) {
                 openWalletModal(source === "block_detail" ? "block_detail_buy" : "sidebar_buy");
             }
             return;
@@ -188,7 +189,7 @@ export const Grid = () => {
             });
             // buyBlock already shows the user-facing error toast; no additional toast here
         }
-    }, [adapterWallet, authenticated, buyBlock, connected, openWalletModal, queuePendingBuy]);
+    }, [authenticated, buyBlock, connected, openWalletModal, queuePendingBuy]);
 
     // Auto-trigger queued buy once wallet finishes connecting
     useEffect(() => {
