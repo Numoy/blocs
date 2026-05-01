@@ -48,6 +48,11 @@ const connectSrc = [
   "wss://*.walletconnect.com",
   "https://*.walletconnect.org",
   "wss://*.walletconnect.org",
+  // Privy payment method probes (Apple Pay / Google Pay availability checks)
+  "https://apple.com",
+  "https://*.apple.com",
+  "https://google.com",
+  "https://pay.google.com",
 ];
 const imgSrc = ["'self'", "data:", "blob:", ...assetOrigins, "https:"];
 const mediaSrc = ["'self'", "data:", "blob:"];
