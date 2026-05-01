@@ -19,7 +19,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => {
     const { wallets: standardWallets } = useStandardWallets();
     const { authenticated, user } = usePrivy();
-    const { select, wallet, wallets: adapterWallets } = useWallet();
+    const { select, connect, wallet, connected, connecting, wallets: adapterWallets } = useWallet();
     const hasAutoSelected = useRef(false);
 
     // Auto-select the correct wallet adapter after login
@@ -55,6 +55,13 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
             hasAutoSelected.current = true;
         }
     }, [authenticated, user, wallet, adapterWallets, select, standardWallets]);
+
+    // autoConnect only fires on mount (from localStorage) — it does NOT auto-connect
+    // after a programmatic select(). Explicitly connect once the wallet is selected.
+    useEffect(() => {
+        if (!wallet || connected || connecting) return;
+        connect().catch(() => {});
+    }, [wallet, connected, connecting, connect]);
 
     // Reset auto-select flag on logout
     useEffect(() => {

@@ -6,7 +6,7 @@ import { render, act } from '@testing-library/react';
 const { mockUseStandardWallets, mockUsePrivy, mockUseWallet } = vi.hoisted(() => ({
     mockUseStandardWallets: vi.fn().mockReturnValue({ ready: true, wallets: [] }),
     mockUsePrivy: vi.fn().mockReturnValue({ authenticated: false, user: null }),
-    mockUseWallet: vi.fn().mockReturnValue({ select: vi.fn(), wallet: null, wallets: [] }),
+    mockUseWallet: vi.fn().mockReturnValue({ select: vi.fn(), connect: vi.fn(), wallet: null, connected: false, connecting: false, wallets: [] }),
 }));
 
 vi.mock('@privy-io/react-auth/solana', () => ({
@@ -129,7 +129,10 @@ describe('PrivyWalletBridge', () => {
         });
         mockUseWallet.mockReturnValue({
             select: mockSelect,
+            connect: vi.fn(),
             wallet: { adapter: { name: 'Phantom' } }, // already connected
+            connected: true,
+            connecting: false,
             wallets: [privyAdapter],
         });
 
