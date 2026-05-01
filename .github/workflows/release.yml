@@ -1,12 +1,9 @@
 name: Release to Production
 
 on:
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: "Signed annotated release tag (e.g. v1.0.0)"
-        required: true
-        type: string
+  push:
+    tags:
+      - "v*.*.*"
 
 env:
   REGISTRY: ghcr.io
@@ -34,7 +31,7 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const tagName = `${{ inputs.release_tag }}`.trim();
+            const tagName = `${{ github.ref_name }}`.trim();
 
             if (!/^v\d+\.\d+\.\d+$/.test(tagName)) {
               core.setFailed(

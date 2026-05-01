@@ -1,9 +1,12 @@
 name: Deploy to Staging
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag to deploy to staging (e.g. v1.0.0)"
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -31,13 +34,7 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const ref = context.ref || "";
-            if (!ref.startsWith("refs/tags/")) {
-              core.setFailed(`Expected a tag ref, got ${ref}`);
-              return;
-            }
-
-            const tagName = ref.replace("refs/tags/", "").trim();
+            const tagName = `${{ inputs.release_tag }}`.trim();
             if (!/^v\d+\.\d+\.\d+$/.test(tagName)) {
               core.setFailed(
                 `Invalid staging tag '${tagName}'. Expected strict semver tag format like v1.0.0.`,
