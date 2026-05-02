@@ -134,6 +134,8 @@
 }
 
 .ownerValue {
+    display: inline-flex;
+    text-decoration: none;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     color: #d2d2d2;
     font-size: 0.85rem;
@@ -141,6 +143,11 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     padding: 4px 8px;
     border-radius: 999px;
+}
+
+a.ownerValue:hover {
+    color: var(--accent-secondary);
+    border-color: rgba(20, 241, 149, 0.3);
 }
 
 .price {
@@ -168,6 +175,12 @@
 .buyButton {
     width: 100%;
     margin-top: 6px;
+}
+
+.buyStatus {
+    color: var(--text-tertiary);
+    font-size: 0.82rem;
+    text-align: center;
 }
 
 .closeButton {

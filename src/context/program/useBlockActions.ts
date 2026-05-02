@@ -10,6 +10,7 @@ import { GRID_PUBKEY } from "@/utils/constants";
 import { parseSolToLamports } from "@/utils/sol";
 import { toSafeExternalUrl } from "@/utils/url";
 import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
+import { getExplorerUrl } from "@/utils/explorer";
 import { deriveBlockPda } from "@/context/program/helpers";
 import {
     EVENTUAL_GRID_SYNC_DELAY_MS,
@@ -231,6 +232,7 @@ export const useBlockActions = ({
                     .instruction();
             }
 
+            toast.loading("Building transaction...", { id: toastId });
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
             const transaction = new Transaction({
@@ -239,6 +241,7 @@ export const useBlockActions = ({
                 lastValidBlockHeight,
             }).add(ix);
 
+            toast.loading("Confirm in your wallet...", { id: toastId });
             const signature = await sendTransaction(transaction, connection, {
                 skipPreflight: false,
                 maxRetries: 3,
@@ -258,6 +261,14 @@ export const useBlockActions = ({
                 isForSale: false,
             }));
 
+            toast.loading("Submitted. Waiting for confirmation...", {
+                id: toastId,
+                action: {
+                    label: "Explorer",
+                    onClick: () => window.open(getExplorerUrl("tx", signature, connection.rpcEndpoint), "_blank", "noopener,noreferrer"),
+                },
+            });
+
             await confirmTransactionByPolling({
                 connection,
                 signature,
@@ -276,7 +287,13 @@ export const useBlockActions = ({
                 console.error(`Failed to refresh block #${id} after purchase:`, refreshError);
                 queueGridSync(0);
             }
-            toast.success("Block purchased!", { id: toastId });
+            toast.success("Block purchased!", {
+                id: toastId,
+                action: {
+                    label: "Explorer",
+                    onClick: () => window.open(getExplorerUrl("tx", signature, connection.rpcEndpoint), "_blank", "noopener,noreferrer"),
+                },
+            });
             queueGridSync(EVENTUAL_GRID_SYNC_DELAY_MS);
         } catch (error) {
             console.error("Purchase Error:", error);

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { trackPlausibleEvent } from '@/utils/analytics';
 import { toSafeExternalUrl } from '@/utils/url';
 import { shareBlock } from '@/utils/shareBlock';
+import { BlockActivity } from '@/components/block/BlockActivity';
 import { BlockData } from '@/types';
 import styles from './Sidebar.module.css';
 
@@ -66,14 +68,19 @@ export const SidebarView = ({
                         {block.owner
                             ? isOwner
                                 ? "You"
-                                : onViewOwnerBlocks
-                                    ? <button
-                                        className={styles.ownerButton}
-                                        onClick={() => onViewOwnerBlocks(block.owner!)}
-                                    >
-                                        {block.owner.slice(0, 4)}...{block.owner.slice(-4)}
-                                    </button>
-                                    : block.owner
+                                : <div className={styles.ownerActions}>
+                                    {onViewOwnerBlocks && (
+                                        <button
+                                            className={styles.ownerButton}
+                                            onClick={() => onViewOwnerBlocks(block.owner!)}
+                                        >
+                                            {block.owner.slice(0, 4)}...{block.owner.slice(-4)}
+                                        </button>
+                                    )}
+                                    <Link href={`/owner/${block.owner}`} className={styles.ownerProfileLink}>
+                                        Profile
+                                    </Link>
+                                </div>
                             : "Available"}
                     </div>
                 </div>
@@ -101,6 +108,8 @@ export const SidebarView = ({
                     <div className={styles.emptyNote}>Nothing here yet</div>
                 )}
             </div>
+
+            <BlockActivity block={block} compact />
 
             {block.isForSale && (block.price !== null) && !isOwner && (
                 <div className={styles.section}>

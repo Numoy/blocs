@@ -1,0 +1,79 @@
+.panel,
+.compactPanel {
+    border: 1px solid var(--border-soft);
+    background: var(--surface-card);
+    border-radius: var(--radius-md);
+    padding: 0.9rem;
+}
+
+.compactPanel {
+    padding: 0.8rem;
+}
+
+.headerRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.title {
+    font-size: 0.8rem;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+}
+
+.explorerLink,
+.ownerLink {
+    color: var(--accent-secondary);
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+
+.explorerLink:hover,
+.ownerLink:hover {
+    text-decoration: underline;
+}
+
+.timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 10px 1fr;
+    gap: 9px;
+    align-items: start;
+}
+
+.dot {
+    width: 7px;
+    height: 7px;
+    margin-top: 6px;
+    border-radius: 50%;
+    background: var(--accent-secondary);
+    box-shadow: 0 0 0 3px rgba(20, 241, 149, 0.12);
+}
+
+.rowLabel {
+    color: var(--foreground);
+    font-size: 0.86rem;
+    font-weight: 650;
+}
+
+.rowValue {
+    color: var(--text-tertiary);
+    font-size: 0.78rem;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.ownerLink {
+    display: inline-flex;
+    margin-top: 12px;
+}

@@ -135,6 +135,69 @@
     backdrop-filter: blur(6px);
 }
 
+.gridToolbar {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    z-index: 22;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    background: rgba(12, 12, 12, 0.86);
+    box-shadow: var(--shadow-soft);
+}
+
+.jumpInput {
+    width: 86px;
+    height: 34px;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--foreground);
+    padding: 0 9px;
+    font-size: 0.86rem;
+    outline: none;
+}
+
+.jumpInput:focus {
+    border-color: rgba(20, 241, 149, 0.45);
+}
+
+.toolbarButton,
+.iconButton {
+    height: 34px;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--foreground);
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.toolbarButton {
+    padding: 0 10px;
+    font-size: 0.8rem;
+}
+
+.iconButton {
+    width: 34px;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.toolbarButton:hover,
+.iconButton:hover {
+    border-color: rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.11);
+}
+
+.mobileSelectionPill {
+    display: none;
+}
+
 .spinner {
     width: 40px;
     height: 40px;
@@ -168,5 +231,51 @@
     .container {
         height: calc(100vh - 64px);
         margin-top: 64px;
+    }
+
+    .gridToolbar {
+        left: 10px;
+        right: 10px;
+        top: 10px;
+        justify-content: center;
+        gap: 5px;
+        padding: 5px;
+    }
+
+    .jumpInput {
+        flex: 1;
+        min-width: 0;
+        max-width: 112px;
+    }
+
+    .toolbarButton {
+        padding: 0 8px;
+    }
+
+    .mobileSelectionPill {
+        position: absolute;
+        left: 50%;
+        bottom: 152px;
+        transform: translateX(-50%);
+        z-index: 23;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        max-width: calc(100vw - 24px);
+        border: 1px solid var(--border-soft);
+        border-radius: 999px;
+        background: rgba(10, 10, 10, 0.84);
+        color: var(--foreground);
+        padding: 7px 11px;
+        box-shadow: var(--shadow-soft);
+    }
+
+    .mobileSelectionPill span {
+        font-weight: 750;
+    }
+
+    .mobileSelectionPill small {
+        color: var(--text-tertiary);
+        white-space: nowrap;
     }
 }

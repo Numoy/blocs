@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useProgram } from "@/context/ProgramContext";
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -8,6 +9,7 @@ import { toSafeExternalUrl } from "@/utils/url";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
 import { parseGridBlockId } from "@/utils/numberParsing";
+import { BlockActivity } from "@/components/block/BlockActivity";
 import styles from "./BlockClient.module.css";
 
 export default function BlockClient() {
@@ -66,6 +68,7 @@ export default function BlockClient() {
     const block = id >= 0 && id < blocks.length ? blocks[id] : undefined;
     const safeBlockUrl = toSafeExternalUrl(block?.url);
     const safeBlockImageUrl = toSafeExternalUrl(block?.imageUrl);
+    const [buyStatus, setBuyStatus] = useState<"idle" | "wallet" | "submitting" | "confirmed">("idle");
 
     useEffect(() => {
         if (isLoading || !block) {
@@ -165,9 +168,13 @@ export default function BlockClient() {
                     <div className={styles.footer}>
                         <div>
                             <div className={styles.metaLabel}>Owner</div>
-                            <div className={styles.ownerValue}>
-                                {block.owner ? `${block.owner.slice(0, 4)}...${block.owner.slice(-4)}` : 'Unclaimed'}
-                            </div>
+                            {block.owner ? (
+                                <Link href={`/owner/${block.owner}`} className={styles.ownerValue}>
+                                    {block.owner.slice(0, 4)}...{block.owner.slice(-4)}
+                                </Link>
+                            ) : (
+                                <div className={styles.ownerValue}>Unclaimed</div>
+                            )}
                         </div>
 
                         {block.isForSale ? (
@@ -180,6 +187,8 @@ export default function BlockClient() {
                         )}
                     </div>
 
+                    <BlockActivity block={block} />
+
                     {block.isForSale && (
                         <button
                             onClick={async () => {
@@ -190,15 +199,18 @@ export default function BlockClient() {
                                     price_sol: block.price || 0,
                                 });
                                 if (!publicKey) {
+                                    setBuyStatus("wallet");
                                     openWalletModal("block_detail_buy");
                                     return;
                                 }
                                 if (isBuying) {
                                     return;
                                 }
+                                setBuyStatus("submitting");
                                 setIsBuying(true);
                                 try {
                                     await buyBlock(block.id, block.price || 0, "block_detail");
+                                    setBuyStatus("confirmed");
                                 } catch (error) {
                                     trackPlausibleEvent("buy_flow_failed", {
                                         block_id: block.id,
@@ -206,6 +218,7 @@ export default function BlockClient() {
                                         error_category: toErrorCategory(error),
                                     });
                                     // buyBlock already handles user-facing errors via toasts.
+                                    setBuyStatus("idle");
                                 } finally {
                                     setIsBuying(false);
                                 }
@@ -213,8 +226,15 @@ export default function BlockClient() {
                             className={`${styles.buyButton} uiButton uiButtonPrimary`}
                             disabled={isBuying}
                         >
-                            {isBuying ? "Processing..." : "Buy Now"}
+                            {isBuying ? "Confirming..." : "Buy Now"}
                         </button>
+                    )}
+                    {buyStatus !== "idle" && (
+                        <div className={styles.buyStatus}>
+                            {buyStatus === "wallet" && "Connect a wallet to continue."}
+                            {buyStatus === "submitting" && "Waiting for wallet confirmation and Solana finality."}
+                            {buyStatus === "confirmed" && "Purchase confirmed."}
+                        </div>
                     )}
                 </div>
             </article>

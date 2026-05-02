@@ -166,14 +166,14 @@ export const Header = () => {
                                                 onClick={handleCopyAddress}
                                                 role="menuitem"
                                             >
-                                                📋 Copy Address
+                                                Copy Address
                                             </button>
                                             <button
                                                 className={styles.dropdownItem}
                                                 onClick={handleFundWallet}
                                                 role="menuitem"
                                             >
-                                                💰 Fund Wallet
+                                                Fund Wallet
                                             </button>
                                             {isEmbeddedWallet && (
                                                 <button
@@ -181,7 +181,7 @@ export const Header = () => {
                                                     onClick={handleExportWallet}
                                                     role="menuitem"
                                                 >
-                                                    🔑 Export Wallet
+                                                    Export Wallet
                                                 </button>
                                             )}
                                             <div className={styles.dropdownDivider} />
