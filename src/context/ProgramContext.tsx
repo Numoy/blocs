@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { usePrivy } from "@privy-io/react-auth";
-import { useFundWallet, useWallets as usePrivySolanaWallets } from "@privy-io/react-auth/solana";
+import { useFundWallet } from "@privy-io/react-auth/solana";
 import { AnchorProvider, Idl, Program } from "@coral-xyz/anchor";
 import { PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "@/utils/idl.json";
@@ -26,13 +26,29 @@ export type { BuySource, WalletModalSource };
 export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const { sendTransaction, publicKey, connected } = useWallet();
+    const { sendTransaction, signTransaction, publicKey, connected, wallet: adapterWalletState } = useWallet();
     const { setVisible: setWalletModalVisible } = useWalletModal();
     const { login, authenticated } = usePrivy();
     const { fundWallet } = useFundWallet();
     const [isConnectWalletModalOpen, setIsConnectWalletModalOpen] = useState(false);
 
     const walletAddress = publicKey?.toBase58();
+
+    // The Privy embedded wallet's standard-wallet `signAndSendTransaction` sends
+    // via Privy's own RPC and fails with "Failed to connect to wallet".
+    // Detect Privy's adapter and sign separately, then send via our Helius connection.
+    const isPrivyEmbedded = adapterWalletState?.adapter.name.toLowerCase().includes("privy") ?? false;
+
+    const effectiveSendTransaction: typeof sendTransaction = useCallback(
+        async (transaction, conn, options) => {
+            if (isPrivyEmbedded && signTransaction) {
+                const signed = await signTransaction(transaction as Transaction);
+                return conn.sendRawTransaction(signed.serialize(), options);
+            }
+            return sendTransaction(transaction, conn, options);
+        },
+        [isPrivyEmbedded, signTransaction, sendTransaction],
+    );
 
     const providerWallet = useMemo(() => (
         wallet || {
@@ -77,7 +93,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         connected,
         publicKey,
         wallet: wallet ?? null,
-        sendTransaction,
+        sendTransaction: effectiveSendTransaction,
         connection,
         program,
         blocks,
