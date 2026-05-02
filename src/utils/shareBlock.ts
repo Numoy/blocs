@@ -7,7 +7,6 @@ export async function shareBlock(blockId: number, source: string): Promise<void>
         if (navigator.share) {
             await navigator.share({
                 title: `Block #${blockId} on Blocs`,
-                text: "Check out this block on the Blocs grid.",
                 url,
             });
             trackPlausibleEvent("share_block_link_clicked", {

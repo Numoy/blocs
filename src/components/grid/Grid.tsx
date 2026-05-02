@@ -564,6 +564,7 @@ export const Grid = () => {
                         <MosaicPreview
                             alt={`Mosaic containing block ${hoveredBlock.id}`}
                             metadata={hoveredMosaicMetadata}
+                            variant="hover"
                         />
                     ) : (
                         // eslint-disable-next-line @next/next/no-img-element

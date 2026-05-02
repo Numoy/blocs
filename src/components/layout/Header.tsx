@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import Link from "next/link";
 import { usePrivy } from "@privy-io/react-auth";
 import { useExportWallet, useFundWallet } from "@privy-io/react-auth/solana";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -126,7 +127,9 @@ export const Header = () => {
     return (
         <>
             <header className={styles.header}>
-                <div className={styles.logo}>10,000 Blocks</div>
+                <Link href="/" className={styles.logo} aria-label="Go to grid">
+                    10,000 Blocks
+                </Link>
 
                 <div className={styles.marketStats}>
                     {isLoading ? (

@@ -21,4 +21,15 @@
 
 .large {
     border-radius: 0;
+    object-fit: contain;
+}
+
+.large img {
+    object-fit: contain;
+    background: #121212;
+}
+
+.hover {
+    max-width: 190px;
+    max-height: 190px;
 }

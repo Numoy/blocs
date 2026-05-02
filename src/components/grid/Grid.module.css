@@ -64,7 +64,9 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    min-width: 200px;
+    width: min-content;
+    min-width: 180px;
+    max-width: 220px;
     box-shadow: var(--shadow-soft);
     backdrop-filter: blur(10px);
     animation: fadeIn 0.1s ease-out;
@@ -89,6 +91,7 @@
 .cardText {
     font-size: 0.8rem;
     color: var(--text-secondary);
+    max-width: 190px;
 }
 
 .cardUrl {
