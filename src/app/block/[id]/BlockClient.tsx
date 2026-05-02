@@ -10,6 +10,8 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { toErrorCategory, trackPlausibleEvent } from "@/utils/analytics";
 import { parseGridBlockId } from "@/utils/numberParsing";
 import { BlockActivity } from "@/components/block/BlockActivity";
+import { MosaicPreview } from "@/components/mosaic/MosaicPreview";
+import { parseMosaicImageUrl } from "@/utils/mosaicImage";
 import styles from "./BlockClient.module.css";
 
 export default function BlockClient() {
@@ -68,6 +70,7 @@ export default function BlockClient() {
     const block = id >= 0 && id < blocks.length ? blocks[id] : undefined;
     const safeBlockUrl = toSafeExternalUrl(block?.url);
     const safeBlockImageUrl = toSafeExternalUrl(block?.imageUrl);
+    const mosaicMetadata = parseMosaicImageUrl(safeBlockImageUrl);
     const [buyStatus, setBuyStatus] = useState<"idle" | "wallet" | "submitting" | "confirmed">("idle");
 
     useEffect(() => {
@@ -130,7 +133,13 @@ export default function BlockClient() {
 
             <article className={`${styles.card} uiCard`}>
                 <div className={styles.media} style={{ backgroundColor: safeBlockImageUrl ? 'transparent' : '#222' }}>
-                    {safeBlockImageUrl ? (
+                    {mosaicMetadata ? (
+                        <MosaicPreview
+                            alt={`Mosaic containing block ${id}`}
+                            metadata={mosaicMetadata}
+                            variant="large"
+                        />
+                    ) : safeBlockImageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                             src={safeBlockImageUrl}

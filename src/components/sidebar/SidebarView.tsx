@@ -7,6 +7,8 @@ import { trackPlausibleEvent } from '@/utils/analytics';
 import { toSafeExternalUrl } from '@/utils/url';
 import { shareBlock } from '@/utils/shareBlock';
 import { BlockActivity } from '@/components/block/BlockActivity';
+import { MosaicPreview } from '@/components/mosaic/MosaicPreview';
+import { parseMosaicImageUrl } from '@/utils/mosaicImage';
 import { BlockData } from '@/types';
 import styles from './Sidebar.module.css';
 
@@ -30,6 +32,7 @@ export const SidebarView = ({
 
     const safeBlockUrl = toSafeExternalUrl(block.url);
     const safeBlockImageUrl = toSafeExternalUrl(block.imageUrl);
+    const mosaicMetadata = parseMosaicImageUrl(safeBlockImageUrl);
 
     const handleShare = () => shareBlock(block.id, "sidebar");
 
@@ -52,12 +55,19 @@ export const SidebarView = ({
         <>
             {safeBlockImageUrl && (
                 <div className={`${styles.section} ${styles.imagePadless}`}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src={safeBlockImageUrl}
-                        alt={`Block ${block.id}`}
-                        className={styles.image}
-                    />
+                    {mosaicMetadata ? (
+                        <MosaicPreview
+                            alt={`Mosaic containing block ${block.id}`}
+                            metadata={mosaicMetadata}
+                        />
+                    ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                            src={safeBlockImageUrl}
+                            alt={`Block ${block.id}`}
+                            className={styles.image}
+                        />
+                    )}
                 </div>
             )}
 

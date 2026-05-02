@@ -81,6 +81,29 @@
     min-width: 220px;
 }
 
+.createMosaicButton {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid rgba(20, 241, 149, 0.32);
+    border-radius: var(--radius-sm);
+    background: rgba(20, 241, 149, 0.12);
+    color: var(--accent-secondary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.createMosaicButton:hover {
+    border-color: rgba(20, 241, 149, 0.5);
+    background: rgba(20, 241, 149, 0.18);
+}
+
+.createMosaicButton:focus-visible {
+    outline: 2px solid var(--accent-secondary);
+    outline-offset: 2px;
+}
+
 .item {
     display: flex;
     align-items: center;

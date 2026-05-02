@@ -182,13 +182,21 @@ const formString = (value: FormDataEntryValue | null): string | null => (
 const putPublicImage = async ({
     blockId,
     buffer,
+    groupId,
+    height,
+    index,
     owner,
+    width,
 }: {
     blockId: number;
     buffer: Buffer;
+    groupId: string;
+    height: number;
+    index: number;
     owner: string;
+    width: number;
 }): Promise<string> => {
-    const filename = `mosaic_${blockId}_${owner.slice(0, 8)}_${Date.now()}_${randomUUID().slice(0, 8)}.webp`;
+    const filename = `mosaic_${groupId}_${width}x${height}_${index}_${blockId}.webp`;
     const basePutObjectParams = {
         Bucket: getBucketName(),
         Key: filename,
@@ -340,6 +348,7 @@ export async function POST(request: Request) {
         .webp({ quality: 84 })
         .toBuffer();
 
+    const groupId = `${Date.now()}-${randomUUID().slice(0, 8)}`;
     const slices: Array<{ blockId: number; url: string }> = [];
     for (let index = 0; index < blockIds.length; index += 1) {
         const col = index % width;
@@ -353,7 +362,15 @@ export async function POST(request: Request) {
             })
             .webp({ quality: 84 })
             .toBuffer();
-        const url = await putPublicImage({ blockId: blockIds[index], buffer: sliceBuffer, owner });
+        const url = await putPublicImage({
+            blockId: blockIds[index],
+            buffer: sliceBuffer,
+            groupId,
+            height,
+            index,
+            owner,
+            width,
+        });
         slices.push({ blockId: blockIds[index], url });
     }
 

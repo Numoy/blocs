@@ -199,11 +199,6 @@
     opacity: 0.45;
 }
 
-.toolbarButtonActive {
-    border-color: rgba(20, 241, 149, 0.45);
-    color: var(--accent-secondary);
-}
-
 .mosaicPanel {
     position: absolute;
     top: 70px;

@@ -8,6 +8,7 @@ interface MyBlocksListProps {
     blocks: BlockData[];
     onSelectBlock: (block: BlockData) => void;
     isWalletConnected?: boolean;
+    onCreateMosaic?: () => void;
     title?: string;
     onClear?: () => void;
 }
@@ -16,6 +17,7 @@ export const MyBlocksList = ({
     blocks,
     onSelectBlock,
     isWalletConnected,
+    onCreateMosaic,
     title,
     onClear,
 }: MyBlocksListProps) => {
@@ -58,6 +60,14 @@ export const MyBlocksList = ({
 
             {isOpen && blocks.length > 0 && (
                 <div className={styles.list}>
+                    {onCreateMosaic && (
+                        <button
+                            className={styles.createMosaicButton}
+                            onClick={onCreateMosaic}
+                        >
+                            Create Mosaic
+                        </button>
+                    )}
                     {blocks.map(block => {
                         const safeImageUrl = toSafeExternalUrl(block.imageUrl);
                         return (

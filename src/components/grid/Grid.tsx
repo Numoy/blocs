@@ -18,6 +18,7 @@ import { useGridInteraction } from './useGridInteraction';
 import { MyBlocksList } from './MyBlocksList';
 import { MobileBlockSheet } from './MobileBlockSheet';
 import { MosaicEditorModal } from '@/components/mosaic/MosaicEditorModal';
+import { MosaicPreview } from '@/components/mosaic/MosaicPreview';
 import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
 import { OnboardingModal } from "@/components/modals/OnboardingModal";
 import { GRID_WIDTH, GRID_SIZE, CANVAS_RES, CANVAS_MARGIN, BLOCK_SIZE } from '@/utils/constants';
@@ -26,6 +27,7 @@ import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
 import { shareBlock } from '@/utils/shareBlock';
 import { parseGridBlockId } from '@/utils/numberParsing';
 import { buildMosaicSelection, validateMosaicSelection } from '@/utils/mosaic';
+import { parseMosaicImageUrl } from '@/utils/mosaicImage';
 
 export const Grid = () => {
     const { blocks, buyBlock, isLoading, isSyncing, openWalletModal } = useProgram();
@@ -247,6 +249,7 @@ export const Grid = () => {
     });
 
     const safeHoveredImageUrl = toSafeExternalUrl(hoveredBlock?.imageUrl);
+    const hoveredMosaicMetadata = parseMosaicImageUrl(safeHoveredImageUrl);
     const selectedIsOwner = Boolean(publicKey && selectedBlock && selectedBlock.owner === publicKey.toBase58());
     const showDesktopSidebar = Boolean(selectedBlock) && (!isMobileViewport || sidebarMode === 'edit');
     const showMobileSheet = Boolean(selectedBlock) && isMobileViewport && sidebarMode === 'view';
@@ -425,20 +428,6 @@ export const Grid = () => {
                 >
                     Reset
                 </button>
-                <button
-                    type="button"
-                    className={`${styles.toolbarButton} ${isMosaicMode ? styles.toolbarButtonActive : ""}`}
-                    onClick={() => {
-                        if (!publicKey) {
-                            openWalletModal("unknown");
-                            return;
-                        }
-                        setIsMosaicMode((current) => !current);
-                        resetMosaicSelection();
-                    }}
-                >
-                    Mosaic
-                </button>
             </form>
 
             {isMosaicMode && (
@@ -571,8 +560,15 @@ export const Grid = () => {
                     }}
                 >
                     <div className={styles.cardTitle}>Block #{hoveredBlock.id}</div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {safeHoveredImageUrl && <img src={safeHoveredImageUrl} alt="" className={styles.cardImage} />}
+                    {hoveredMosaicMetadata ? (
+                        <MosaicPreview
+                            alt={`Mosaic containing block ${hoveredBlock.id}`}
+                            metadata={hoveredMosaicMetadata}
+                        />
+                    ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        safeHoveredImageUrl && <img src={safeHoveredImageUrl} alt="" className={styles.cardImage} />
+                    )}
                     {hoveredBlock.text && <div className={styles.cardText}>{hoveredBlock.text}</div>}
                     {hoveredBlock.url && <div className={styles.cardUrl}>{hoveredBlock.url}</div>}
                     {hoveredBlock.isForSale && <div className={styles.cardPrice}>For Sale: {hoveredBlock.price} SOL</div>}
@@ -628,6 +624,14 @@ export const Grid = () => {
             <MyBlocksList
                 blocks={ownedBlocks}
                 isWalletConnected={Boolean(publicKey)}
+                onCreateMosaic={() => {
+                    if (!publicKey) {
+                        openWalletModal("unknown");
+                        return;
+                    }
+                    setIsMosaicMode(true);
+                    resetMosaicSelection();
+                }}
                 onSelectBlock={(block) => {
                     trackPlausibleEvent("owned_block_selected", {
                         block_id: block.id,
