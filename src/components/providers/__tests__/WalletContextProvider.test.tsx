@@ -25,6 +25,7 @@ vi.mock('@privy-io/react-auth', () => ({
 vi.mock('@privy-io/react-auth/solana', () => ({
     toSolanaWalletConnectors: () => 'mock-solana-connectors',
     useStandardWallets: mockUseStandardWallets,
+    defaultSolanaRpcsPlugin: () => ({ id: 'mock-solana-rpcs-plugin' }),
 }));
 
 vi.mock('@wallet-standard/app', () => ({

@@ -2,7 +2,7 @@
 
 import { FC, ReactNode, useEffect, useMemo } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
-import { toSolanaWalletConnectors, useStandardWallets, type SolanaStandardWallet } from "@privy-io/react-auth/solana";
+import { toSolanaWalletConnectors, useStandardWallets, defaultSolanaRpcsPlugin, type SolanaStandardWallet } from "@privy-io/react-auth/solana";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { getWallets } from "@wallet-standard/app";
@@ -77,6 +77,7 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
                         connectors: solanaConnectors,
                     },
                 },
+                plugins: [defaultSolanaRpcsPlugin()],
             }}
         >
             <SolanaWalletProviderStack endpoint={endpoint}>
