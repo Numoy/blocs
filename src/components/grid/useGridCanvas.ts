@@ -10,10 +10,18 @@ interface UseGridCanvasProps {
     blocks: BlockData[];
     visibleBounds: VisibleBounds;
     hoveredBlockId: number | null;
+    mosaicBlockIds?: number[];
     selectedBlockId: number | null;
 }
 
-export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, hoveredBlockId, selectedBlockId }: UseGridCanvasProps) => {
+export const useGridCanvas = ({
+    canvasRef,
+    blocks,
+    visibleBounds,
+    hoveredBlockId,
+    mosaicBlockIds = [],
+    selectedBlockId,
+}: UseGridCanvasProps) => {
     const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
     const animationFrameRef = useRef<number | null>(null);
     const MAX_IMAGE_CACHE_SIZE = 2000;
@@ -98,6 +106,20 @@ export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, hoveredBlockId
             }
 
             // --- Selection highlight ---
+            if (mosaicBlockIds.length > 0) {
+                ctx.fillStyle = 'rgba(20, 241, 149, 0.18)';
+                ctx.strokeStyle = 'rgba(20, 241, 149, 0.8)';
+                ctx.lineWidth = 2;
+                for (const blockId of mosaicBlockIds) {
+                    const col = blockId % GRID_WIDTH;
+                    const row = Math.floor(blockId / GRID_WIDTH);
+                    const x = col * BLOCK_SIZE;
+                    const y = row * BLOCK_SIZE;
+                    ctx.fillRect(x + 2, y + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
+                    ctx.strokeRect(x + 2, y + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
+                }
+            }
+
             if (selectedBlockId !== null) {
                 const sCol = selectedBlockId % GRID_WIDTH;
                 const sRow = Math.floor(selectedBlockId / GRID_WIDTH);
@@ -115,7 +137,7 @@ export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, hoveredBlockId
                 animationFrameRef.current = null;
             }
         };
-    }, [blocks, visibleBounds, CANVAS_RES, canvasRef, hoveredBlockId, selectedBlockId]);
+    }, [blocks, visibleBounds, CANVAS_RES, canvasRef, hoveredBlockId, mosaicBlockIds, selectedBlockId]);
 
     useEffect(() => {
         const cache = imageCache.current;

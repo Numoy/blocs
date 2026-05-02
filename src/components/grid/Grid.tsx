@@ -17,6 +17,7 @@ import { useGridCanvas } from './useGridCanvas';
 import { useGridInteraction } from './useGridInteraction';
 import { MyBlocksList } from './MyBlocksList';
 import { MobileBlockSheet } from './MobileBlockSheet';
+import { MosaicEditorModal } from '@/components/mosaic/MosaicEditorModal';
 import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
 import { OnboardingModal } from "@/components/modals/OnboardingModal";
 import { GRID_WIDTH, GRID_SIZE, CANVAS_RES, CANVAS_MARGIN, BLOCK_SIZE } from '@/utils/constants';
@@ -24,6 +25,7 @@ import { toSafeExternalUrl } from '@/utils/url';
 import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
 import { shareBlock } from '@/utils/shareBlock';
 import { parseGridBlockId } from '@/utils/numberParsing';
+import { buildMosaicSelection, validateMosaicSelection } from '@/utils/mosaic';
 
 export const Grid = () => {
     const { blocks, buyBlock, isLoading, isSyncing, openWalletModal } = useProgram();
@@ -36,6 +38,11 @@ export const Grid = () => {
     const [isMobileBuying, setIsMobileBuying] = useState(false);
     const [viewingOwner, setViewingOwner] = useState<string | null>(null);
     const [jumpBlockInput, setJumpBlockInput] = useState("");
+    const [isMosaicMode, setIsMosaicMode] = useState(false);
+    const [mosaicStartId, setMosaicStartId] = useState<number | null>(null);
+    const [mosaicEndId, setMosaicEndId] = useState<number | null>(null);
+    const [mosaicHoverId, setMosaicHoverId] = useState<number | null>(null);
+    const [isMosaicEditorOpen, setIsMosaicEditorOpen] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(() =>
         typeof window !== 'undefined' && !localStorage.getItem('blocs_has_visited')
     );
@@ -151,6 +158,67 @@ export const Grid = () => {
         onBlockSelect: zoomToBlock,
     });
 
+    const getBlockIdFromCanvasEvent = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = rect.width / CANVAS_RES;
+        const scaleY = rect.height / CANVAS_RES;
+        const canvasX = (event.clientX - rect.left) / scaleX;
+        const canvasY = (event.clientY - rect.top) / scaleY;
+        const col = Math.floor(canvasX / BLOCK_SIZE);
+        const row = Math.floor(canvasY / BLOCK_SIZE);
+        if (col < 0 || col >= GRID_WIDTH || row < 0 || row >= GRID_WIDTH) return null;
+        return row * GRID_WIDTH + col;
+    }, []);
+
+    const mosaicSelection = useMemo(() => {
+        if (mosaicStartId === null) return null;
+        return buildMosaicSelection(mosaicStartId, mosaicEndId ?? mosaicHoverId ?? mosaicStartId);
+    }, [mosaicEndId, mosaicHoverId, mosaicStartId]);
+
+    const mosaicValidation = useMemo(() => (
+        validateMosaicSelection(mosaicSelection, blocks, publicKey?.toBase58())
+    ), [blocks, mosaicSelection, publicKey]);
+
+    const resetMosaicSelection = useCallback(() => {
+        setMosaicStartId(null);
+        setMosaicEndId(null);
+        setMosaicHoverId(null);
+    }, []);
+
+    const closeMosaicMode = useCallback(() => {
+        setIsMosaicMode(false);
+        resetMosaicSelection();
+    }, [resetMosaicSelection]);
+
+    const handleMosaicCanvasClick = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const blockId = getBlockIdFromCanvasEvent(event);
+        if (blockId === null) return;
+
+        if (mosaicStartId === null || mosaicEndId !== null) {
+            setMosaicStartId(blockId);
+            setMosaicEndId(null);
+            setMosaicHoverId(blockId);
+            trackPlausibleEvent("mosaic_selection_started", { block_id: blockId });
+            return;
+        }
+
+        setMosaicEndId(blockId);
+        trackPlausibleEvent("mosaic_selection_changed", {
+            block_count: buildMosaicSelection(mosaicStartId, blockId)?.blockIds.length ?? 0,
+        });
+    }, [getBlockIdFromCanvasEvent, mosaicEndId, mosaicStartId]);
+
+    const handleMosaicMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!isMosaicMode || mosaicStartId === null || mosaicEndId !== null) {
+            return;
+        }
+        setMosaicHoverId(getBlockIdFromCanvasEvent(event));
+    }, [getBlockIdFromCanvasEvent, isMosaicMode, mosaicEndId, mosaicStartId]);
+
     const handleJumpToBlock = useCallback((event?: FormEvent<HTMLFormElement>) => {
         event?.preventDefault();
         const id = parseGridBlockId(jumpBlockInput);
@@ -174,6 +242,7 @@ export const Grid = () => {
         blocks,
         visibleBounds,
         hoveredBlockId: isMobileViewport ? null : hoveredBlockId,
+        mosaicBlockIds: isMosaicMode ? mosaicSelection?.blockIds : undefined,
         selectedBlockId: selectedBlock?.id ?? null,
     });
 
@@ -356,7 +425,53 @@ export const Grid = () => {
                 >
                     Reset
                 </button>
+                <button
+                    type="button"
+                    className={`${styles.toolbarButton} ${isMosaicMode ? styles.toolbarButtonActive : ""}`}
+                    onClick={() => {
+                        if (!publicKey) {
+                            openWalletModal("unknown");
+                            return;
+                        }
+                        setIsMosaicMode((current) => !current);
+                        resetMosaicSelection();
+                    }}
+                >
+                    Mosaic
+                </button>
             </form>
+
+            {isMosaicMode && (
+                <div className={styles.mosaicPanel}>
+                    <div>
+                        <strong>Mosaic mode</strong>
+                        <span>
+                            {mosaicSelection
+                                ? `${mosaicSelection.width} x ${mosaicSelection.height}, ${mosaicSelection.blockIds.length} blocks`
+                                : "Click a start block, then an end block."}
+                        </span>
+                        {mosaicValidation.invalidReason && mosaicSelection && (
+                            <small>{mosaicValidation.invalidReason}</small>
+                        )}
+                    </div>
+                    <div className={styles.mosaicActions}>
+                        <button
+                            type="button"
+                            className={styles.toolbarButton}
+                            disabled={!mosaicSelection || !mosaicValidation.isValid}
+                            onClick={() => setIsMosaicEditorOpen(true)}
+                        >
+                            Edit
+                        </button>
+                        <button type="button" className={styles.toolbarButton} onClick={resetMosaicSelection}>
+                            Clear
+                        </button>
+                        <button type="button" className={styles.toolbarButton} onClick={closeMosaicMode}>
+                            Done
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {selectedBlock && isMobileViewport && (
                 <div className={styles.mobileSelectionPill}>
@@ -405,7 +520,15 @@ export const Grid = () => {
                                 imageRendering: currentScale >= HIGH_RES_THRESHOLD ? 'pixelated' : 'auto',
                             }}
                             onClick={handleCanvasClick}
-                            onMouseMove={handleMouseMove}
+                            onMouseDown={isMosaicMode ? (event) => event.stopPropagation() : undefined}
+                            onClickCapture={isMosaicMode ? handleMosaicCanvasClick : undefined}
+                            onMouseMove={(event) => {
+                                if (isMosaicMode) {
+                                    handleMosaicMouseMove(event);
+                                    return;
+                                }
+                                handleMouseMove(event);
+                            }}
                             onMouseLeave={handleMouseLeave}
                             tabIndex={0}
                             aria-label="Interactive block grid. Use mouse to pan/zoom, or click a block to view details."
@@ -533,6 +656,14 @@ export const Grid = () => {
             )}
 
             <OnboardingModal isOpen={showOnboarding} onClose={handleCloseOnboarding} />
+            <MosaicEditorModal
+                isOpen={isMosaicEditorOpen}
+                onClose={() => {
+                    setIsMosaicEditorOpen(false);
+                    closeMosaicMode();
+                }}
+                selection={mosaicValidation.isValid ? mosaicSelection : null}
+            />
         </div>
     );
 };

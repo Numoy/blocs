@@ -89,7 +89,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         } catch { /* user cancelled, ignore */ }
     }, [fundWallet, walletAddress, login]);
 
-    const { buyBlock, updateBlock, sellBlock } = useBlockActions({
+    const { buyBlock, updateBlock, updateBlocks, sellBlock } = useBlockActions({
         connected,
         publicKey,
         wallet: wallet ?? null,
@@ -145,6 +145,7 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 blocks,
                 buyBlock,
                 updateBlock,
+                updateBlocks,
                 sellBlock,
                 refreshBlock,
                 isLoading,

@@ -17,6 +17,9 @@ import {
     PRICE_EPSILON_SOL,
     TRANSACTION_CONFIRM_POLL_INTERVAL_MS,
     TRANSACTION_CONFIRM_TIMEOUT_MS,
+    type BatchBlockUpdate,
+    type BatchBlockUpdateOptions,
+    type BatchBlockUpdateResult,
     type BuySource,
 } from "@/context/program/shared";
 import { asBlocsProgram } from "@/utils/programTypes";
@@ -53,6 +56,7 @@ type UseBlockActionsOptions = {
 type UseBlockActionsResult = {
     buyBlock: (id: number, price: number, source?: BuySource) => Promise<void>;
     updateBlock: (id: number, text: string, imageUrl: string, url: string) => Promise<void>;
+    updateBlocks: (updates: BatchBlockUpdate[], options?: BatchBlockUpdateOptions) => Promise<BatchBlockUpdateResult>;
     sellBlock: (id: number, priceInput: string) => Promise<void>;
 };
 
@@ -476,6 +480,132 @@ export const useBlockActions = ({
         }
     }, [connected, connection, program, queueGridSync, refreshBlockById, sendTransaction, updateBlockInState, wallet]);
 
+    const updateBlocks = useCallback(async (
+        updates: BatchBlockUpdate[],
+        options: BatchBlockUpdateOptions = {},
+    ): Promise<BatchBlockUpdateResult> => {
+        if (!connected || !wallet) {
+            trackPlausibleEvent("batch_update_blocks_wallet_missing", {
+                block_count: updates.length,
+            });
+            toast.error("Connect wallet first");
+            throw new Error("Wallet not connected");
+        }
+
+        const failed: BatchBlockUpdateResult["failed"] = [];
+        const succeeded: number[] = [];
+
+        trackPlausibleEvent("batch_update_blocks_started", {
+            block_count: updates.length,
+        });
+
+        for (const update of updates) {
+            const existing = blocks.find((block) => block.id === update.id);
+            if (!existing || existing.owner !== wallet.publicKey.toBase58()) {
+                failed.push({ blockId: update.id, message: "Block is not owned by your wallet." });
+                options.onProgress?.({
+                    blockId: update.id,
+                    completed: succeeded.length,
+                    failed: failed.length,
+                    total: updates.length,
+                });
+                continue;
+            }
+
+            const safeImageUrl = update.imageUrl.trim() ? toSafeExternalUrl(update.imageUrl) : "";
+            const safeUrl = update.url.trim() ? toSafeExternalUrl(update.url) : "";
+            if (!safeImageUrl || (update.url.trim() && !safeUrl)) {
+                failed.push({ blockId: update.id, message: "Generated metadata was invalid." });
+                options.onProgress?.({
+                    blockId: update.id,
+                    completed: succeeded.length,
+                    failed: failed.length,
+                    total: updates.length,
+                });
+                continue;
+            }
+
+            try {
+                const blockPda = deriveBlockPda(update.id, program.programId);
+                const text = existing.text || "";
+                const ix = await program.methods.updateBlock(update.id, text, safeImageUrl, safeUrl || "")
+                    .accounts({
+                        block: blockPda,
+                        owner: wallet.publicKey,
+                    })
+                    .instruction();
+
+                const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+                const transaction = new Transaction({
+                    feePayer: wallet.publicKey,
+                    blockhash,
+                    lastValidBlockHeight,
+                }).add(ix);
+
+                const signature = await sendTransaction(transaction, connection, {
+                    skipPreflight: false,
+                    maxRetries: 3,
+                });
+
+                updateBlockInState(update.id, (current) => ({
+                    ...current,
+                    imageUrl: safeImageUrl,
+                    url: safeUrl || "",
+                }));
+
+                await confirmTransactionByPolling({
+                    connection,
+                    signature,
+                    lastValidBlockHeight,
+                });
+                succeeded.push(update.id);
+                try {
+                    await refreshBlockById(update.id);
+                } catch (refreshError) {
+                    console.error(`Failed to refresh block #${update.id} after batch update:`, refreshError);
+                }
+            } catch (error) {
+                console.error(`Batch update failed for block #${update.id}:`, error);
+                failed.push({
+                    blockId: update.id,
+                    message: (error as Error).message || "Update failed.",
+                });
+            } finally {
+                options.onProgress?.({
+                    blockId: update.id,
+                    completed: succeeded.length,
+                    failed: failed.length,
+                    total: updates.length,
+                });
+            }
+        }
+
+        if (failed.length > 0) {
+            trackPlausibleEvent("batch_update_blocks_partial_failed", {
+                block_count: updates.length,
+                failed_count: failed.length,
+                succeeded_count: succeeded.length,
+            });
+        } else {
+            trackPlausibleEvent("batch_update_blocks_succeeded", {
+                block_count: updates.length,
+            });
+        }
+        queueGridSync(EVENTUAL_GRID_SYNC_DELAY_MS);
+
+        return { failed, succeeded };
+    }, [
+        blocks,
+        connected,
+        connection,
+        program,
+        queueGridSync,
+        refreshBlockById,
+        sendTransaction,
+        updateBlockInState,
+        wallet,
+    ]);
+
     const sellBlock = useCallback(async (id: number, priceInput: string) => {
         if (!connected || !wallet) {
             trackPlausibleEvent("set_sale_wallet_missing", { block_id: id });
@@ -562,6 +692,7 @@ export const useBlockActions = ({
     return {
         buyBlock,
         updateBlock,
+        updateBlocks,
         sellBlock,
     };
 };

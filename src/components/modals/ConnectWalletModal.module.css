@@ -19,6 +19,7 @@
     background: var(--surface-elevated);
     box-shadow: var(--shadow-soft);
     color: #fff;
+    overflow: hidden;
 }
 
 .closeButton {
@@ -54,6 +55,9 @@
     border-radius: var(--radius-lg);
     padding: 14px 16px;
     font-size: 1rem;
+    background-clip: padding-box;
+    overflow: hidden;
+    transform: translateZ(0);
 }
 
 .secondaryButton {
@@ -63,11 +67,12 @@
 @media (max-width: 480px) {
     .overlay {
         align-items: flex-end;
-        padding: 12px;
+        padding: 12px 16px max(12px, env(safe-area-inset-bottom));
     }
 
     .modal {
-        width: 100%;
+        width: calc(100vw - 32px);
+        max-width: 420px;
         border-radius: var(--radius-xl) var(--radius-xl) var(--radius-lg) var(--radius-lg);
         padding-bottom: 20px;
     }

@@ -1,0 +1,176 @@
+.backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.68);
+    padding: 18px;
+}
+
+.modal {
+    width: min(880px, 100%);
+    max-height: min(760px, calc(100dvh - 36px));
+    overflow: auto;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    background: var(--surface-elevated);
+    color: var(--foreground);
+    box-shadow: var(--shadow-soft);
+}
+
+.header,
+.footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px;
+}
+
+.header {
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.header p {
+    margin: 3px 0 0;
+    color: var(--text-tertiary);
+    font-size: 0.86rem;
+}
+
+.closeButton {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--foreground);
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+    gap: 16px;
+    padding: 16px;
+}
+
+.previewPanel {
+    min-height: 280px;
+}
+
+.previewGrid {
+    display: grid;
+    width: 100%;
+    max-height: 520px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: #111;
+}
+
+.previewTile {
+    position: relative;
+    min-height: 74px;
+    background-repeat: no-repeat;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.previewTile span {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font-size: 0.66rem;
+    padding: 2px 5px;
+}
+
+.emptyPreview {
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--border-soft);
+    border-radius: var(--radius-md);
+    color: var(--text-tertiary);
+    text-align: center;
+    padding: 18px;
+}
+
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.field input {
+    width: 100%;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--foreground);
+    padding: 10px;
+}
+
+.field input[type="file"] {
+    padding: 8px;
+}
+
+.errorText {
+    color: #ff8e8e;
+    font-size: 0.8rem;
+}
+
+.progressBox {
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    padding: 12px;
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+}
+
+.progressBox progress {
+    width: 100%;
+    margin-top: 8px;
+}
+
+.footer {
+    justify-content: flex-end;
+    border-top: 1px solid var(--border-soft);
+    flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+    .backdrop {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .modal {
+        max-height: 92dvh;
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+
+    .body {
+        grid-template-columns: 1fr;
+    }
+}

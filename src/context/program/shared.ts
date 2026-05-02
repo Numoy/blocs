@@ -4,12 +4,35 @@ export interface ProgramContextState {
     blocks: BlockData[];
     buyBlock: (id: number, price: number, source?: BuySource) => Promise<void>;
     updateBlock: (id: number, text: string, imageUrl: string, url: string) => Promise<void>;
+    updateBlocks: (updates: BatchBlockUpdate[], options?: BatchBlockUpdateOptions) => Promise<BatchBlockUpdateResult>;
     sellBlock: (id: number, priceInput: string) => Promise<void>;
     refreshBlock: () => Promise<void>;
     isLoading: boolean;
     isSyncing: boolean;
     openWalletModal: (source?: WalletModalSource) => void;
 }
+
+export type BatchBlockUpdate = {
+    id: number;
+    imageUrl: string;
+    url: string;
+};
+
+export type BatchBlockUpdateProgress = {
+    blockId: number;
+    completed: number;
+    failed: number;
+    total: number;
+};
+
+export type BatchBlockUpdateOptions = {
+    onProgress?: (progress: BatchBlockUpdateProgress) => void;
+};
+
+export type BatchBlockUpdateResult = {
+    failed: Array<{ blockId: number; message: string }>;
+    succeeded: number[];
+};
 
 export type BuySource = "grid_sidebar" | "block_detail" | "mobile_sheet" | "unknown";
 export type WalletModalSource = "sidebar_buy" | "block_detail_buy" | "header_connect" | "unknown";

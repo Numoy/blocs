@@ -194,6 +194,62 @@
     background: rgba(255, 255, 255, 0.11);
 }
 
+.toolbarButton:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.toolbarButtonActive {
+    border-color: rgba(20, 241, 149, 0.45);
+    color: var(--accent-secondary);
+}
+
+.mosaicPanel {
+    position: absolute;
+    top: 70px;
+    left: 16px;
+    z-index: 24;
+    width: min(360px, calc(100vw - 32px));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md);
+    background: rgba(12, 12, 12, 0.9);
+    color: var(--foreground);
+    padding: 10px;
+    box-shadow: var(--shadow-soft);
+}
+
+.mosaicPanel div:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.mosaicPanel strong {
+    font-size: 0.86rem;
+}
+
+.mosaicPanel span,
+.mosaicPanel small {
+    color: var(--text-tertiary);
+    font-size: 0.76rem;
+    line-height: 1.25;
+}
+
+.mosaicPanel small {
+    color: #ffb2b2;
+}
+
+.mosaicActions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
 .mobileSelectionPill {
     display: none;
 }
@@ -250,6 +306,15 @@
 
     .toolbarButton {
         padding: 0 8px;
+    }
+
+    .mosaicPanel {
+        top: 58px;
+        left: 10px;
+        right: 10px;
+        width: auto;
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .mobileSelectionPill {
