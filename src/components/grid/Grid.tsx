@@ -536,7 +536,7 @@ export const Grid = () => {
                                     top: row * BLOCK_SIZE + CANVAS_MARGIN,
                                     width: BLOCK_SIZE,
                                     height: BLOCK_SIZE,
-                                    objectFit: 'cover',
+                                    objectFit: 'contain',
                                     pointerEvents: 'none',
                                     userSelect: 'none',
                                 }}
