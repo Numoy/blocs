@@ -50,7 +50,7 @@ type UseBlockActionsOptions = {
     refreshBlockById: (id: number) => Promise<void>;
     queueGridSync: (delayMs?: number) => void;
     updateBlockInState: UpdateBlockInState;
-    onFundWallet: () => void;
+    onFundWallet: (amount?: string) => void;
 };
 
 type UseBlockActionsResult = {
@@ -149,13 +149,16 @@ export const useBlockActions = ({
             throw new Error("Wallet not connected");
         }
 
-        // Quick balance check before attempting — saves a round-trip on empty wallets
+        // Quick balance check before attempting — saves a round-trip on empty wallets.
+        // Minimum = price + rent (~0.004 SOL for the Block PDA) + tx fee. Buffer of 0.005 SOL covers it.
+        const RENT_AND_FEE_BUFFER_SOL = 0.005;
+        const suggestedAmountSol = (Math.ceil((price + RENT_AND_FEE_BUFFER_SOL) * 100) / 100).toString();
+        const MIN_BALANCE_LAMPORTS = Math.ceil((price + RENT_AND_FEE_BUFFER_SOL) * 1_000_000_000);
         const balance = await connection.getBalance(publicKey).catch(() => null);
-        const MIN_BALANCE_LAMPORTS = 5_000_000; // 0.005 SOL (fees + rent buffer)
         if (balance !== null && balance < MIN_BALANCE_LAMPORTS) {
             toast.error("Not enough SOL in your wallet to buy this block.", {
                 duration: 8000,
-                action: { label: "Add SOL", onClick: onFundWallet },
+                action: { label: "Add SOL", onClick: () => onFundWallet(suggestedAmountSol) },
             });
             throw new Error("Insufficient balance");
         }
@@ -350,7 +353,7 @@ export const useBlockActions = ({
                 toast.error("Not enough SOL in your wallet to buy this block.", {
                     id: toastId,
                     duration: 8000,
-                    action: { label: "Add SOL", onClick: onFundWallet },
+                    action: { label: "Add SOL", onClick: () => onFundWallet(suggestedAmountSol) },
                 });
             } else {
                 toast.error("Purchase failed: " + (err.message || "Unknown"), { id: toastId });

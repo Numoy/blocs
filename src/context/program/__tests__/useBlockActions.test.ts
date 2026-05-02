@@ -246,7 +246,8 @@ describe('buyBlock — block not found', () => {
 
 describe('buyBlock — resale price mismatch', () => {
     it('throws and refreshes grid when the stored price differs from the buy price', async () => {
-        const { result, fetchGrid } = buildHook();
+        // Need enough balance to pass the pre-check (price=1.0 + 0.005 buffer = 1.005 SOL)
+        const { result, fetchGrid } = buildHook({ connection: { ...makeMockConnection(), getBalance: vi.fn().mockResolvedValue(2_000_000_000) } as never });
         // resaleBlock is at id=1 with price=2.0; pass stale price 1.0
         await expect(result.current.buyBlock(1, 1.0)).rejects.toThrow('Price changed');
         expect(fetchGrid).toHaveBeenCalled();

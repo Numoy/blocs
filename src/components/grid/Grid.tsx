@@ -97,7 +97,7 @@ export const Grid = () => {
 
     const { visibleBounds, updateVisibility } = useGridVisibility();
     const [currentScale, setCurrentScale] = useState(initialTransform.scale);
-    const HIGH_RES_THRESHOLD = 3;
+    const HIGH_RES_THRESHOLD = 1.5;
 
     // At high zoom, collect visible blocks with images so we can overlay native <img>
     // elements that render at the source image's full resolution instead of the canvas's

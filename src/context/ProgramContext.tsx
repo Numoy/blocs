@@ -79,13 +79,13 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     });
 
     // Called when a buy fails due to insufficient SOL — opens on-ramp to fund with real money
-    const onFundWallet = useCallback(async () => {
+    const onFundWallet = useCallback(async (amount?: string) => {
         if (!walletAddress) {
             login();
             return;
         }
         try {
-            await fundWallet({ address: walletAddress });
+            await fundWallet({ address: walletAddress, ...(amount ? { amount } : {}) });
         } catch { /* user cancelled, ignore */ }
     }, [fundWallet, walletAddress, login]);
 
