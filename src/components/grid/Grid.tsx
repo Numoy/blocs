@@ -320,7 +320,13 @@ export const Grid = () => {
                             ref={canvasRef}
                             width={CANVAS_RES}
                             height={CANVAS_RES}
-                            style={{ margin: `${CANVAS_MARGIN}px`, display: 'block' }}
+                            style={{
+                                margin: `${CANVAS_MARGIN}px`,
+                                display: 'block',
+                                // At high zoom the img overlays handle image quality.
+                                // Pixelated rendering keeps empty block borders crisp.
+                                imageRendering: currentScale >= HIGH_RES_THRESHOLD ? 'pixelated' : 'auto',
+                            }}
                             onClick={handleCanvasClick}
                             onMouseMove={handleMouseMove}
                             onMouseLeave={handleMouseLeave}
