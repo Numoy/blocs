@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { usePrivy } from '@privy-io/react-auth';
@@ -35,6 +35,7 @@ export const Grid = () => {
     const [isMobileViewport, setIsMobileViewport] = useState(false);
     const [isMobileBuying, setIsMobileBuying] = useState(false);
     const [viewingOwner, setViewingOwner] = useState<string | null>(null);
+    const [jumpBlockInput, setJumpBlockInput] = useState("");
     const [showOnboarding, setShowOnboarding] = useState(() =>
         typeof window !== 'undefined' && !localStorage.getItem('blocs_has_visited')
     );
@@ -150,6 +151,24 @@ export const Grid = () => {
         onBlockSelect: zoomToBlock,
     });
 
+    const handleJumpToBlock = useCallback((event?: FormEvent<HTMLFormElement>) => {
+        event?.preventDefault();
+        const id = parseGridBlockId(jumpBlockInput);
+        if (id === null) {
+            toast.error(`Enter a block number from 0 to ${GRID_SIZE - 1}.`);
+            return;
+        }
+        const block = blocks[id];
+        if (!block) return;
+        setSelectedBlock(block);
+        setSidebarMode('view');
+        zoomToBlock(id);
+        trackPlausibleEvent("grid_jump_to_block", {
+            block_id: id,
+            ui_source: isMobileViewport ? "mobile_toolbar" : "grid_toolbar",
+        });
+    }, [blocks, isMobileViewport, jumpBlockInput, setSelectedBlock, setSidebarMode, zoomToBlock]);
+
     useGridCanvas({
         canvasRef,
         blocks,
@@ -182,6 +201,8 @@ export const Grid = () => {
         }, 15_000);
     }, [adapterWallet, connect]);
 
+    const isBuyingRef = useRef(false);
+
     const handleBuyBlock = useCallback(async (block: BlockData, source: BuySource = "grid_sidebar") => {
         if (!connected) {
             // Queue the buy before opening the modal so it auto-fires once the wallet connects.
@@ -193,6 +214,9 @@ export const Grid = () => {
             }
             return;
         }
+
+        if (isBuyingRef.current) return;
+        isBuyingRef.current = true;
 
         trackPlausibleEvent("buy_flow_requested", {
             block_id: block.id,
@@ -210,6 +234,8 @@ export const Grid = () => {
                 error_category: toErrorCategory(error),
             });
             // buyBlock already shows the user-facing error toast; no additional toast here
+        } finally {
+            isBuyingRef.current = false;
         }
     }, [authenticated, buyBlock, connected, openWalletModal, queuePendingBuy]);
 
@@ -291,6 +317,57 @@ export const Grid = () => {
             {!isLoading && isSyncing && (
                 <div className={styles.syncBadge}>
                     Syncing…
+                </div>
+            )}
+
+            <form className={styles.gridToolbar} onSubmit={handleJumpToBlock}>
+                <input
+                    value={jumpBlockInput}
+                    onChange={(event) => setJumpBlockInput(event.target.value)}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Block #"
+                    aria-label="Go to block number"
+                    className={styles.jumpInput}
+                />
+                <button type="submit" className={styles.toolbarButton}>
+                    Go
+                </button>
+                <button
+                    type="button"
+                    className={styles.iconButton}
+                    aria-label="Zoom in"
+                    onClick={() => transformRef.current?.zoomIn?.(0.4)}
+                >
+                    +
+                </button>
+                <button
+                    type="button"
+                    className={styles.iconButton}
+                    aria-label="Zoom out"
+                    onClick={() => transformRef.current?.zoomOut?.(0.4)}
+                >
+                    -
+                </button>
+                <button
+                    type="button"
+                    className={styles.toolbarButton}
+                    onClick={() => transformRef.current?.resetTransform?.(300, 'easeOut')}
+                >
+                    Reset
+                </button>
+            </form>
+
+            {selectedBlock && isMobileViewport && (
+                <div className={styles.mobileSelectionPill}>
+                    <span>#{selectedBlock.id}</span>
+                    <small>
+                        {selectedBlock.isForSale && selectedBlock.price !== null
+                            ? `${selectedBlock.price} SOL`
+                            : selectedBlock.owner
+                                ? "Owned"
+                                : "Available"}
+                    </small>
                 </div>
             )}
 

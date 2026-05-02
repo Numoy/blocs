@@ -56,6 +56,7 @@ const connectSrc = [
   "https://apple.com",
   "https://*.apple.com",
   "https://google.com",
+  "https://www.google.com",
   "https://pay.google.com",
 ];
 const imgSrc = ["'self'", "data:", "blob:", ...assetOrigins, "https:"];
