@@ -536,7 +536,7 @@ export const Grid = () => {
                                     top: row * BLOCK_SIZE + CANVAS_MARGIN,
                                     width: BLOCK_SIZE,
                                     height: BLOCK_SIZE,
-                                    objectFit: 'contain',
+                                    objectFit: parseMosaicImageUrl(block.imageUrl) ? 'fill' : 'contain',
                                     pointerEvents: 'none',
                                     userSelect: 'none',
                                 }}

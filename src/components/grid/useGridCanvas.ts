@@ -3,6 +3,7 @@ import { BlockData } from '@/types';
 import { VisibleBounds } from './useGridVisibility';
 import { GRID_WIDTH, CANVAS_RES, BLOCK_SIZE, BLOCK_EMPTY_COLOR } from '@/utils/constants';
 import { toSafeExternalUrl } from '@/utils/url';
+import { parseMosaicImageUrl } from '@/utils/mosaicImage';
 
 
 interface UseGridCanvasProps {
@@ -67,10 +68,16 @@ export const useGridCanvas = ({
                             const cached = imageCache.current.get(safeImageUrl);
                             if (cached && cached.complete) {
                                 if (cached.naturalWidth > 0) {
-                                    const scale = Math.min(BLOCK_SIZE / cached.naturalWidth, BLOCK_SIZE / cached.naturalHeight);
-                                    const dw = cached.naturalWidth * scale;
-                                    const dh = cached.naturalHeight * scale;
-                                    ctx.drawImage(cached, x + (BLOCK_SIZE - dw) / 2, y + (BLOCK_SIZE - dh) / 2, dw, dh);
+                                    if (parseMosaicImageUrl(safeImageUrl)) {
+                                        // Mosaic tile: stretch to fill block for seamless tiling
+                                        ctx.drawImage(cached, x, y, BLOCK_SIZE, BLOCK_SIZE);
+                                    } else {
+                                        // Single image: contain (full image visible, centred)
+                                        const scale = Math.min(BLOCK_SIZE / cached.naturalWidth, BLOCK_SIZE / cached.naturalHeight);
+                                        const dw = cached.naturalWidth * scale;
+                                        const dh = cached.naturalHeight * scale;
+                                        ctx.drawImage(cached, x + (BLOCK_SIZE - dw) / 2, y + (BLOCK_SIZE - dh) / 2, dw, dh);
+                                    }
                                 }
                             } else if (!cached) {
                                 const img = new Image();
@@ -78,11 +85,15 @@ export const useGridCanvas = ({
                                     const liveCanvas = canvasRef.current;
                                     const liveCtx = liveCanvas?.getContext('2d', { alpha: false });
                                     if (!liveCtx || img.naturalWidth === 0) return;
-                                    const scale = Math.min(BLOCK_SIZE / img.naturalWidth, BLOCK_SIZE / img.naturalHeight);
-                                    const dw = img.naturalWidth * scale;
-                                    const dh = img.naturalHeight * scale;
                                     requestAnimationFrame(() => {
-                                        liveCtx.drawImage(img, x + (BLOCK_SIZE - dw) / 2, y + (BLOCK_SIZE - dh) / 2, dw, dh);
+                                        if (parseMosaicImageUrl(safeImageUrl)) {
+                                            liveCtx.drawImage(img, x, y, BLOCK_SIZE, BLOCK_SIZE);
+                                        } else {
+                                            const scale = Math.min(BLOCK_SIZE / img.naturalWidth, BLOCK_SIZE / img.naturalHeight);
+                                            const dw = img.naturalWidth * scale;
+                                            const dh = img.naturalHeight * scale;
+                                            liveCtx.drawImage(img, x + (BLOCK_SIZE - dw) / 2, y + (BLOCK_SIZE - dh) / 2, dw, dh);
+                                        }
                                     });
                                 };
                                 img.onerror = () => {
