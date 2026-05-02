@@ -144,6 +144,17 @@ export const useBlockActions = ({
             throw new Error("Wallet not connected");
         }
 
+        // Quick balance check before attempting — saves a round-trip on empty wallets
+        const balance = await connection.getBalance(publicKey).catch(() => null);
+        const MIN_BALANCE_LAMPORTS = 5_000_000; // 0.005 SOL (fees + rent buffer)
+        if (balance !== null && balance < MIN_BALANCE_LAMPORTS) {
+            toast.error("Not enough SOL in your wallet to buy this block.", {
+                duration: 8000,
+                action: { label: "Add SOL", onClick: onFundWallet },
+            });
+            throw new Error("Insufficient balance");
+        }
+
         const toastId = toast.loading("Buying block...");
         let saleType: "primary" | "resale" | "unknown" = "unknown";
 
@@ -272,12 +283,19 @@ export const useBlockActions = ({
             queueGridSync(0);
 
             const err = error as { message?: string; name?: string; logs?: string[] };
-            const msg = (err.message || JSON.stringify(error)).toLowerCase();
+            // Include error.toString() so simulation details are captured even when
+            // err.message is only a short summary like "Simulation failed."
+            const fullErrStr = [
+                err.message,
+                error instanceof Error ? error.toString() : "",
+                ...(err.logs ?? []),
+            ].join(" ").toLowerCase();
+
             if (
-                msg.includes("user rejected") ||
-                msg.includes("rejected the request") ||
-                msg.includes("stopped") ||
-                msg.includes("cancelled") ||
+                fullErrStr.includes("user rejected") ||
+                fullErrStr.includes("rejected the request") ||
+                fullErrStr.includes("stopped") ||
+                fullErrStr.includes("cancelled") ||
                 err.name === "WalletSignTransactionError"
             ) {
                 trackPlausibleEvent("buy_block_cancelled", {
@@ -301,14 +319,16 @@ export const useBlockActions = ({
             });
 
             const isInsufficientFunds =
-                msg.includes("insufficient funds") ||
-                msg.includes("insufficient lamports") ||
-                msg.includes("not enough sol") ||
-                msg.includes("attempt to debit an account but found no record");
+                fullErrStr.includes("insufficient funds") ||
+                fullErrStr.includes("insufficient lamports") ||
+                fullErrStr.includes("not enough sol") ||
+                fullErrStr.includes("attempt to debit an account but found no record") ||
+                fullErrStr.includes("custom program error: 0x1");
 
             if (isInsufficientFunds) {
-                toast.error("Not enough SOL to complete this purchase.", {
+                toast.error("Not enough SOL in your wallet to buy this block.", {
                     id: toastId,
+                    duration: 8000,
                     action: { label: "Add SOL", onClick: onFundWallet },
                 });
             } else {

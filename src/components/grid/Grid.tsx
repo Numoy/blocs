@@ -88,6 +88,28 @@ export const Grid = () => {
     }, [blockParam]);
 
     const { visibleBounds, updateVisibility } = useGridVisibility();
+    const [currentScale, setCurrentScale] = useState(initialTransform.scale);
+    const HIGH_RES_THRESHOLD = 3;
+
+    // At high zoom, collect visible blocks with images so we can overlay native <img>
+    // elements that render at the source image's full resolution instead of the canvas's
+    // fixed 30×30px-per-block budget.
+    const highResOverlays = useMemo(() => {
+        if (currentScale < HIGH_RES_THRESHOLD) return [];
+        const startCol = Math.max(0, Math.floor(visibleBounds.minX / BLOCK_SIZE));
+        const endCol = Math.min(GRID_WIDTH - 1, Math.ceil(visibleBounds.maxX / BLOCK_SIZE));
+        const startRow = Math.max(0, Math.floor(visibleBounds.minY / BLOCK_SIZE));
+        const endRow = Math.min(GRID_WIDTH - 1, Math.ceil(visibleBounds.maxY / BLOCK_SIZE));
+        const result: { block: BlockData; col: number; row: number }[] = [];
+        for (let row = startRow; row <= endRow; row++) {
+            for (let col = startCol; col <= endCol; col++) {
+                const block = blocks[row * GRID_WIDTH + col];
+                const safeUrl = block?.imageUrl ? toSafeExternalUrl(block.imageUrl) : null;
+                if (safeUrl) result.push({ block, col, row });
+            }
+        }
+        return result;
+    }, [currentScale, visibleBounds, blocks]);
     const zoomToBlock = useCallback((blockId: number) => {
         const ref = transformRef.current;
         if (!ref) return;
@@ -282,26 +304,50 @@ export const Grid = () => {
                 limitToBounds={true}
                 wheel={{ step: 0.1 }}
                 panning={{ velocityDisabled: false }}
-                onTransform={(ref) => updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY)}
+                onTransform={(ref) => {
+                    setCurrentScale(ref.state.scale);
+                    updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY);
+                }}
                 onInit={(ref) => {
                     transformRef.current = ref;
+                    setCurrentScale(ref.state.scale);
                     updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY);
                 }}
             >
                 <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-                    <canvas
-                        ref={canvasRef}
-                        width={CANVAS_RES}
-                        height={CANVAS_RES}
-                        style={{ margin: `${CANVAS_MARGIN}px` }}
-                        onClick={handleCanvasClick}
-                        onMouseMove={handleMouseMove}
-                        onMouseLeave={handleMouseLeave}
-                        tabIndex={0}
-                        aria-label="Interactive block grid. Use mouse to pan/zoom, or click a block to view details."
-                        onKeyDown={handleKeyDown}
-                        className={styles.canvas}
-                    />
+                    <div style={{ position: 'relative' }}>
+                        <canvas
+                            ref={canvasRef}
+                            width={CANVAS_RES}
+                            height={CANVAS_RES}
+                            style={{ margin: `${CANVAS_MARGIN}px`, display: 'block' }}
+                            onClick={handleCanvasClick}
+                            onMouseMove={handleMouseMove}
+                            onMouseLeave={handleMouseLeave}
+                            tabIndex={0}
+                            aria-label="Interactive block grid. Use mouse to pan/zoom, or click a block to view details."
+                            onKeyDown={handleKeyDown}
+                            className={styles.canvas}
+                        />
+                        {highResOverlays.map(({ block, col, row }) => (
+                            <img
+                                key={block.id}
+                                src={toSafeExternalUrl(block.imageUrl)!}
+                                alt=""
+                                draggable={false}
+                                style={{
+                                    position: 'absolute',
+                                    left: col * BLOCK_SIZE + CANVAS_MARGIN,
+                                    top: row * BLOCK_SIZE + CANVAS_MARGIN,
+                                    width: BLOCK_SIZE,
+                                    height: BLOCK_SIZE,
+                                    objectFit: 'cover',
+                                    pointerEvents: 'none',
+                                    userSelect: 'none',
+                                }}
+                            />
+                        ))}
+                    </div>
                 </TransformComponent>
             </TransformWrapper>
 

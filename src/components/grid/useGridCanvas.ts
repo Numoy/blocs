@@ -29,6 +29,8 @@ export const useGridCanvas = ({ canvasRef, blocks, visibleBounds, hoveredBlockId
             const ctx = canvas.getContext('2d', { alpha: false });
             if (!ctx) return;
 
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.fillStyle = '#1e1e1e';
             ctx.fillRect(0, 0, CANVAS_RES, CANVAS_RES);
 

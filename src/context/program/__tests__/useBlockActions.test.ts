@@ -61,6 +61,7 @@ const makeMockProgram = () => ({
 });
 
 const makeMockConnection = () => ({
+    getBalance: vi.fn().mockResolvedValue(100_000_000), // 0.1 SOL — enough for any buy
     getLatestBlockhash: vi.fn().mockResolvedValue({ blockhash: 'fakehash', lastValidBlockHeight: 100 }),
     getSignatureStatuses: vi.fn().mockResolvedValue({
         value: [{ err: null, confirmationStatus: 'confirmed' }],
@@ -204,7 +205,7 @@ describe('buyBlock — insufficient funds', () => {
         });
         await expect(result.current.buyBlock(5, 0.01)).rejects.toThrow();
         expect(mockToast.error).toHaveBeenCalledWith(
-            'Not enough SOL to complete this purchase.',
+            'Not enough SOL in your wallet to buy this block.',
             expect.objectContaining({ id: mockToastId, action: expect.objectContaining({ label: 'Add SOL' }) })
         );
     });
@@ -229,7 +230,7 @@ describe('buyBlock — insufficient funds', () => {
         });
         await expect(result.current.buyBlock(5, 0.01)).rejects.toThrow();
         expect(mockToast.error).toHaveBeenCalledWith(
-            'Not enough SOL to complete this purchase.',
+            'Not enough SOL in your wallet to buy this block.',
             expect.anything()
         );
     });
