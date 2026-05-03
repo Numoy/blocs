@@ -327,9 +327,9 @@
 
 .image {
     width: 100%;
+    height: auto;
     display: block;
-    max-height: 200px;
-    object-fit: contain;
+    max-height: 400px;
     border-radius: 0;
     border: none;
 }
