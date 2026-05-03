@@ -25,3 +25,6 @@ export const getPrimaryBlockPriceLamports = (id: number): number => BLOCK_BASE_P
 
 export const getPrimaryBlockPriceSol = (id: number): number =>
     getPrimaryBlockPriceLamports(id) / LAMPORTS_PER_SOL;
+
+export const formatSol = (price: number): string =>
+    parseFloat(price.toFixed(4)).toString();

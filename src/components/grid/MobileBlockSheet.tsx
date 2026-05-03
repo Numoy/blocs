@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { toSafeExternalUrl } from "@/utils/url";
-import { BLOCK_EMPTY_COLOR, getPrimaryBlockPriceSol } from "@/utils/constants";
+import { BLOCK_EMPTY_COLOR, getPrimaryBlockPriceSol, formatSol } from "@/utils/constants";
 import { useProgram } from "@/context/ProgramContext";
 import type { BlockData } from "@/types";
 import styles from "./MobileBlockSheet.module.css";
@@ -63,7 +63,7 @@ export const MobileBlockSheet = ({
                     <p className={styles.message}>{block.text || "No message"}</p>
 
                     <div className={styles.metaRow}>
-                        <span className="uiChip">{block.isForSale && block.price !== null ? `${block.price} SOL` : "Not for sale"}</span>
+                        <span className="uiChip">{block.isForSale && block.price !== null ? `${formatSol(block.price)} SOL` : "Not for sale"}</span>
                         {block.url && <span className="uiChipMuted">Link</span>}
                     </div>
                 </div>

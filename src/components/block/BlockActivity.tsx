@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { BlockData } from "@/types";
 import { getBlockAccountExplorerUrl } from "@/utils/explorer";
+import { formatSol } from "@/utils/constants";
 import styles from "./BlockActivity.module.css";
 
 type BlockActivityProps = {
@@ -21,7 +22,7 @@ export const BlockActivity = ({ block, compact = false }: BlockActivityProps) =>
         },
         {
             label: block.isForSale ? "Listed" : "Sale",
-            value: block.isForSale && block.price !== null ? `${block.price} SOL` : "Not listed",
+            value: block.isForSale && block.price !== null ? `${formatSol(block.price)} SOL` : "Not listed",
         },
         {
             label: "Content",

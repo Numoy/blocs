@@ -10,7 +10,7 @@ import { BlockActivity } from '@/components/block/BlockActivity';
 import { MosaicPreview } from '@/components/mosaic/MosaicPreview';
 import { parseMosaicImageUrl } from '@/utils/mosaicImage';
 import { useProgram } from '@/context/ProgramContext';
-import { getPrimaryBlockPriceSol } from '@/utils/constants';
+import { getPrimaryBlockPriceSol, formatSol } from '@/utils/constants';
 import { BlockData } from '@/types';
 import styles from './Sidebar.module.css';
 
@@ -132,7 +132,7 @@ export const SidebarView = ({
             {block.isForSale && (block.price !== null) && !isOwner && (
                 <div className={styles.section}>
                     <div className={styles.priceDisplay}>
-                        {block.price} SOL
+                        {formatSol(block.price!)} SOL
                     </div>
                     <button
                         className={`${styles.button} uiButton uiButtonPrimary`}
