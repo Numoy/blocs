@@ -9,6 +9,8 @@ import { shareBlock } from '@/utils/shareBlock';
 import { BlockActivity } from '@/components/block/BlockActivity';
 import { MosaicPreview } from '@/components/mosaic/MosaicPreview';
 import { parseMosaicImageUrl } from '@/utils/mosaicImage';
+import { useProgram } from '@/context/ProgramContext';
+import { getPrimaryBlockPriceSol } from '@/utils/constants';
 import { BlockData } from '@/types';
 import styles from './Sidebar.module.css';
 
@@ -28,7 +30,13 @@ export const SidebarView = ({
     onViewOwnerBlocks,
 }: SidebarViewProps) => {
     const { publicKey } = useWallet();
+    const { walletBalance, onFundWallet } = useProgram();
     const [isBuying, setIsBuying] = useState(false);
+
+    const blockPrice = block.isForSale && block.price ? block.price : getPrimaryBlockPriceSol(block.id);
+    const neededSol = blockPrice + 0.005;
+    const isLowBalance = walletBalance !== null && walletBalance < neededSol;
+    const suggestedAmount = (Math.ceil(neededSol * 100) / 100).toString();
 
     const safeBlockUrl = toSafeExternalUrl(block.url);
     const safeBlockImageUrl = toSafeExternalUrl(block.imageUrl);
@@ -133,6 +141,14 @@ export const SidebarView = ({
                     >
                         {isBuying ? "Processing..." : "Buy Block"}
                     </button>
+                    {walletBalance !== null && (
+                        <p className={`${styles.balanceRow} ${isLowBalance ? styles.balanceLow : ""}`}>
+                            Balance: {walletBalance.toFixed(3)} SOL
+                            {isLowBalance && (
+                                <> · <button className={styles.addSolLink} onClick={() => onFundWallet(suggestedAmount)}>Add SOL</button></>
+                            )}
+                        </p>
+                    )}
                     {isBuying && (
                         <p className={styles.helperText}>
                             Confirm in your wallet to complete.

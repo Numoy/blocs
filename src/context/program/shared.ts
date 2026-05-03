@@ -10,6 +10,8 @@ export interface ProgramContextState {
     isLoading: boolean;
     isSyncing: boolean;
     openWalletModal: (source?: WalletModalSource) => void;
+    walletBalance: number | null;
+    onFundWallet: (amount?: string) => void;
 }
 
 export type BatchBlockUpdate = {

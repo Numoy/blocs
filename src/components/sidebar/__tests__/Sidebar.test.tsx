@@ -14,6 +14,8 @@ vi.mock('@/context/ProgramContext', () => ({
         updateBlock: mockUpdateBlock,
         sellBlock: mockSellBlock,
         openWalletModal: mockOpenWalletModal,
+        walletBalance: 0.1,
+        onFundWallet: vi.fn(),
     }),
 }));
 

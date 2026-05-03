@@ -3,6 +3,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MobileBlockSheet } from '../MobileBlockSheet';
 import type { BlockData } from '@/types';
 
+vi.mock("@/context/ProgramContext", () => ({
+    useProgram: () => ({ walletBalance: 0.1, onFundWallet: vi.fn() }),
+}));
+
 vi.mock('next/link', () => ({
     default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
         <a href={href} className={className}>{children}</a>

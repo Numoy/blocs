@@ -334,6 +334,29 @@
     border: none;
 }
 
+/* ── Wallet balance indicator ───────────────────────────────────── */
+
+.balanceRow {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+}
+
+.balanceLow {
+    color: #e6a817;
+}
+
+.addSolLink {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: #e6a817;
+    font-size: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
 /* ── Price ───────────────────────────────────────────────────────── */
 
 .priceBreakdown {

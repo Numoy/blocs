@@ -344,7 +344,12 @@ export async function POST(request: Request) {
     const targetHeight = height * tileSize;
     const normalized = await sharp(inputBuffer, { limitInputPixels: MAX_INPUT_PIXELS, failOnError: true })
         .rotate()
-        .resize({ width: targetWidth, height: targetHeight, fit: "cover", position: "centre" })
+        .resize({
+            width: targetWidth,
+            height: targetHeight,
+            fit: "contain",
+            background: { r: 18, g: 18, b: 18, alpha: 1 },
+        })
         .webp({ quality: 84 })
         .toBuffer();
 

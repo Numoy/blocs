@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { toSafeExternalUrl } from "@/utils/url";
-import { BLOCK_EMPTY_COLOR } from "@/utils/constants";
+import { BLOCK_EMPTY_COLOR, getPrimaryBlockPriceSol } from "@/utils/constants";
+import { useProgram } from "@/context/ProgramContext";
 import type { BlockData } from "@/types";
 import styles from "./MobileBlockSheet.module.css";
 
@@ -25,9 +26,15 @@ export const MobileBlockSheet = ({
     onShare,
     onClose,
 }: MobileBlockSheetProps) => {
+    const { walletBalance, onFundWallet } = useProgram();
+
     if (!block) return null;
 
     const safeImageUrl = toSafeExternalUrl(block.imageUrl);
+    const blockPrice = block.isForSale && block.price ? block.price : getPrimaryBlockPriceSol(block.id);
+    const neededSol = blockPrice + 0.005;
+    const isLowBalance = walletBalance !== null && walletBalance < neededSol;
+    const suggestedAmount = (Math.ceil(neededSol * 100) / 100).toString();
 
     return (
         <>
@@ -75,6 +82,14 @@ export const MobileBlockSheet = ({
                     )}
                     {isBuying && (
                         <p className={styles.walletHint}>Check your wallet to confirm.</p>
+                    )}
+                    {block.isForSale && !isOwner && walletBalance !== null && (
+                        <p className={`${styles.walletHint} ${isLowBalance ? styles.balanceLow : ""}`}>
+                            Balance: {walletBalance.toFixed(3)} SOL
+                            {isLowBalance && (
+                                <> · <button className={styles.addSolLink} onClick={() => onFundWallet(suggestedAmount)}>Add SOL</button></>
+                            )}
+                        </p>
                     )}
 
                     {isOwner && (

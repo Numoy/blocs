@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useConnection, useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { usePrivy } from "@privy-io/react-auth";
 import { useFundWallet } from "@privy-io/react-auth/solana";
@@ -28,11 +29,25 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
     const wallet = useAnchorWallet();
     const { sendTransaction, signTransaction, publicKey, connected, wallet: adapterWalletState } = useWallet();
     const { setVisible: setWalletModalVisible } = useWalletModal();
-    const { login, authenticated } = usePrivy();
+    const { login } = usePrivy();
     const { fundWallet } = useFundWallet();
     const [isConnectWalletModalOpen, setIsConnectWalletModalOpen] = useState(false);
+    const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
     const walletAddress = publicKey?.toBase58();
+
+    // Fetch SOL balance whenever the connected wallet changes
+    useEffect(() => {
+        if (!publicKey) {
+            queueMicrotask(() => setWalletBalance(null));
+            return;
+        }
+        let cancelled = false;
+        connection.getBalance(publicKey)
+            .then(lamports => { if (!cancelled) setWalletBalance(lamports / LAMPORTS_PER_SOL); })
+            .catch(() => { if (!cancelled) setWalletBalance(null); });
+        return () => { cancelled = true; };
+    }, [publicKey, connection]);
 
     // The Privy embedded wallet's standard-wallet `signAndSendTransaction` sends
     // via Privy's own RPC and fails with "Failed to connect to wallet".
@@ -78,16 +93,19 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
         program,
     });
 
-    // Called when a buy fails due to insufficient SOL — opens on-ramp to fund with real money
+    // Called when a buy fails or user requests top-up — opens on-ramp to fund with real money
     const onFundWallet = useCallback(async (amount?: string) => {
-        if (!walletAddress) {
-            login();
-            return;
-        }
+        if (!walletAddress) { login(); return; }
         try {
             await fundWallet({ address: walletAddress, ...(amount ? { amount } : {}) });
+            // Refresh balance after funding completes
+            if (publicKey) {
+                connection.getBalance(publicKey)
+                    .then(l => setWalletBalance(l / LAMPORTS_PER_SOL))
+                    .catch(() => {});
+            }
         } catch { /* user cancelled, ignore */ }
-    }, [fundWallet, walletAddress, login]);
+    }, [fundWallet, walletAddress, login, publicKey, connection]);
 
     const { buyBlock, updateBlock, updateBlocks, sellBlock } = useBlockActions({
         connected,
@@ -151,6 +169,8 @@ export const ProgramProvider = ({ children }: { children: ReactNode }) => {
                 isLoading,
                 isSyncing,
                 openWalletModal,
+                walletBalance,
+                onFundWallet,
             }}
         >
             {children}
