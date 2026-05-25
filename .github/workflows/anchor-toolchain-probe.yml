@@ -98,11 +98,11 @@ jobs:
         run: |
           export PATH="$HOME/.cargo/bin:$HOME/solana-release/bin:$PATH"
           export ANCHOR_WALLET="${ANCHOR_WALLET:-$HOME/.config/solana/id.json}"
-          anchor build
+          anchor build --ignore-keys
 
       - name: Run Anchor Tests
         if: ${{ inputs.run_tests }}
         run: |
           export PATH="$HOME/.cargo/bin:$HOME/solana-release/bin:$PATH"
           export ANCHOR_WALLET="${ANCHOR_WALLET:-$HOME/.config/solana/id.json}"
-          yarn test
+          yarn test --skip-build
