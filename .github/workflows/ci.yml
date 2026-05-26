@@ -159,4 +159,4 @@ jobs:
         run: |
           export PATH="$HOME/.cargo/bin:$HOME/solana-release/bin:$PATH"
           export ANCHOR_WALLET="${ANCHOR_WALLET:-$HOME/.config/solana/id.json}"
-          yarn test --skip-build --skip-local-validator
+          yarn test --skip-build
