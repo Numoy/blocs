@@ -87,7 +87,7 @@ jobs:
         with:
           path: |
             ~/solana-release
-          key: solana-${{ runner.os }}-v1.18.23
+          key: solana-${{ runner.os }}-v3.1.9
 
       # Cache Anchor CLI
       - name: Cache Anchor CLI
@@ -106,7 +106,7 @@ jobs:
       - name: Install Solana CLI
         if: steps.cache-solana.outputs.cache-hit != 'true'
         run: |
-          curl -sSfL https://github.com/solana-labs/solana/releases/download/v1.18.23/solana-release-x86_64-unknown-linux-gnu.tar.bz2 | tar jxf - -C $HOME
+          curl -sSfL https://github.com/anza-xyz/agave/releases/download/v3.1.9/solana-release-x86_64-unknown-linux-gnu.tar.bz2 | tar jxf - -C $HOME
 
       # Install Anchor (Only if cache miss)
       - name: Install Anchor CLI
@@ -145,12 +145,8 @@ jobs:
       - name: Normalize Cargo.lock compatibility for SBF toolchain
         run: |
           if grep -q '^version = 4$' Cargo.lock; then
-            echo "::warning::anchor/Cargo.lock uses lockfile v4; rewriting to v3 for Solana 1.18 SBF cargo compatibility."
+            echo "::warning::anchor/Cargo.lock uses lockfile v4; rewriting to v3 for SBF cargo compatibility."
             sed -i 's/^version = 4$/version = 3/' Cargo.lock
-          fi
-          if ! grep -q '^version = 3$' Cargo.lock; then
-            echo "::error::anchor/Cargo.lock must contain version = 3 for Solana 1.18 SBF cargo compatibility."
-            exit 1
           fi
 
       - name: Build Program
