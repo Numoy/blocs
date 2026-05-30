@@ -65,7 +65,7 @@
   },
   "license": "MIT",
   "overrides": {
-    "axios": "^1.15.0",
+    "axios": "^1.16.0",
     "fast-xml-parser": "^5.3.8",
     "hono": "^4.12.18",
     "postcss": "^8.5.10",
