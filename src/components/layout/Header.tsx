@@ -18,7 +18,7 @@ export const Header = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { blocks, isLoading, openWalletModal } = useProgram();
     const { logout, authenticated, ready: privyReady, user } = usePrivy();
-    const { publicKey, connected, disconnect } = useWallet();
+    const { publicKey, connected, disconnect, wallet } = useWallet();
     const { exportWallet } = useExportWallet();
     const { fundWallet } = useFundWallet();
 
@@ -122,7 +122,10 @@ export const Header = () => {
     }, [isDropdownOpen]);
 
     // Embedded wallet check (Privy-created, not external)
-    const isEmbeddedWallet = authenticated && !connected;
+    const isEmbeddedWallet = authenticated && (
+        !connected ||
+        (wallet?.adapter?.name.toLowerCase().includes("privy") ?? false)
+    );
 
     return (
         <>

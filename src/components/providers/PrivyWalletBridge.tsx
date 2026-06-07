@@ -28,17 +28,19 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
     const { select, connect, wallet, connected, connecting, wallets: adapterWallets } = useWallet();
     const hasAutoSelected = useRef(false);
 
+    const privyStandardWallet = standardWallets.find(isPrivyStandardWallet);
+    const privyAccountsLength = privyStandardWallet?.accounts?.length ?? 0;
+
     // Auto-select the correct wallet adapter after login
     useEffect(() => {
         if (!authenticated || wallet || hasAutoSelected.current) return;
 
         const walletClientType = user?.wallet?.walletClientType;
         const isEmbedded = !walletClientType || walletClientType === "privy" || walletClientType === "privy-v2";
-        const privyStandardWallet = standardWallets.find(isPrivyStandardWallet);
 
         let targetWallet;
         if (isEmbedded) {
-            if (!privyStandardWallet?.accounts.length) return;
+            if (privyAccountsLength === 0) return;
 
             // Social/email login: select Privy's embedded wallet adapter
             targetWallet = adapterWallets.find(w =>
@@ -63,7 +65,7 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
             select(targetWallet.adapter.name);
             hasAutoSelected.current = true;
         }
-    }, [authenticated, user, wallet, adapterWallets, select, standardWallets]);
+    }, [authenticated, user, wallet, adapterWallets, select, standardWallets, privyAccountsLength]);
 
     // autoConnect only fires on mount (from localStorage) — it does NOT auto-connect
     // after a programmatic select(). Explicitly connect once the wallet is selected.
