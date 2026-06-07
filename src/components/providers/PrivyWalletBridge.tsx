@@ -26,14 +26,13 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
     const { wallets: standardWallets } = useStandardWallets();
     const { authenticated, user } = usePrivy();
     const { select, connect, wallet, connected, connecting, wallets: adapterWallets } = useWallet();
-    const hasAutoSelected = useRef(false);
 
     const privyStandardWallet = standardWallets.find(isPrivyStandardWallet);
     const privyAccountsLength = privyStandardWallet?.accounts?.length ?? 0;
 
     // Auto-select the correct wallet adapter after login
     useEffect(() => {
-        if (!authenticated || wallet || hasAutoSelected.current) return;
+        if (!authenticated || wallet) return;
 
         const walletClientType = user?.wallet?.walletClientType;
         const isEmbedded = !walletClientType || walletClientType === "privy" || walletClientType === "privy-v2";
@@ -63,7 +62,6 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
 
         if (targetWallet) {
             select(targetWallet.adapter.name);
-            hasAutoSelected.current = true;
         }
     }, [authenticated, user, wallet, adapterWallets, select, standardWallets, privyAccountsLength]);
 
@@ -71,15 +69,13 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
     // after a programmatic select(). Explicitly connect once the wallet is selected.
     useEffect(() => {
         if (!wallet || connected || connecting) return;
-        connect().catch(() => {});
-    }, [wallet, connected, connecting, connect]);
 
-    // Reset auto-select flag on logout
-    useEffect(() => {
-        if (!authenticated) {
-            hasAutoSelected.current = false;
-        }
-    }, [authenticated]);
+        // If it is the Privy standard wallet adapter, only connect if accounts are ready
+        const isPrivy = wallet.adapter.name.toLowerCase().includes("privy");
+        if (isPrivy && privyAccountsLength === 0) return;
+
+        connect().catch(() => {});
+    }, [wallet, connected, connecting, connect, privyAccountsLength]);
 
     return <>{children}</>;
 };

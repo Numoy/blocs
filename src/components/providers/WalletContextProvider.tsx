@@ -1,6 +1,6 @@
 "use client";
 
-import { FC, ReactNode, useEffect, useMemo } from "react";
+import { FC, ReactNode, useEffect, useMemo, useRef } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors, useStandardWallets, defaultSolanaRpcsPlugin, type SolanaStandardWallet } from "@privy-io/react-auth/solana";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
@@ -26,11 +26,17 @@ const SolanaWalletProviderStack: FC<{ endpoint: string; children: ReactNode }> =
         () => standardWallets.find(isPrivyStandardWallet) ?? null,
         [standardWallets]
     );
+    const hasRegisteredRef = useRef(false);
 
     useEffect(() => {
-        if (!ready || !privyStandardWallet) return;
+        if (!ready || !privyStandardWallet || hasRegisteredRef.current) return;
 
-        return getWallets().register(privyStandardWallet);
+        hasRegisteredRef.current = true;
+        const unregister = getWallets().register(privyStandardWallet);
+        return () => {
+            unregister();
+            hasRegisteredRef.current = false;
+        };
     }, [privyStandardWallet, ready]);
 
     const wallets = useMemo(

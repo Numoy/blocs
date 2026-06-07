@@ -281,7 +281,7 @@ export const Grid = () => {
             // If authenticated, PrivyWalletBridge will connect the embedded wallet automatically —
             // don't open the modal, just wait for the pending buy to fire.
             queuePendingBuy(block, source);
-            if (!authenticated) {
+            if (!authenticated || !adapterWallet) {
                 openWalletModal(source === "block_detail" ? "block_detail_buy" : "sidebar_buy");
             }
             return;

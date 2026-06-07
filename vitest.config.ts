@@ -8,7 +8,7 @@ export default defineConfig({
         environment: 'jsdom',
         setupFiles: ['./src/test/setup.ts'],
         globals: true,
-        exclude: ['node_modules', 'anchor', '.next', '.git'],
+        exclude: ['node_modules', 'anchor', '.next', '.git', 'scratch-run'],
     },
     resolve: {
         alias: {
