@@ -16,7 +16,8 @@ const solanaConnectors = toSolanaWalletConnectors();
 type PrivySolanaStandardWallet = SolanaStandardWallet & { isPrivyWallet: true };
 
 const isPrivyStandardWallet = (wallet: SolanaStandardWallet): wallet is PrivySolanaStandardWallet => (
-    "isPrivyWallet" in wallet && wallet.isPrivyWallet === true
+    ("isPrivyWallet" in wallet && wallet.isPrivyWallet === true) ||
+    wallet.name.toLowerCase().includes("privy")
 );
 
 const SolanaWalletProviderStack: FC<{ endpoint: string; children: ReactNode }> = ({ endpoint, children }) => {

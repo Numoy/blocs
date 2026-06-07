@@ -8,7 +8,8 @@ import { useWallet } from "@solana/wallet-adapter-react";
 type PrivySolanaStandardWallet = SolanaStandardWallet & { isPrivyWallet: true };
 
 const isPrivyStandardWallet = (wallet: SolanaStandardWallet): wallet is PrivySolanaStandardWallet => (
-    "isPrivyWallet" in wallet && wallet.isPrivyWallet === true
+    ("isPrivyWallet" in wallet && wallet.isPrivyWallet === true) ||
+    wallet.name.toLowerCase().includes("privy")
 );
 
 /**
