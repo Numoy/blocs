@@ -67,13 +67,11 @@ const fontSrc = ["'self'", "data:", "https://fonts.gstatic.com"];
 const scriptSrc = [
   "'self'",
   "'unsafe-inline'",
+  "'unsafe-eval'", // Required by Privy embedded wallet for Secure EcmaScript (SES) sandboxing
   analyticsOrigin,
   "https://challenges.cloudflare.com",
 ];
 const isDev = process.env.NODE_ENV !== "production";
-if (isDev) {
-  scriptSrc.push("'unsafe-eval'");
-}
 
 const contentSecurityPolicy = [
   "default-src 'self'",
