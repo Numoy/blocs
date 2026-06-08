@@ -126,7 +126,7 @@ describe('WalletContextProvider', () => {
             </WalletContextProvider>
         );
 
-        expect(mockRegister).toHaveBeenCalledWith(privyWallet);
+        expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ name: 'Privy', isPrivyWallet: true }));
         expect(mockRegister).not.toHaveBeenCalledWith(phantomWallet);
     });
 
