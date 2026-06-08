@@ -180,10 +180,14 @@ describe('PrivyWalletBridge', () => {
         expect(mockSelect).toHaveBeenCalledWith('Privy');
     });
 
-    it('does not auto-select if a wallet is already connected', async () => {
+    it('auto-selects the Privy wallet if a different wallet is connected', async () => {
         const mockSelect = vi.fn();
         const privyAdapter = { adapter: { name: 'Privy' } };
 
+        mockUseStandardWallets.mockReturnValue({
+            ready: true,
+            wallets: [privyStandardWallet()],
+        });
         mockUsePrivy.mockReturnValue({
             authenticated: true,
             user: { wallet: { walletClientType: 'privy' } },
@@ -191,7 +195,7 @@ describe('PrivyWalletBridge', () => {
         mockUseWallet.mockReturnValue({
             select: mockSelect,
             connect: vi.fn(),
-            wallet: { adapter: { name: 'Phantom' } }, // already connected
+            wallet: { adapter: { name: 'Phantom' } }, // different wallet connected
             connected: true,
             connecting: false,
             wallets: [privyAdapter],
@@ -201,7 +205,7 @@ describe('PrivyWalletBridge', () => {
             render(<PrivyWalletBridge><div /></PrivyWalletBridge>);
         });
 
-        expect(mockSelect).not.toHaveBeenCalled();
+        expect(mockSelect).toHaveBeenCalledWith('Privy');
     });
 
     it('gates connect() for Privy wallet adapter on accounts array loading', async () => {

@@ -30,9 +30,18 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
     const privyStandardWallet = standardWallets.find(isPrivyStandardWallet);
     const privyAccountsLength = privyStandardWallet?.accounts?.length ?? 0;
 
+    const hasAutoSelectedRef = useRef(false);
+
+    useEffect(() => {
+        if (!authenticated) {
+            hasAutoSelectedRef.current = false;
+        }
+    }, [authenticated]);
+
     // Auto-select the correct wallet adapter after login
     useEffect(() => {
-        if (!authenticated || wallet) return;
+        if (!authenticated) return;
+        if (hasAutoSelectedRef.current) return;
 
         const walletClientType = user?.wallet?.walletClientType;
         const isEmbedded = !walletClientType || walletClientType === "privy" || walletClientType === "privy-v2";
@@ -61,7 +70,13 @@ export const PrivyWalletBridge: FC<{ children: ReactNode }> = ({ children }) => 
         }
 
         if (targetWallet) {
+            if (wallet?.adapter.name === targetWallet.adapter.name) {
+                hasAutoSelectedRef.current = true;
+                return;
+            }
+
             select(targetWallet.adapter.name);
+            hasAutoSelectedRef.current = true;
         }
     }, [authenticated, user, wallet, adapterWallets, select, standardWallets, privyAccountsLength]);
 
