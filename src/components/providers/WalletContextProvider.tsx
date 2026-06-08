@@ -26,18 +26,23 @@ const SolanaWalletProviderStack: FC<{ endpoint: string; children: ReactNode }> =
         () => standardWallets.find(isPrivyStandardWallet) ?? null,
         [standardWallets]
     );
-    const hasRegisteredRef = useRef(false);
+    const unregisterRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
-        if (!ready || !privyStandardWallet || hasRegisteredRef.current) return;
+        if (!ready || !privyStandardWallet) return;
+        if (unregisterRef.current) return;
 
-        hasRegisteredRef.current = true;
-        const unregister = getWallets().register(privyStandardWallet);
-        return () => {
-            unregister();
-            hasRegisteredRef.current = false;
-        };
+        unregisterRef.current = getWallets().register(privyStandardWallet);
     }, [privyStandardWallet, ready]);
+
+    useEffect(() => {
+        return () => {
+            if (unregisterRef.current) {
+                unregisterRef.current();
+                unregisterRef.current = null;
+            }
+        };
+    }, []);
 
     const wallets = useMemo(
         () => [], // Rely on standard wallet detection (MWA) to avoid duplications like MetaMask/Backpack
