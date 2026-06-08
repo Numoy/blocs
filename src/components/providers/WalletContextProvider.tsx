@@ -85,7 +85,7 @@ const SolanaWalletProviderStack: FC<{ endpoint: string; children: ReactNode }> =
                 return true;
             },
             get features() {
-                const currentFeatures = latestWalletRef.current?.features ?? {};
+                const currentFeatures = (latestWalletRef.current?.features ?? {}) as Record<string, unknown>;
                 const features: Record<string, unknown> = {};
 
                 for (const key of Object.keys(currentFeatures)) {
