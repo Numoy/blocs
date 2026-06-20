@@ -67,7 +67,7 @@
   "overrides": {
     "axios": "^1.16.0",
     "fast-xml-parser": "^5.3.8",
-    "hono": "^4.12.23",
+    "hono": "^4.12.26",
     "postcss": "^8.5.10",
     "serialize-javascript": "^7.0.5",
     "typescript": "^6.0.3",
