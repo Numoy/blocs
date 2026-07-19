@@ -131,8 +131,8 @@ describe("block detail page metadata", () => {
 
         expect(fetchBlockMock).not.toHaveBeenCalled();
         expect(metadata).toMatchObject({
-            title: "Invalid Block",
-            description: "Explore the live 10,000 block grid on Solana.",
+            title: "Invalid Plot",
+            description: "Explore the live 10,000 plot Mars map on Solana.",
             alternates: {
                 canonical: "/",
             },
@@ -152,8 +152,8 @@ describe("block detail page metadata", () => {
 
         expect(fetchBlockMock).not.toHaveBeenCalled();
         expect(metadata).toMatchObject({
-            title: "Invalid Block",
-            description: "Explore the live 10,000 block grid on Solana.",
+            title: "Invalid Plot",
+            description: "Explore the live 10,000 plot Mars map on Solana.",
             alternates: {
                 canonical: "/",
             },
@@ -172,8 +172,8 @@ describe("block detail page metadata", () => {
         });
 
         expect(metadata).toMatchObject({
-            title: "Block #1659",
-            description: "View block #1659 on Blocs, the decentralized 100x100 grid on Solana.",
+            title: "Plot #1659",
+            description: "View land plot #1659 on Mars Blocs, the decentralized 100x100 grid on Planet Mars.",
             alternates: {
                 canonical: "/block/1659",
             },
@@ -183,7 +183,7 @@ describe("block detail page metadata", () => {
                         url: "/og-image.png",
                         width: 1200,
                         height: 630,
-                        alt: "Blocs block #1659",
+                        alt: "Mars Blocs plot #1659",
                     },
                 ],
             },
@@ -207,7 +207,7 @@ describe("block detail page metadata", () => {
             params: Promise.resolve({ id: "1659" }),
         });
 
-        expect(metadata.title).toBe('Block #1659: "hello blocs"');
+        expect(metadata.title).toBe('Plot #1659: "hello blocs"');
         expect(metadata.alternates).toMatchObject({
             canonical: "/block/1659",
         });
@@ -215,7 +215,7 @@ describe("block detail page metadata", () => {
             images: [
                 {
                     url: "https://cdn.example.com/image.webp",
-                    alt: "Image for block #1659 on Blocs",
+                    alt: "Image for plot #1659 on Mars Blocs",
                 },
             ],
         });

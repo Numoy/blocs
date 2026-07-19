@@ -254,7 +254,7 @@ export default function BlockClient() {
                         block_id: block.id,
                         ui_source: "block_detail",
                     });
-                    router.push('/');
+                    router.push(`/?block=${block.id}`);
                 }}
                 className={`${styles.closeButton} uiButton uiButtonGhost`}
             >
