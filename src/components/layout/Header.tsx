@@ -130,17 +130,29 @@ export const Header = () => {
     return (
         <>
             <header className={styles.header}>
-                <Link href="/" className={styles.logo} aria-label="Go to grid">
-                    10,000 Blocks
+                <Link href="/" className={styles.logo} aria-label="Go to Mars map">
+                    <b className={styles.logoWordmark}>
+                        MARS<span className={styles.logoDot}>.</span>BLOCS
+                    </b>
+                    <small className={styles.logoTagline}>{"// occupy mars"}</small>
                 </Link>
 
                 <div className={styles.marketStats}>
                     {isLoading ? (
                         <div className={styles.statsSkeleton} aria-hidden="true" />
                     ) : marketStats ? (
-                        <span className={styles.statsText}>
-                            Floor: {marketStats.floor.toFixed(2)} SOL · {marketStats.count.toLocaleString()} listed
-                        </span>
+                        <div className={styles.statsPill}>
+                            <div className={styles.stat}>
+                                <div className={styles.statValue}>{marketStats.floor.toFixed(2)} ◎</div>
+                                <div className={styles.statLabel}>Floor</div>
+                            </div>
+                            <div className={styles.stat}>
+                                <div className={`${styles.statValue} ${styles.statValueGreen}`}>
+                                    {marketStats.count.toLocaleString()}
+                                </div>
+                                <div className={styles.statLabel}>Listed</div>
+                            </div>
+                        </div>
                     ) : null}
                 </div>
 
