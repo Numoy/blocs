@@ -202,6 +202,22 @@ export const Grid = () => {
         setViewMode('flat');
     }, []);
 
+    // Hand the globe the block under the viewport center and the map's current
+    // on-screen width so it mounts scale- and position-matched.
+    const handoverToGlobe = useCallback((state: { scale: number; positionX: number; positionY: number }) => {
+        const { scale, positionX, positionY } = state;
+        const centerX = (window.innerWidth / 2 - positionX) / scale - CANVAS_MARGIN;
+        const centerY = (window.innerHeight / 2 - positionY) / scale - CANVAS_MARGIN;
+        const col = Math.min(GRID_WIDTH - 1, Math.max(0, Math.floor(centerX / BLOCK_SIZE)));
+        const row = Math.min(GRID_WIDTH - 1, Math.max(0, Math.floor(centerY / BLOCK_SIZE)));
+        setGlobeView({
+            blockId: row * GRID_WIDTH + col,
+            apparentDiameterPx: CANVAS_RES * scale,
+        });
+        setPendingFocus(null);
+        setViewMode('globe');
+    }, []);
+
     // Handle initial deep-linked block selection
     useEffect(() => {
         if (blockParam && blocks.length > 0) {
@@ -466,9 +482,17 @@ export const Grid = () => {
                     type="button"
                     className={styles.toolbarButton}
                     onClick={() => {
-                        setPendingFocus(null);
-                        setGlobeView(null);
-                        setViewMode(viewMode === 'globe' ? 'flat' : 'globe');
+                        if (viewMode === 'globe') {
+                            setPendingFocus(null);
+                            setGlobeView(null);
+                            setViewMode('flat');
+                        } else if (transformRef.current) {
+                            // Mount the globe over the spot currently in view
+                            handoverToGlobe(transformRef.current.state);
+                        } else {
+                            setGlobeView(null);
+                            setViewMode('globe');
+                        }
                     }}
                 >
                     {viewMode === 'globe' ? "2D Map" : "3D Globe"}
@@ -487,7 +511,17 @@ export const Grid = () => {
                             type="button"
                             className={styles.iconButton}
                             aria-label="Zoom out"
-                            onClick={() => transformRef.current?.zoomOut?.(0.4)}
+                            onClick={() => {
+                                // Programmatic zoom never fires onZoomStop, so the
+                                // zoomed-all-the-way-out state hands over here instead
+                                const ref = transformRef.current;
+                                if (!ref) return;
+                                if (ref.state.scale <= 0.45) {
+                                    handoverToGlobe(ref.state);
+                                } else {
+                                    ref.zoomOut?.(0.4);
+                                }
+                            }}
                         >
                             -
                         </button>
@@ -575,21 +609,9 @@ export const Grid = () => {
                         updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY);
                     }}
                     onZoomStop={(ref) => {
-                        // Switch to the globe only once the gesture settles, never mid-pinch.
-                        // Hand the globe the block under the viewport center and the map's
-                        // current on-screen width so it mounts scale- and position-matched.
-                        const { scale, positionX, positionY } = ref.state;
-                        if (scale < GLOBE_SWITCH_SCALE) {
-                            const centerX = (window.innerWidth / 2 - positionX) / scale - CANVAS_MARGIN;
-                            const centerY = (window.innerHeight / 2 - positionY) / scale - CANVAS_MARGIN;
-                            const col = Math.min(GRID_WIDTH - 1, Math.max(0, Math.floor(centerX / BLOCK_SIZE)));
-                            const row = Math.min(GRID_WIDTH - 1, Math.max(0, Math.floor(centerY / BLOCK_SIZE)));
-                            setGlobeView({
-                                blockId: row * GRID_WIDTH + col,
-                                apparentDiameterPx: CANVAS_RES * scale,
-                            });
-                            setPendingFocus(null);
-                            setViewMode('globe');
+                        // Switch to the globe only once the gesture settles, never mid-pinch
+                        if (ref.state.scale < GLOBE_SWITCH_SCALE) {
+                            handoverToGlobe(ref.state);
                         }
                     }}
                     onInit={(ref) => {

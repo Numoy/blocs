@@ -10,6 +10,14 @@
     animation: fadeIn 0.3s ease;
 }
 
+/* Desktop: the sidebar is a side panel, not a modal — keep the globe/map
+   fully visible and interactive instead of dimming it behind a scrim. */
+@media (min-width: 769px) {
+    .overlay {
+        display: none;
+    }
+}
+
 /* Custom scrollbar for sidebar */
 .sidebar::-webkit-scrollbar {
     width: 6px;

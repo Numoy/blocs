@@ -6,6 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import styles from './MarsGlobe.module.css';
 import type { BlockData } from '@/types';
 import { toSafeExternalUrl } from '@/utils/url';
+import { parseMosaicImageUrl } from '@/utils/mosaicImage';
 
 interface MarsGlobeProps {
     blocks: BlockData[];
@@ -26,16 +27,18 @@ const MIN_DISTANCE = 5.2;
 const MAX_DISTANCE = 18.0;
 
 // Direction from globe center to the center of a block's parcel.
-// Matches the sphere's UV mapping (see click handling below).
+// Derived from THREE.SphereGeometry's vertex formula so it inverts the same
+// UV mapping the raycast click handling reads (col = floor(uv.x * 100)):
+//   x = -cos(2π·u)·sin(π·v), y = cos(π·v), z = sin(2π·u)·sin(π·v)
 const blockDirection = (blockId: number) => {
-    const col = blockId % 100;
-    const row = Math.floor(blockId / 100);
-    const theta = Math.PI - 2 * Math.PI * ((col + 0.5) / 100);
-    const phi = Math.PI / 2 - Math.PI * ((row + 0.5) / 100);
+    const u = ((blockId % 100) + 0.5) / 100;
+    const v = (Math.floor(blockId / 100) + 0.5) / 100;
+    const azimuth = 2 * Math.PI * u;
+    const polar = Math.PI * v;
     return new THREE.Vector3(
-        Math.cos(phi) * Math.sin(theta),
-        Math.sin(phi),
-        Math.cos(phi) * Math.cos(theta)
+        -Math.cos(azimuth) * Math.sin(polar),
+        Math.cos(polar),
+        Math.sin(azimuth) * Math.sin(polar)
     );
 };
 
@@ -211,6 +214,26 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         const failedTextures = failedTexturesRef.current;
         let disposed = false;
 
+        // (Re)bind an image's callbacks to THIS mount's redraw. Images outlive
+        // component mounts via imagesRef, so a cached image finishing its load
+        // must repaint the current overlay, not a disposed one.
+        const bindImageHandlers = (image: HTMLImageElement, safeUrl: string) => {
+            image.onload = () => {
+                if (!disposed) drawOverlay();
+            };
+            image.onerror = () => {
+                // Hosts without CORS headers fail the direct load;
+                // retry through our same-origin image proxy.
+                if (!image.dataset.proxyTried) {
+                    image.dataset.proxyTried = "true";
+                    image.src = `/api/image-proxy?url=${encodeURIComponent(safeUrl)}`;
+                    return;
+                }
+                failedTextures.add(safeUrl);
+                if (!disposed) drawOverlay();
+            };
+        };
+
         const drawOverlay = () => {
             const ctx = overlayCtx;
             ctx.clearRect(0, 0, OVERLAY_W, OVERLAY_H);
@@ -242,34 +265,40 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
                 const img = safeUrl && !failedTextures.has(safeUrl) ? images.get(safeUrl) : undefined;
 
                 if (img && img.complete && img.naturalWidth > 0) {
-                    // Cover-crop the image into the parcel cell. Texture pixel density
-                    // is equal in both axes, so aspect is preserved on the sphere.
-                    const s = Math.max(CELL_W / img.naturalWidth, CELL_H / img.naturalHeight);
-                    const sw = CELL_W / s;
-                    const sh = CELL_H / s;
-                    const sx = (img.naturalWidth - sw) / 2;
-                    const sy = (img.naturalHeight - sh) / 2;
-                    ctx.drawImage(img, sx, sy, sw, sh, x, y, CELL_W, CELL_H);
+                    if (parseMosaicImageUrl(safeUrl!)) {
+                        // Mosaic tiles must fill their cell exactly so adjacent
+                        // tiles join into one continuous artwork on the sphere.
+                        ctx.drawImage(img, x, y, CELL_W, CELL_H);
+                    } else {
+                        // Cover-crop the image into the parcel cell. Texture pixel density
+                        // is equal in both axes, so aspect is preserved on the sphere.
+                        const s = Math.max(CELL_W / img.naturalWidth, CELL_H / img.naturalHeight);
+                        const sw = CELL_W / s;
+                        const sh = CELL_H / s;
+                        const sx = (img.naturalWidth - sw) / 2;
+                        const sy = (img.naturalHeight - sh) / 2;
+                        ctx.drawImage(img, sx, sy, sw, sh, x, y, CELL_W, CELL_H);
+                    }
                 } else {
                     // Colonized tint (also the placeholder while an image loads)
-                    ctx.fillStyle = 'rgba(20, 241, 149, 0.22)';
+                    ctx.fillStyle = 'rgba(20, 241, 149, 0.28)';
                     ctx.fillRect(x + 1, y + 1, CELL_W - 2, CELL_H - 2);
-                    ctx.strokeStyle = 'rgba(20, 241, 149, 0.65)';
+                    ctx.strokeStyle = 'rgba(20, 241, 149, 0.8)';
                     ctx.lineWidth = 1.5;
                     ctx.strokeRect(x + 0.75, y + 0.75, CELL_W - 1.5, CELL_H - 1.5);
 
-                    if (safeUrl && !failedTextures.has(safeUrl) && !images.has(safeUrl)) {
-                        const image = new Image();
-                        // Keep the canvas untainted so it can upload as a WebGL texture
-                        image.crossOrigin = 'anonymous';
-                        image.onload = () => {
-                            if (!disposed) drawOverlay();
-                        };
-                        image.onerror = () => {
-                            failedTextures.add(safeUrl);
-                        };
-                        images.set(safeUrl, image);
-                        image.src = safeUrl;
+                    if (safeUrl && !failedTextures.has(safeUrl)) {
+                        const cached = images.get(safeUrl);
+                        if (cached) {
+                            bindImageHandlers(cached, safeUrl);
+                        } else {
+                            const image = new Image();
+                            // Keep the canvas untainted so it can upload as a WebGL texture
+                            image.crossOrigin = 'anonymous';
+                            bindImageHandlers(image, safeUrl);
+                            images.set(safeUrl, image);
+                            image.src = safeUrl;
+                        }
                     }
                 }
             });

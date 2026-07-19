@@ -159,9 +159,9 @@ export const Header = () => {
                             </div>
                             <div className={styles.stat}>
                                 <div className={`${styles.statValue} ${styles.statValueGreen}`}>
-                                    {marketStats.count.toLocaleString()}
+                                    {(marketStats.total - marketStats.colonized).toLocaleString()}
                                 </div>
-                                <div className={styles.statLabel}>Listed</div>
+                                <div className={styles.statLabel}>Free</div>
                             </div>
                         </div>
                     ) : null}

@@ -23,12 +23,12 @@ const blockPosition = (id: number) => ({
 // Colonized parcel: Sol-green tint + border (matches the map legend).
 // Also the placeholder while a block image loads and the fallback when it fails.
 const drawColonized = (ctx: CanvasRenderingContext2D, bx: number, by: number) => {
-    ctx.fillStyle = 'rgba(20, 241, 149, 0.16)';
+    ctx.fillStyle = 'rgba(20, 241, 149, 0.28)';
     ctx.fillRect(bx + 1, by + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
 
-    ctx.strokeStyle = 'rgba(20, 241, 149, 0.5)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(bx + 0.5, by + 0.5, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+    ctx.strokeStyle = 'rgba(20, 241, 149, 0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx + 0.75, by + 0.75, BLOCK_SIZE - 1.5, BLOCK_SIZE - 1.5);
 };
 
 const drawBlockImage = (
