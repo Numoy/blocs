@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import styles from './MarsGlobe.module.css';
 import type { BlockData } from '@/types';
 import { toSafeExternalUrl } from '@/utils/url';
-import { parseMosaicImageUrl } from '@/utils/mosaicImage';
+import { parseMosaicImageUrl, getMosaicTileUrl } from '@/utils/mosaicImage';
 
 interface MarsGlobeProps {
     blocks: BlockData[];
@@ -26,13 +26,11 @@ const RADIUS = 4.0;
 const MIN_DISTANCE = 5.2;
 const MAX_DISTANCE = 18.0;
 
-// Direction from globe center to the center of a block's parcel.
+// Direction from globe center for texture coordinates (u across, v from top).
 // Derived from THREE.SphereGeometry's vertex formula so it inverts the same
 // UV mapping the raycast click handling reads (col = floor(uv.x * 100)):
 //   x = -cos(2π·u)·sin(π·v), y = cos(π·v), z = sin(2π·u)·sin(π·v)
-const blockDirection = (blockId: number) => {
-    const u = ((blockId % 100) + 0.5) / 100;
-    const v = (Math.floor(blockId / 100) + 0.5) / 100;
+const directionFromUV = (u: number, v: number) => {
     const azimuth = 2 * Math.PI * u;
     const polar = Math.PI * v;
     return new THREE.Vector3(
@@ -41,6 +39,17 @@ const blockDirection = (blockId: number) => {
         Math.sin(azimuth) * Math.sin(polar)
     );
 };
+
+const blockDirection = (blockId: number) =>
+    directionFromUV(((blockId % 100) + 0.5) / 100, (Math.floor(blockId / 100) + 0.5) / 100);
+
+// Billboards float this far above the surface and fade out as the camera
+// closes in (the painted surface parcels take over up close).
+const BILLBOARD_ALTITUDE = 0.62;
+const BILLBOARD_HEIGHT = 0.55;
+const BILLBOARD_FADE_NEAR = 6.4;
+const BILLBOARD_FADE_FAR = 7.6;
+const MAX_BILLBOARDS = 60;
 
 const ATMOSPHERE_VERTEX = `
 varying vec3 vNormal;
@@ -234,6 +243,151 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
             };
         };
 
+        // Billboard cards: parcel artwork floats above its land, camera-facing,
+        // with a stalk down to the parcel. Mosaics get one card showing the
+        // assembled artwork. Depth testing lets the planet occlude far-side
+        // cards; the animate loop fades them out as the camera closes in.
+        const billboardGroup = new THREE.Group();
+        scene.add(billboardGroup);
+
+        const disposeBillboards = () => {
+            for (const child of [...billboardGroup.children]) {
+                billboardGroup.remove(child);
+                if (child instanceof THREE.Sprite) {
+                    child.material.map?.dispose();
+                    child.material.dispose();
+                } else if (child instanceof THREE.Line) {
+                    child.geometry.dispose();
+                    (child.material as THREE.Material).dispose();
+                }
+            }
+        };
+
+        const rebuildBillboards = () => {
+            disposeBillboards();
+            const selected = selectedRef.current;
+            const seenGroups = new Set<string>();
+            let count = 0;
+
+            for (const block of blocksRef.current) {
+                if (count >= MAX_BILLBOARDS) break;
+                if (!block.owner || !block.imageUrl) continue;
+                const safeUrl = toSafeExternalUrl(block.imageUrl);
+                if (!safeUrl) continue;
+
+                const mosaic = parseMosaicImageUrl(safeUrl);
+                if (mosaic && seenGroups.has(mosaic.groupId)) continue;
+
+                let cols = 1;
+                let rows = 1;
+                let anchorId = block.id;
+                let centerU: number;
+                let centerV: number;
+                let tiles: (HTMLImageElement | undefined)[];
+                let isSelected: boolean;
+
+                if (mosaic) {
+                    seenGroups.add(mosaic.groupId);
+                    cols = mosaic.width;
+                    rows = mosaic.height;
+                    anchorId = mosaic.startId;
+                    tiles = [];
+                    for (let i = 0; i < cols * rows; i++) {
+                        const tileUrl = toSafeExternalUrl(getMosaicTileUrl(mosaic, i));
+                        const img = tileUrl ? images.get(tileUrl) : undefined;
+                        tiles.push(img && img.complete && img.naturalWidth > 0 ? img : undefined);
+                    }
+                    const startCol = mosaic.startId % 100;
+                    const startRow = Math.floor(mosaic.startId / 100);
+                    centerU = (startCol + cols / 2) / 100;
+                    centerV = (startRow + rows / 2) / 100;
+                    const selCol = selected !== null ? selected % 100 : -1;
+                    const selRow = selected !== null ? Math.floor(selected / 100) : -1;
+                    isSelected = selCol >= startCol && selCol < startCol + cols
+                        && selRow >= startRow && selRow < startRow + rows;
+                } else {
+                    const img = images.get(safeUrl);
+                    tiles = [img && img.complete && img.naturalWidth > 0 ? img : undefined];
+                    centerU = ((block.id % 100) + 0.5) / 100;
+                    centerV = (Math.floor(block.id / 100) + 0.5) / 100;
+                    isSelected = selected === block.id;
+                }
+
+                // No card until at least one tile has loaded
+                if (!tiles.some(Boolean)) continue;
+
+                const aspect = cols / rows;
+                const cw = aspect >= 1 ? 256 : Math.round(256 * aspect);
+                const ch = aspect >= 1 ? Math.round(256 / aspect) : 256;
+                const card = document.createElement('canvas');
+                card.width = cw;
+                card.height = ch;
+                const cctx = card.getContext('2d')!;
+                const corner = 14;
+
+                cctx.beginPath();
+                if (typeof cctx.roundRect === 'function') {
+                    cctx.roundRect(1, 1, cw - 2, ch - 2, corner);
+                } else {
+                    cctx.rect(1, 1, cw - 2, ch - 2);
+                }
+                cctx.fillStyle = '#15121f';
+                cctx.fill();
+                cctx.save();
+                cctx.clip();
+                const cellW = (cw - 12) / cols;
+                const cellH = (ch - 12) / rows;
+                tiles.forEach((img, i) => {
+                    if (!img) return;
+                    const cx = 6 + (i % cols) * cellW;
+                    const cy = 6 + Math.floor(i / cols) * cellH;
+                    const s = Math.max(cellW / img.naturalWidth, cellH / img.naturalHeight);
+                    const sw = cellW / s;
+                    const sh = cellH / s;
+                    cctx.drawImage(
+                        img,
+                        (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh,
+                        cx, cy, cellW, cellH
+                    );
+                });
+                cctx.restore();
+                cctx.beginPath();
+                if (typeof cctx.roundRect === 'function') {
+                    cctx.roundRect(2, 2, cw - 4, ch - 4, corner);
+                } else {
+                    cctx.rect(2, 2, cw - 4, ch - 4);
+                }
+                cctx.lineWidth = 4;
+                cctx.strokeStyle = isSelected ? '#14f195' : 'rgba(241, 235, 227, 0.9)';
+                cctx.stroke();
+
+                const cardTex = new THREE.CanvasTexture(card);
+                cardTex.colorSpace = THREE.SRGBColorSpace;
+                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                    map: cardTex,
+                    transparent: true,
+                    depthTest: true,
+                }));
+                const dir = directionFromUV(centerU, centerV);
+                sprite.position.copy(dir.clone().multiplyScalar(RADIUS + BILLBOARD_ALTITUDE));
+                sprite.scale.set(BILLBOARD_HEIGHT * (cw / ch), BILLBOARD_HEIGHT, 1);
+                sprite.userData = { blockId: anchorId };
+
+                const stalkGeo = new THREE.BufferGeometry().setFromPoints([
+                    dir.clone().multiplyScalar(RADIUS + 0.01),
+                    dir.clone().multiplyScalar(RADIUS + BILLBOARD_ALTITUDE - BILLBOARD_HEIGHT / 2),
+                ]);
+                const stalk = new THREE.Line(
+                    stalkGeo,
+                    new THREE.LineBasicMaterial({ color: 0x14f195, transparent: true, opacity: 0.55 })
+                );
+
+                billboardGroup.add(stalk);
+                billboardGroup.add(sprite);
+                count++;
+            }
+        };
+
         const drawOverlay = () => {
             const ctx = overlayCtx;
             ctx.clearRect(0, 0, OVERLAY_W, OVERLAY_H);
@@ -319,6 +473,7 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
             }
 
             overlayTex.needsUpdate = true;
+            rebuildBillboards();
         };
 
         redrawRef.current = drawOverlay;
@@ -360,22 +515,25 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         const mouse = new THREE.Vector2();
 
         let isDragging = false;
-        let dragStartTime = 0;
+        let downX = 0;
+        let downY = 0;
 
-        const onPointerDown = () => {
+        const onPointerDown = (event: PointerEvent) => {
             isDragging = false;
-            dragStartTime = Date.now();
+            downX = event.clientX;
+            downY = event.clientY;
         };
 
-        const onPointerMove = () => {
-            // If mouse moves, flag as dragging
-            isDragging = true;
+        const onPointerMove = (event: PointerEvent) => {
+            // Only a real movement counts as a drag — otherwise fast flicks
+            // (rotating the globe) would register as parcel clicks
+            if (Math.hypot(event.clientX - downX, event.clientY - downY) > 6) {
+                isDragging = true;
+            }
         };
 
         const onPointerUp = (event: PointerEvent) => {
-            const clickDuration = Date.now() - dragStartTime;
-            // If they clicked quickly (less than 250ms) and didn't drag far, treat it as a click
-            if (isDragging && clickDuration > 250) return;
+            if (isDragging) return;
 
             const rect = renderer.domElement.getBoundingClientRect();
             mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -383,6 +541,18 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
 
             raycaster.setFromCamera(mouse, camera);
             const marsHit = raycaster.intersectObject(marsMesh)[0];
+            const cardHit = billboardGroup.visible
+                ? raycaster.intersectObjects(
+                    billboardGroup.children.filter((child) => child instanceof THREE.Sprite),
+                    false
+                )[0]
+                : undefined;
+
+            // A billboard wins only when it's actually in front of the planet
+            if (cardHit && (!marsHit || cardHit.distance < marsHit.distance)) {
+                onSelectRef.current(cardHit.object.userData.blockId as number);
+                return;
+            }
             if (marsHit?.uv) {
                 const col = Math.floor(marsHit.uv.x * 100);
                 const row = Math.floor((1 - marsHit.uv.y) * 100);
@@ -472,6 +642,18 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
                 if (t >= 1) cameraTween = null;
             }
 
+            // Fade billboards out as the camera closes in on the surface
+            const camDist = camera.position.length();
+            const fade = Math.min(Math.max(
+                (camDist - BILLBOARD_FADE_NEAR) / (BILLBOARD_FADE_FAR - BILLBOARD_FADE_NEAR), 0), 1);
+            billboardGroup.visible = fade > 0.01;
+            if (billboardGroup.visible) {
+                for (const child of billboardGroup.children) {
+                    const mat = (child as THREE.Sprite).material as THREE.SpriteMaterial;
+                    mat.opacity = (child instanceof THREE.Line ? 0.55 : 1) * fade;
+                }
+            }
+
             controls.update();
             renderer.render(scene, camera);
         };
@@ -491,6 +673,7 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
             renderer.domElement.removeEventListener('touchend', onTouchEnd);
             controls.removeEventListener('start', stopAutoRotate);
             controls.removeEventListener('start', cancelTween);
+            disposeBillboards();
             overlayTex.dispose();
             marsTexture.dispose();
             atmosphereMat.dispose();
