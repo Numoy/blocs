@@ -10,6 +10,7 @@
 
 .canvas {
     outline: none;
+    cursor: crosshair;
 }
 
 /* Soft fade-in when swapping between globe and flat views */

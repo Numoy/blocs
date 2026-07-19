@@ -23,11 +23,13 @@ export const Header = () => {
     const { fundWallet } = useFundWallet();
 
     const marketStats = useMemo(() => {
+        if (!blocks.length) return null;
         const forSale = blocks.filter(b => b.isForSale && b.price !== null);
-        if (!forSale.length) return null;
         return {
-            floor: Math.min(...forSale.map(b => b.price!)),
+            floor: forSale.length ? Math.min(...forSale.map(b => b.price!)) : null,
             count: forSale.length,
+            colonized: blocks.filter(b => b.owner).length,
+            total: blocks.length,
         };
     }, [blocks]);
 
@@ -143,7 +145,16 @@ export const Header = () => {
                     ) : marketStats ? (
                         <div className={styles.statsPill}>
                             <div className={styles.stat}>
-                                <div className={styles.statValue}>{marketStats.floor.toFixed(2)} ◎</div>
+                                <div className={`${styles.statValue} ${styles.statValueWarm}`}>
+                                    {marketStats.colonized.toLocaleString()}
+                                    <span className={styles.statValueSub}> / {marketStats.total.toLocaleString()}</span>
+                                </div>
+                                <div className={styles.statLabel}>Colonized</div>
+                            </div>
+                            <div className={styles.stat}>
+                                <div className={styles.statValue}>
+                                    {marketStats.floor !== null ? `${marketStats.floor.toFixed(2)} ◎` : '—'}
+                                </div>
                                 <div className={styles.statLabel}>Floor</div>
                             </div>
                             <div className={styles.stat}>

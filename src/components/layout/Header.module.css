@@ -83,6 +83,16 @@
   color: var(--accent-secondary);
 }
 
+.statValueWarm {
+  color: var(--accent-warm);
+}
+
+.statValueSub {
+  color: var(--text-tertiary);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
 .statLabel {
   font-family: var(--font-mono);
   font-size: 0.56rem;
@@ -248,7 +258,7 @@
   padding: 0.65rem 0.9rem;
   background: none;
   border: none;
-  color: #ddd;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   font-family: inherit;
   border-radius: 8px;

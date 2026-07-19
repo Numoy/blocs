@@ -100,7 +100,7 @@
 }
 
 .balanceLow {
-    color: #e6a817;
+    color: var(--accent-warm);
 }
 
 .addSolLink {
@@ -108,7 +108,7 @@
     border: none;
     padding: 0;
     cursor: pointer;
-    color: #e6a817;
+    color: var(--accent-warm);
     font-size: inherit;
     text-decoration: underline;
     text-underline-offset: 2px;

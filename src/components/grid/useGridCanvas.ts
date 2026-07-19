@@ -180,8 +180,11 @@ export const useGridCanvas = ({
 
         if (selectedBlockId !== null) {
             const { bx, by } = blockPosition(selectedBlockId);
+            ctx.strokeStyle = 'rgba(20, 241, 149, 0.35)';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(bx - 1, by - 1, BLOCK_SIZE + 2, BLOCK_SIZE + 2);
             ctx.strokeStyle = '#14f195';
-            ctx.lineWidth = 4;
+            ctx.lineWidth = 3;
             ctx.strokeRect(bx + 2, by + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
         }
     }, [blocks, visibleBounds, canvasRef, hoveredBlockId, mosaicBlockIds, selectedBlockId]);

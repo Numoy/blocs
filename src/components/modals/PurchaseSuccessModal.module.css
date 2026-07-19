@@ -14,8 +14,8 @@
 }
 
 .modal {
-    background: #1a1a1a;
-    border: 1px solid #333;
+    background: var(--surface-base);
+    border: 1px solid var(--border-soft);
     border-radius: 12px;
     padding: 30px;
     width: 90%;
@@ -37,7 +37,7 @@
 }
 
 .description {
-    color: #ccc;
+    color: var(--text-secondary);
     margin-bottom: 25px;
     line-height: 1.5;
 }
@@ -49,23 +49,28 @@
 }
 
 .editButton {
-    background: var(--accent-secondary, #00e5ff);
-    color: #000;
+    background: var(--grad-sol);
+    color: #0a0612;
     border: none;
-    padding: 12px;
-    border-radius: 8px;
+    padding: 13px;
+    border-radius: 4px;
+    font-family: var(--font-display), "Orbitron", ui-sans-serif, sans-serif;
     font-weight: 600;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
     cursor: pointer;
-    transition: opacity 0.2s;
+    transition: filter 0.2s, box-shadow 0.2s;
 }
 
 .editButton:hover {
-    opacity: 0.9;
+    filter: brightness(1.08);
+    box-shadow: 0 8px 30px rgba(153, 69, 255, 0.3);
 }
 
 .closeButton {
     background: transparent;
-    border: 1px solid #444;
+    border: 1px solid var(--border-soft);
     color: #fff;
     padding: 12px;
     border-radius: 8px;

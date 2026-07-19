@@ -38,7 +38,7 @@
     right: 1rem;
     background: none;
     border: none;
-    color: #888;
+    color: var(--text-tertiary);
     font-size: 1.5rem;
     cursor: pointer;
     padding: 0.5rem;
@@ -58,7 +58,7 @@
 }
 
 .content {
-    color: #ccc;
+    color: var(--text-secondary);
     font-size: 1rem;
     line-height: 1.6;
     overflow-y: auto;
@@ -88,7 +88,7 @@
 .list li {
     margin-bottom: 0.5rem;
     padding-left: 1rem;
-    border-left: 2px solid #333;
+    border-left: 2px solid var(--border-soft);
 }
 
 .list strong {
@@ -99,7 +99,7 @@
     margin-top: 2rem;
     text-align: center;
     font-size: 0.8rem;
-    color: #666;
+    color: var(--text-tertiary);
 }
 
 .githubCard {
@@ -117,7 +117,7 @@
 
 .githubText {
     margin: 0;
-    color: #bbb;
+    color: var(--text-secondary);
     font-size: 0.92rem;
     line-height: 1.5;
     flex: 1 1 220px;
@@ -127,7 +127,7 @@
     text-decoration: none;
     border-radius: 999px;
     border: 1px solid rgba(20, 241, 149, 0.7);
-    background: #111;
+    background: #0e0b18;
     color: #fff;
     padding: 0.45rem 0.9rem;
     font-size: 0.9rem;
