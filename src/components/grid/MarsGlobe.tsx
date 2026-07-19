@@ -111,6 +111,9 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         const width = container.clientWidth;
         const height = container.clientHeight;
 
+        const prefersReducedMotion = typeof window.matchMedia === 'function'
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
         const scene = new THREE.Scene();
 
         const camera = new THREE.PerspectiveCamera(FOV_DEG, width / height, 0.1, 100);
@@ -132,7 +135,10 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
 
         // Apply the handover view from the flat map, if one was given.
         const initial = initialViewRef.current;
-        controls.autoRotate = !initial; // Idle rotation only until the user takes control
+        // Idle rotation only until the user takes control (and never against
+        // a reduced-motion preference); on a cold start it begins after the
+        // entry glide finishes.
+        controls.autoRotate = false;
         if (initial) {
             const apparentPx = Math.max(initial.apparentDiameterPx, 120);
             const dist = Math.min(
@@ -159,6 +165,28 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.25);
         dirLight2.position.set(-5, -8, -5);
         scene.add(dirLight2);
+
+        // Distant starfield for depth (well beyond max camera distance)
+        const STAR_COUNT = 900;
+        const starPositions = new Float32Array(STAR_COUNT * 3);
+        const starDir = new THREE.Vector3();
+        for (let i = 0; i < STAR_COUNT; i++) {
+            starDir.randomDirection().multiplyScalar(28 + Math.random() * 30);
+            starPositions[i * 3] = starDir.x;
+            starPositions[i * 3 + 1] = starDir.y;
+            starPositions[i * 3 + 2] = starDir.z;
+        }
+        const starGeo = new THREE.BufferGeometry();
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMat = new THREE.PointsMaterial({
+            color: 0xf1ebe3,
+            size: 0.09,
+            sizeAttenuation: true,
+            transparent: true,
+            opacity: 0.7,
+            depthWrite: false,
+        });
+        scene.add(new THREE.Points(starGeo, starMat));
 
         // Load Mars texture
         const textureLoader = new THREE.TextureLoader();
@@ -484,9 +512,11 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         let cameraTween: {
             fromDir: THREE.Vector3;
             toDir: THREE.Vector3;
-            distance: number;
+            fromDist: number;
+            toDist: number;
             start: number;
             duration: number;
+            onDone?: () => void;
         } | null = null;
 
         const focusCamera = (blockId: number) => {
@@ -495,15 +525,43 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
             // Already roughly facing it — no need to move
             if (fromDir.dot(toDir) > Math.cos(Math.PI / 9)) return;
             controls.autoRotate = false;
+            const dist = camera.position.length();
+            if (prefersReducedMotion) {
+                camera.position.copy(toDir.multiplyScalar(dist));
+                controls.update();
+                return;
+            }
             cameraTween = {
                 fromDir,
                 toDir,
-                distance: camera.position.length(),
+                fromDist: dist,
+                toDist: dist,
                 start: performance.now(),
                 duration: 600,
             };
         };
         focusCameraRef.current = focusCamera;
+
+        // Cold start: glide in from deep space, then begin the idle rotation
+        if (!initial) {
+            if (prefersReducedMotion) {
+                // No motion: hold the default framing, no auto-rotate
+            } else {
+                const entryDir = camera.position.clone().normalize();
+                camera.position.copy(entryDir.clone().multiplyScalar(16.5));
+                cameraTween = {
+                    fromDir: entryDir,
+                    toDir: entryDir.clone(),
+                    fromDist: 16.5,
+                    toDist: 11,
+                    start: performance.now() + 200,
+                    duration: 1500,
+                    onDone: () => {
+                        controls.autoRotate = true;
+                    },
+                };
+            }
+        }
 
         const cancelTween = () => {
             cameraTween = null;
@@ -529,6 +587,19 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
             // (rotating the globe) would register as parcel clicks
             if (Math.hypot(event.clientX - downX, event.clientY - downY) > 6) {
                 isDragging = true;
+            }
+
+            // Pointer cursor over billboard cards
+            if (billboardGroup.visible && event.buttons === 0) {
+                const rect = renderer.domElement.getBoundingClientRect();
+                mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const hit = raycaster.intersectObjects(
+                    billboardGroup.children.filter((child) => child instanceof THREE.Sprite),
+                    false
+                )[0];
+                container.style.cursor = hit ? 'pointer' : 'grab';
             }
         };
 
@@ -628,7 +699,7 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
             animId = requestAnimationFrame(animate);
 
             if (cameraTween) {
-                const t = Math.min((performance.now() - cameraTween.start) / cameraTween.duration, 1);
+                const t = Math.min(Math.max((performance.now() - cameraTween.start) / cameraTween.duration, 0), 1);
                 const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
                 const angle = cameraTween.fromDir.angleTo(cameraTween.toDir);
                 const axis = new THREE.Vector3()
@@ -637,9 +708,14 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
                 const dir = axis.lengthSq() > 0.5
                     ? cameraTween.fromDir.clone().applyAxisAngle(axis, angle * eased)
                     : cameraTween.toDir.clone();
-                camera.position.copy(dir.multiplyScalar(cameraTween.distance));
+                const dist = cameraTween.fromDist + (cameraTween.toDist - cameraTween.fromDist) * eased;
+                camera.position.copy(dir.multiplyScalar(dist));
                 camera.lookAt(0, 0, 0);
-                if (t >= 1) cameraTween = null;
+                if (t >= 1) {
+                    const done = cameraTween.onDone;
+                    cameraTween = null;
+                    done?.();
+                }
             }
 
             // Fade billboards out as the camera closes in on the surface
@@ -677,6 +753,8 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
             overlayTex.dispose();
             marsTexture.dispose();
             atmosphereMat.dispose();
+            starGeo.dispose();
+            starMat.dispose();
             sphereGeo.dispose();
             controls.dispose();
             renderer.dispose();
