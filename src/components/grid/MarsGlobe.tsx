@@ -7,6 +7,8 @@ import styles from './MarsGlobe.module.css';
 import type { BlockData } from '@/types';
 import { toSafeExternalUrl } from '@/utils/url';
 import { parseMosaicImageUrl, getMosaicTileUrl } from '@/utils/mosaicImage';
+import { GRID_WIDTH } from '@/utils/constants';
+import { directionFromUV, blockDirection, groupBillboards, isBlockInGroup, billboardCardSize } from '@/utils/globeMath';
 
 interface MarsGlobeProps {
     blocks: BlockData[];
@@ -18,6 +20,9 @@ interface MarsGlobeProps {
     /** Fired when the user keeps zooming in at minimum distance: hands over the
      *  block under the viewport center and the globe's current apparent size. */
     onZoomIntoSurface?: (blockId: number, apparentDiameterPx: number) => void;
+    /** Fired if WebGL can't be initialized (old browser, disabled GPU, etc.)
+     *  so the caller can fall back to the flat map instead of the app crashing. */
+    onWebGLUnavailable?: () => void;
 }
 
 const FOV_DEG = 45;
@@ -26,22 +31,16 @@ const RADIUS = 4.0;
 const MIN_DISTANCE = 5.2;
 const MAX_DISTANCE = 18.0;
 
-// Direction from globe center for texture coordinates (u across, v from top).
-// Derived from THREE.SphereGeometry's vertex formula so it inverts the same
-// UV mapping the raycast click handling reads (col = floor(uv.x * 100)):
-//   x = -cos(2π·u)·sin(π·v), y = cos(π·v), z = sin(2π·u)·sin(π·v)
-const directionFromUV = (u: number, v: number) => {
-    const azimuth = 2 * Math.PI * u;
-    const polar = Math.PI * v;
-    return new THREE.Vector3(
-        -Math.cos(azimuth) * Math.sin(polar),
-        Math.cos(polar),
-        Math.sin(azimuth) * Math.sin(polar)
-    );
+// directionFromUV/blockDirection live in @/utils/globeMath (pure, unit-tested);
+// this local helper wraps their plain {x,y,z} result as a THREE.Vector3.
+const dirVector = (u: number, v: number) => {
+    const d = directionFromUV(u, v);
+    return new THREE.Vector3(d.x, d.y, d.z);
 };
-
-const blockDirection = (blockId: number) =>
-    directionFromUV(((blockId % 100) + 0.5) / 100, (Math.floor(blockId / 100) + 0.5) / 100);
+const blockDirVector = (blockId: number) => {
+    const d = blockDirection(blockId);
+    return new THREE.Vector3(d.x, d.y, d.z);
+};
 
 // Billboards float this far above the surface and fade out as the camera
 // closes in (the painted surface parcels take over up close).
@@ -68,7 +67,7 @@ void main() {
 }
 `;
 
-export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView, onZoomIntoSurface }: MarsGlobeProps) => {
+export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView, onZoomIntoSurface, onWebGLUnavailable }: MarsGlobeProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
 
@@ -83,6 +82,7 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
     const selectedRef = useRef(selectedBlockId);
     const onSelectRef = useRef(onSelectBlock);
     const onZoomRef = useRef(onZoomIntoSurface);
+    const onWebGLUnavailableRef = useRef(onWebGLUnavailable);
     const initialViewRef = useRef(initialView);
     const redrawRef = useRef<(() => void) | null>(null);
     const focusCameraRef = useRef<((blockId: number) => void) | null>(null);
@@ -90,18 +90,24 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
     useEffect(() => {
         onSelectRef.current = onSelectBlock;
         onZoomRef.current = onZoomIntoSurface;
+        onWebGLUnavailableRef.current = onWebGLUnavailable;
     });
 
     // Repaint the surface overlay when data or selection changes; glide the
-    // camera over to the selected parcel if it's out of view.
+    // camera over to the selected parcel if it's out of view. The redraw
+    // itself (full canvas repaint + billboard texture rebuild) is debounced
+    // so a burst of websocket-driven block refreshes coalesces into one
+    // repaint instead of stalling the main thread on every message.
     useEffect(() => {
         blocksRef.current = blocks;
         const selectionChanged = selectedRef.current !== selectedBlockId;
         selectedRef.current = selectedBlockId;
-        redrawRef.current?.();
+
+        const timeout = setTimeout(() => redrawRef.current?.(), 80);
         if (selectionChanged && selectedBlockId !== null) {
             focusCameraRef.current?.(selectedBlockId);
         }
+        return () => clearTimeout(timeout);
     }, [blocks, selectedBlockId]);
 
     useEffect(() => {
@@ -119,7 +125,16 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         const camera = new THREE.PerspectiveCamera(FOV_DEG, width / height, 0.1, 100);
         camera.position.set(0, 0, 11);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        // WebGL can be unavailable (old browser, disabled/blocklisted GPU, some
+        // headless/embedded webviews) — three.js throws synchronously in that
+        // case. Fail soft into the flat map instead of crashing the whole app.
+        let renderer: THREE.WebGLRenderer;
+        try {
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        } catch {
+            onWebGLUnavailableRef.current?.();
+            return;
+        }
         renderer.setSize(width, height);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         container.appendChild(renderer.domElement);
@@ -145,7 +160,7 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
                 Math.max((RADIUS * height) / (TAN_HALF_FOV * apparentPx), MIN_DISTANCE + 0.2),
                 MAX_DISTANCE - 0.5
             );
-            camera.position.copy(blockDirection(initial.blockId).multiplyScalar(dist));
+            camera.position.copy(blockDirVector(initial.blockId).multiplyScalar(dist));
         }
         controls.update();
 
@@ -188,11 +203,16 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         });
         scene.add(new THREE.Points(starGeo, starMat));
 
-        // Load Mars texture
+        // Load Mars texture. The error callback keeps the loading spinner from
+        // hanging forever if the asset fails to fetch — the sphere still
+        // renders (untextured) and the scene stays interactive.
         const textureLoader = new THREE.TextureLoader();
-        const marsTexture = textureLoader.load('/mars_surface.jpg', () => {
-            setLoading(false);
-        });
+        const marsTexture = textureLoader.load(
+            '/mars_surface.jpg',
+            () => setLoading(false),
+            undefined,
+            () => setLoading(false)
+        );
         marsTexture.colorSpace = THREE.SRGBColorSpace;
         marsTexture.minFilter = THREE.LinearMipmapLinearFilter;
         marsTexture.magFilter = THREE.LinearFilter;
@@ -294,59 +314,27 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         const rebuildBillboards = () => {
             disposeBillboards();
             const selected = selectedRef.current;
-            const seenGroups = new Set<string>();
-            let count = 0;
+            const groups = groupBillboards(blocksRef.current, MAX_BILLBOARDS);
 
-            for (const block of blocksRef.current) {
-                if (count >= MAX_BILLBOARDS) break;
-                if (!block.owner || !block.imageUrl) continue;
-                const safeUrl = toSafeExternalUrl(block.imageUrl);
-                if (!safeUrl) continue;
+            for (const group of groups) {
+                const { cols, rows, centerU, centerV, mosaic, anchorId } = group;
 
-                const mosaic = parseMosaicImageUrl(safeUrl);
-                if (mosaic && seenGroups.has(mosaic.groupId)) continue;
-
-                let cols = 1;
-                let rows = 1;
-                let anchorId = block.id;
-                let centerU: number;
-                let centerV: number;
-                let tiles: (HTMLImageElement | undefined)[];
-                let isSelected: boolean;
-
-                if (mosaic) {
-                    seenGroups.add(mosaic.groupId);
-                    cols = mosaic.width;
-                    rows = mosaic.height;
-                    anchorId = mosaic.startId;
-                    tiles = [];
-                    for (let i = 0; i < cols * rows; i++) {
+                const tiles: (HTMLImageElement | undefined)[] = mosaic
+                    ? Array.from({ length: cols * rows }, (_, i) => {
                         const tileUrl = toSafeExternalUrl(getMosaicTileUrl(mosaic, i));
                         const img = tileUrl ? images.get(tileUrl) : undefined;
-                        tiles.push(img && img.complete && img.naturalWidth > 0 ? img : undefined);
-                    }
-                    const startCol = mosaic.startId % 100;
-                    const startRow = Math.floor(mosaic.startId / 100);
-                    centerU = (startCol + cols / 2) / 100;
-                    centerV = (startRow + rows / 2) / 100;
-                    const selCol = selected !== null ? selected % 100 : -1;
-                    const selRow = selected !== null ? Math.floor(selected / 100) : -1;
-                    isSelected = selCol >= startCol && selCol < startCol + cols
-                        && selRow >= startRow && selRow < startRow + rows;
-                } else {
-                    const img = images.get(safeUrl);
-                    tiles = [img && img.complete && img.naturalWidth > 0 ? img : undefined];
-                    centerU = ((block.id % 100) + 0.5) / 100;
-                    centerV = (Math.floor(block.id / 100) + 0.5) / 100;
-                    isSelected = selected === block.id;
-                }
+                        return img && img.complete && img.naturalWidth > 0 ? img : undefined;
+                    })
+                    : (() => {
+                        const img = images.get(group.safeUrl);
+                        return [img && img.complete && img.naturalWidth > 0 ? img : undefined];
+                    })();
 
                 // No card until at least one tile has loaded
                 if (!tiles.some(Boolean)) continue;
 
-                const aspect = cols / rows;
-                const cw = aspect >= 1 ? 256 : Math.round(256 * aspect);
-                const ch = aspect >= 1 ? Math.round(256 / aspect) : 256;
+                const isSelected = isBlockInGroup(group, selected);
+                const { width: cw, height: ch } = billboardCardSize(cols, rows);
                 const card = document.createElement('canvas');
                 card.width = cw;
                 card.height = ch;
@@ -396,7 +384,7 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
                     transparent: true,
                     depthTest: true,
                 }));
-                const dir = directionFromUV(centerU, centerV);
+                const dir = dirVector(centerU, centerV);
                 sprite.position.copy(dir.clone().multiplyScalar(RADIUS + BILLBOARD_ALTITUDE));
                 sprite.scale.set(BILLBOARD_HEIGHT * (cw / ch), BILLBOARD_HEIGHT, 1);
                 sprite.userData = { blockId: anchorId };
@@ -412,7 +400,6 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
 
                 billboardGroup.add(stalk);
                 billboardGroup.add(sprite);
-                count++;
             }
         };
 
@@ -520,7 +507,7 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         } | null = null;
 
         const focusCamera = (blockId: number) => {
-            const toDir = blockDirection(blockId);
+            const toDir = blockDirVector(blockId);
             const fromDir = camera.position.clone().normalize();
             // Already roughly facing it — no need to move
             if (fromDir.dot(toDir) > Math.cos(Math.PI / 9)) return;
@@ -635,6 +622,38 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
         container.addEventListener('pointermove', onPointerMove);
         container.addEventListener('pointerup', onPointerUp);
 
+        // Keyboard navigation: arrow keys walk the same row/col neighbor a
+        // click would select, mirroring the flat map's keyboard nav so the
+        // globe is reachable without a mouse or touchscreen.
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+            if (!['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+            event.preventDefault();
+
+            const total = blocksRef.current.length;
+            if (total === 0) return;
+
+            const current = selectedRef.current;
+            if (current === null) {
+                onSelectRef.current(0);
+                return;
+            }
+
+            let next = current;
+            if (event.key === 'ArrowRight') {
+                if ((current + 1) % GRID_WIDTH !== 0) next += 1;
+            } else if (event.key === 'ArrowLeft') {
+                if (current % GRID_WIDTH !== 0) next -= 1;
+            } else if (event.key === 'ArrowDown') {
+                if (current + GRID_WIDTH < total) next += GRID_WIDTH;
+            } else if (event.key === 'ArrowUp') {
+                if (current - GRID_WIDTH >= 0) next -= GRID_WIDTH;
+            }
+
+            if (next !== current) onSelectRef.current(next);
+        };
+        container.addEventListener('keydown', onKeyDown);
+
         // Zooming in past the minimum distance hands over to the flat map,
         // centered on the parcel under the middle of the viewport.
         let surfaceZoomFired = false;
@@ -744,6 +763,7 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
             container.removeEventListener('pointerdown', onPointerDown);
             container.removeEventListener('pointermove', onPointerMove);
             container.removeEventListener('pointerup', onPointerUp);
+            container.removeEventListener('keydown', onKeyDown);
             renderer.domElement.removeEventListener('wheel', onWheelZoomThrough);
             renderer.domElement.removeEventListener('touchmove', onTouchMove);
             renderer.domElement.removeEventListener('touchend', onTouchEnd);
@@ -766,7 +786,13 @@ export const MarsGlobe = ({ blocks, selectedBlockId, onSelectBlock, initialView,
     }, []);
 
     return (
-        <div className={styles.container} ref={containerRef}>
+        <div
+            className={styles.container}
+            ref={containerRef}
+            tabIndex={0}
+            role="application"
+            aria-label="Interactive 3D Mars globe. Drag to rotate, click a parcel to select it, or use arrow keys to move the selection between parcels."
+        >
             {loading && (
                 <div className={styles.loadingOverlay}>
                     <div className={styles.spinner}></div>

@@ -2,9 +2,17 @@
     width: 100%;
     height: 100%;
     position: relative;
-    outline: none;
     overflow: hidden;
     background: transparent;
+}
+
+.container:focus {
+    outline: none;
+}
+
+.container:focus-visible {
+    outline: 2px solid var(--accent-secondary);
+    outline-offset: -2px;
 }
 
 .canvas {

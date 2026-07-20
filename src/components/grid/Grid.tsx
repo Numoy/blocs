@@ -18,6 +18,7 @@ import { useGridInteraction } from './useGridInteraction';
 import { MyBlocksList } from './MyBlocksList';
 import { MobileBlockSheet } from './MobileBlockSheet';
 import { MarsGlobe } from './MarsGlobe';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { MosaicEditorModal } from '@/components/mosaic/MosaicEditorModal';
 import { MosaicPreview } from '@/components/mosaic/MosaicPreview';
 import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
@@ -199,6 +200,16 @@ export const Grid = () => {
         // Continue the zoom into the flat map at the matching scale
         const scale = Math.min(Math.max(apparentDiameterPx / CANVAS_RES, 0.4), 1.2);
         setPendingFocus({ blockId, scale });
+        setViewMode('flat');
+    }, []);
+
+    // WebGL can be unavailable (old browser, disabled/blocklisted GPU) or the
+    // globe can throw for an unrelated reason (caught by the ErrorBoundary
+    // below) — either way, fall back to the flat map instead of losing the
+    // whole app.
+    const handleGlobeUnavailable = useCallback(() => {
+        setGlobeView(null);
+        setPendingFocus(null);
         setViewMode('flat');
     }, []);
 
@@ -583,13 +594,29 @@ export const Grid = () => {
 
             {viewMode === 'globe' ? (
                 <div key="globe" className={styles.viewFade}>
-                    <MarsGlobe
-                        blocks={blocks}
-                        selectedBlockId={selectedBlock?.id ?? null}
-                        onSelectBlock={handleGlobeSelect}
-                        initialView={globeView}
-                        onZoomIntoSurface={handleZoomIntoSurface}
-                    />
+                    <ErrorBoundary
+                        fallback={
+                            <div className={styles.globeFallback}>
+                                <p>3D view isn&apos;t available in this browser.</p>
+                                <button
+                                    type="button"
+                                    className={`${styles.toolbarButton} ${styles.globeFallbackButton}`}
+                                    onClick={handleGlobeUnavailable}
+                                >
+                                    Use 2D Map
+                                </button>
+                            </div>
+                        }
+                    >
+                        <MarsGlobe
+                            blocks={blocks}
+                            selectedBlockId={selectedBlock?.id ?? null}
+                            onSelectBlock={handleGlobeSelect}
+                            initialView={globeView}
+                            onZoomIntoSurface={handleZoomIntoSurface}
+                            onWebGLUnavailable={handleGlobeUnavailable}
+                        />
+                    </ErrorBoundary>
                 </div>
             ) : (
                 <div key="flat" className={styles.viewFade}>
