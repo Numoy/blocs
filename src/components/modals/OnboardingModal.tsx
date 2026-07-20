@@ -32,21 +32,21 @@ export const OnboardingModal = ({ isOpen, onClose }: OnboardingModalProps) => {
                     ×
                 </button>
 
-                <h2 id="onboarding-modal-title" className={styles.title}>Welcome to 10,000 Blocks</h2>
+                <h2 id="onboarding-modal-title" className={styles.title}>Welcome to Mars Blocs</h2>
 
                 <div className={styles.content}>
                     <ul className={styles.tips}>
                         <li className={styles.tip}>
-                            <strong>Explore</strong> the 100×100 grid by panning and zooming — every block is a piece of the Solana blockchain.
+                            <strong>Explore</strong> — spin the planet and zoom in to drop onto the surface map. Zoom out anytime to return to orbit. Every parcel is a real piece of Mars registered on the Solana blockchain.
                         </li>
                         <li className={styles.tip}>
-                            <strong>Buy</strong> any available block for SOL and make it permanently yours.
+                            <strong>Claim</strong> — tap any parcel to see its details, then claim available land for SOL and make it permanently yours.
                         </li>
                         <li className={styles.tip}>
-                            <strong>Customize</strong> your block with an image, message, and link for the world to see.
+                            <strong>Customize</strong> your plot with an image, custom colonist message, and link to mark your base.
                         </li>
                         <li className={styles.tip}>
-                            <strong>Trade</strong> — list your block for sale at any price you choose.
+                            <strong>Trade</strong> — list your plot for resale to other colonists at any price you choose.
                         </li>
                     </ul>
 
@@ -55,7 +55,7 @@ export const OnboardingModal = ({ isOpen, onClose }: OnboardingModalProps) => {
                         onClick={onClose}
                         data-autofocus="true"
                     >
-                        Explore the Grid
+                        Explore Mars
                     </button>
                 </div>
             </div>

@@ -37,7 +37,7 @@
 .clearButton {
     background: var(--surface-elevated);
     border: 1px solid var(--border-soft);
-    color: #ccc;
+    color: var(--text-secondary);
     width: 36px;
     height: 36px;
     border-radius: var(--radius-sm);
@@ -147,12 +147,12 @@
 
 .id {
     font-size: 0.86rem;
-    color: #eee;
+    color: var(--foreground);
 }
 
 .price {
     font-size: 0.74rem;
-    color: var(--accent-secondary, #00e5ff);
+    color: var(--accent-secondary);
 }
 
 @media (max-width: 900px) {

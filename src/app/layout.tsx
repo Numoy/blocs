@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Toaster } from 'sonner';
 import PlausibleProvider from "next-plausible";
 import "./globals.css";
-// import { Inter } from "next/font/google";
+import { Orbitron, Space_Grotesk } from "next/font/google";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import { ClientRoot } from "@/components/providers/ClientRoot";
 import { Header } from "@/components/layout/Header";
@@ -10,34 +10,47 @@ import { ProgramProvider } from "@/context/ProgramContext";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { getSiteOrigin, getSiteUrl } from "@/utils/siteUrl";
 
+const orbitron = Orbitron({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800", "900"],
+  variable: "--font-display",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+});
+
 const metadataBase = getSiteUrl();
 const siteUrl = getSiteOrigin();
-const siteName = "Blocs";
+const siteName = "Mars Blocs";
 const siteDescription =
-  "A decentralized 100x100 grid on Solana where you can buy, trade, and own one of 10,000 blocks permanently.";
+  "Claim, own, and trade land plots on Planet Mars on-chain using Solana. Join the 10,000 plots planetary colony.";
 const defaultOgImage = {
   url: "/og-image.png",
   width: 1200,
   height: 630,
-  alt: "Blocs: 10,000 ownable blocks on Solana",
+  alt: "Mars Blocs: 10,000 ownable plots on Planet Mars",
 };
 
 
 export const metadata: Metadata = {
   metadataBase,
   title: {
-    default: "Blocs | 10,000 Blocks on Solana",
-    template: "%s | Blocs",
+    default: "Mars Blocs | 10,000 Plots on Planet Mars",
+    template: "%s | Mars Blocs",
   },
   description: siteDescription,
   applicationName: siteName,
   keywords: [
+    "Mars Plots",
+    "Mars land plots",
+    "Solana Mars",
+    "decentralized land",
+    "space real estate",
+    "planetary colony map",
     "Solana",
-    "on-chain grid",
-    "NFT alternative",
-    "decentralized ownership",
-    "digital real estate",
-    "block marketplace",
   ],
   alternates: {
     canonical: "/",
@@ -76,7 +89,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
+  themeColor: "#0b0a14",
 };
 
 const webSiteStructuredData = {
@@ -95,7 +108,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="app-font" suppressHydrationWarning>
+      <body className={`${orbitron.variable} ${spaceGrotesk.variable} app-font`} suppressHydrationWarning>
+        <div className="aurora" aria-hidden="true">
+          <b className="auroraP1" />
+          <b className="auroraP2" />
+          <b className="auroraP3" />
+          <span className="auroraGrain" />
+        </div>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteStructuredData) }}

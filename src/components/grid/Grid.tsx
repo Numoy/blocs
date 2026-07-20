@@ -17,6 +17,8 @@ import { useGridCanvas } from './useGridCanvas';
 import { useGridInteraction } from './useGridInteraction';
 import { MyBlocksList } from './MyBlocksList';
 import { MobileBlockSheet } from './MobileBlockSheet';
+import { MarsGlobe } from './MarsGlobe';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { MosaicEditorModal } from '@/components/mosaic/MosaicEditorModal';
 import { MosaicPreview } from '@/components/mosaic/MosaicPreview';
 import { PurchaseSuccessModal } from "@/components/modals/PurchaseSuccessModal";
@@ -26,8 +28,17 @@ import { toSafeExternalUrl } from '@/utils/url';
 import { toErrorCategory, trackPlausibleEvent } from '@/utils/analytics';
 import { shareBlock } from '@/utils/shareBlock';
 import { parseGridBlockId } from '@/utils/numberParsing';
+import { computeBlockTransform } from '@/utils/gridTransform';
 import { buildMosaicSelection, validateMosaicSelection } from '@/utils/mosaic';
 import { parseMosaicImageUrl } from '@/utils/mosaicImage';
+
+// High-res <img> overlays and pixelated rendering toggle with hysteresis so
+// hovering around a single threshold doesn't pop layers in and out.
+const HIGH_RES_ON = 1.6;
+const HIGH_RES_OFF = 1.4;
+
+// Zooming the flat map out this far (gesture end) returns to the globe.
+const GLOBE_SWITCH_SCALE = 0.35;
 
 export const Grid = () => {
     const { blocks, buyBlock, isLoading, isSyncing, openWalletModal } = useProgram();
@@ -40,6 +51,18 @@ export const Grid = () => {
     const [isMobileBuying, setIsMobileBuying] = useState(false);
     const [viewingOwner, setViewingOwner] = useState<string | null>(null);
     const [jumpBlockInput, setJumpBlockInput] = useState("");
+
+    const searchParams = useSearchParams();
+    const blockParam = searchParams.get('block');
+
+    const [viewMode, setViewMode] = useState<'flat' | 'globe'>(() =>
+        blockParam ? 'flat' : 'globe'
+    );
+    // Block the next flat-view mount should center on (set when leaving the globe).
+    const [pendingFocus, setPendingFocus] = useState<{ blockId: number; scale: number } | null>(null);
+    // Camera focus the globe should mount with, so leaving the flat map by zooming
+    // out lands on the same spot at a matching apparent size.
+    const [globeView, setGlobeView] = useState<{ blockId: number; apparentDiameterPx: number } | null>(null);
     const [isMosaicMode, setIsMosaicMode] = useState(false);
     const [mosaicStartId, setMosaicStartId] = useState<number | null>(null);
     const [mosaicEndId, setMosaicEndId] = useState<number | null>(null);
@@ -48,9 +71,6 @@ export const Grid = () => {
     const [showOnboarding, setShowOnboarding] = useState(() =>
         typeof window !== 'undefined' && !localStorage.getItem('blocs_has_visited')
     );
-
-    const searchParams = useSearchParams();
-    const blockParam = searchParams.get('block');
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const transformRef = useRef<ReactZoomPanPinchRef | null>(null);
@@ -76,36 +96,27 @@ export const Grid = () => {
         if (blockParam) {
             const id = parseGridBlockId(blockParam);
             if (id !== null) {
-                const col = id % GRID_WIDTH;
-                const row = Math.floor(id / GRID_WIDTH);
-
-                const targetX = col * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
-                const targetY = row * BLOCK_SIZE + BLOCK_SIZE / 2 + CANVAS_MARGIN;
-                const scale = 2.0;
-
-                const winW = typeof window !== 'undefined' ? window.innerWidth : 1000;
-                const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
-
-                return {
-                    scale,
-                    positionX: -targetX * scale + winW / 2,
-                    positionY: -targetY * scale + winH / 2,
-                };
+                return computeBlockTransform(id);
             }
         }
 
         return { scale: 0.6, positionX: 0, positionY: 0 };
     }, [blockParam]);
 
+    // Transform the flat view mounts with: a pending focus block wins over the deep link.
+    const flatMountTransform = pendingFocus !== null
+        ? computeBlockTransform(pendingFocus.blockId, pendingFocus.scale)
+        : initialTransform;
+
     const { visibleBounds, updateVisibility } = useGridVisibility();
-    const [currentScale, setCurrentScale] = useState(initialTransform.scale);
-    const HIGH_RES_THRESHOLD = 1.5;
+    const scaleRef = useRef(initialTransform.scale);
+    const [isHighRes, setIsHighRes] = useState(initialTransform.scale >= HIGH_RES_ON);
 
     // At high zoom, collect visible blocks with images so we can overlay native <img>
     // elements that render at the source image's full resolution instead of the canvas's
     // fixed 30×30px-per-block budget.
     const highResOverlays = useMemo(() => {
-        if (currentScale < HIGH_RES_THRESHOLD) return [];
+        if (!isHighRes) return [];
         const startCol = Math.max(0, Math.floor(visibleBounds.minX / BLOCK_SIZE));
         const endCol = Math.min(GRID_WIDTH - 1, Math.ceil(visibleBounds.maxX / BLOCK_SIZE));
         const startRow = Math.max(0, Math.floor(visibleBounds.minY / BLOCK_SIZE));
@@ -119,7 +130,7 @@ export const Grid = () => {
             }
         }
         return result;
-    }, [currentScale, visibleBounds, blocks]);
+    }, [isHighRes, visibleBounds, blocks]);
     const zoomToBlock = useCallback((blockId: number) => {
         const ref = transformRef.current;
         if (!ref) return;
@@ -160,6 +171,89 @@ export const Grid = () => {
         onBlockSelect: zoomToBlock,
     });
 
+    // Select a block and show it in the flat view. From the globe, the flat view
+    // mounts already centered on the block (no reset-then-animate jump); when
+    // already flat, it animates there.
+    const focusBlockInFlat = useCallback((blockId: number, mode: 'view' | 'edit' = 'view') => {
+        const block = blocks[blockId];
+        if (!block) return;
+        setSelectedBlock(block);
+        setSidebarMode(mode);
+        if (viewMode === 'globe') {
+            setPendingFocus({ blockId, scale: 2.0 });
+            setViewMode('flat');
+        } else {
+            zoomToBlock(blockId);
+        }
+    }, [blocks, setSelectedBlock, setSidebarMode, viewMode, zoomToBlock]);
+
+    // Clicking a parcel on the globe selects it in place (highlight + sidebar);
+    // the flat map is reached by zooming in or via the toolbar toggle.
+    const handleGlobeSelect = useCallback((blockId: number) => {
+        const block = blocks[blockId];
+        if (!block) return;
+        setSelectedBlock(block);
+        setSidebarMode('view');
+    }, [blocks, setSelectedBlock, setSidebarMode]);
+
+    const handleZoomIntoSurface = useCallback((blockId: number, apparentDiameterPx: number) => {
+        // Continue the zoom into the flat map at the matching scale
+        const scale = Math.min(Math.max(apparentDiameterPx / CANVAS_RES, 0.4), 1.2);
+        setPendingFocus({ blockId, scale });
+        setViewMode('flat');
+    }, []);
+
+    // WebGL can be unavailable (old browser, disabled/blocklisted GPU) or the
+    // globe can throw for an unrelated reason (caught by the ErrorBoundary
+    // below) — either way, fall back to the flat map instead of losing the
+    // whole app.
+    const handleGlobeUnavailable = useCallback(() => {
+        setGlobeView(null);
+        setPendingFocus(null);
+        setViewMode('flat');
+    }, []);
+
+    // Hand the globe the block under the viewport center and the map's current
+    // on-screen width so it mounts scale- and position-matched.
+    const handoverToGlobe = useCallback((state: { scale: number; positionX: number; positionY: number }) => {
+        const { scale, positionX, positionY } = state;
+        const centerX = (window.innerWidth / 2 - positionX) / scale - CANVAS_MARGIN;
+        const centerY = (window.innerHeight / 2 - positionY) / scale - CANVAS_MARGIN;
+        const col = Math.min(GRID_WIDTH - 1, Math.max(0, Math.floor(centerX / BLOCK_SIZE)));
+        const row = Math.min(GRID_WIDTH - 1, Math.max(0, Math.floor(centerY / BLOCK_SIZE)));
+        setGlobeView({
+            blockId: row * GRID_WIDTH + col,
+            apparentDiameterPx: CANVAS_RES * scale,
+        });
+        setPendingFocus(null);
+        setViewMode('globe');
+    }, []);
+
+    // Handle initial deep-linked block selection. `blocks` gets a new array
+    // reference on every background sync, so without this guard the effect
+    // would re-fire on every refresh and keep forcing the user back to the
+    // deep-linked block/view even after they've closed the sidebar or
+    // navigated elsewhere. Applying it once per blockParam value fixes that
+    // while still re-applying if the URL's ?block= actually changes.
+    const appliedBlockParamRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!blockParam || blocks.length === 0) return;
+        if (appliedBlockParamRef.current === blockParam) return;
+
+        const id = parseGridBlockId(blockParam);
+        if (id !== null && id >= 0 && id < blocks.length) {
+            const block = blocks[id];
+            if (block) {
+                appliedBlockParamRef.current = blockParam;
+                setTimeout(() => {
+                    setSelectedBlock(block);
+                    setSidebarMode('view');
+                    setViewMode('flat');
+                }, 0);
+            }
+        }
+    }, [blockParam, blocks, setSelectedBlock, setSidebarMode, setViewMode]);
+
     const getBlockIdFromCanvasEvent = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (!canvas) return null;
@@ -187,12 +281,12 @@ export const Grid = () => {
         setMosaicStartId(null);
         setMosaicEndId(null);
         setMosaicHoverId(null);
-    }, []);
+    }, [setMosaicStartId, setMosaicEndId, setMosaicHoverId]);
 
     const closeMosaicMode = useCallback(() => {
         setIsMosaicMode(false);
         resetMosaicSelection();
-    }, [resetMosaicSelection]);
+    }, [setIsMosaicMode, resetMosaicSelection]);
 
     const handleMosaicCanvasClick = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
         event.preventDefault();
@@ -212,14 +306,14 @@ export const Grid = () => {
         trackPlausibleEvent("mosaic_selection_changed", {
             block_count: buildMosaicSelection(mosaicStartId, blockId)?.blockIds.length ?? 0,
         });
-    }, [getBlockIdFromCanvasEvent, mosaicEndId, mosaicStartId]);
+    }, [getBlockIdFromCanvasEvent, mosaicEndId, mosaicStartId, setMosaicStartId, setMosaicEndId, setMosaicHoverId]);
 
     const handleMosaicMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
         if (!isMosaicMode || mosaicStartId === null || mosaicEndId !== null) {
             return;
         }
         setMosaicHoverId(getBlockIdFromCanvasEvent(event));
-    }, [getBlockIdFromCanvasEvent, isMosaicMode, mosaicEndId, mosaicStartId]);
+    }, [getBlockIdFromCanvasEvent, isMosaicMode, mosaicEndId, mosaicStartId, setMosaicHoverId]);
 
     const handleJumpToBlock = useCallback((event?: FormEvent<HTMLFormElement>) => {
         event?.preventDefault();
@@ -230,14 +324,12 @@ export const Grid = () => {
         }
         const block = blocks[id];
         if (!block) return;
-        setSelectedBlock(block);
-        setSidebarMode('view');
-        zoomToBlock(id);
+        focusBlockInFlat(id, 'view');
         trackPlausibleEvent("grid_jump_to_block", {
             block_id: id,
             ui_source: isMobileViewport ? "mobile_toolbar" : "grid_toolbar",
         });
-    }, [blocks, isMobileViewport, jumpBlockInput, setSelectedBlock, setSidebarMode, zoomToBlock]);
+    }, [blocks, focusBlockInFlat, isMobileViewport, jumpBlockInput]);
 
     useGridCanvas({
         canvasRef,
@@ -309,7 +401,7 @@ export const Grid = () => {
         } finally {
             isBuyingRef.current = false;
         }
-    }, [authenticated, buyBlock, connected, openWalletModal, queuePendingBuy]);
+    }, [adapterWallet, authenticated, buyBlock, connected, openWalletModal, queuePendingBuy]);
 
     // Auto-trigger queued buy once wallet finishes connecting
     useEffect(() => {
@@ -359,7 +451,7 @@ export const Grid = () => {
     const handleCloseOnboarding = useCallback(() => {
         localStorage.setItem('blocs_has_visited', '1');
         setShowOnboarding(false);
-    }, []);
+    }, [setShowOnboarding]);
 
     // Filter owned blocks
     const ownedBlocks = useMemo(() => {
@@ -377,7 +469,7 @@ export const Grid = () => {
             className={styles.container}
             onMouseDownCapture={handleMouseDown}
             role="main"
-            aria-label="10,000 Blocs Grid"
+            aria-label="Mars Blocs 3D Globe and Map"
         >
             {isLoading && (
                 <div className={styles.loadingOverlay} role="alert" aria-busy="true">
@@ -407,27 +499,60 @@ export const Grid = () => {
                 </button>
                 <button
                     type="button"
-                    className={styles.iconButton}
-                    aria-label="Zoom in"
-                    onClick={() => transformRef.current?.zoomIn?.(0.4)}
-                >
-                    +
-                </button>
-                <button
-                    type="button"
-                    className={styles.iconButton}
-                    aria-label="Zoom out"
-                    onClick={() => transformRef.current?.zoomOut?.(0.4)}
-                >
-                    -
-                </button>
-                <button
-                    type="button"
                     className={styles.toolbarButton}
-                    onClick={() => transformRef.current?.resetTransform?.(300, 'easeOut')}
+                    onClick={() => {
+                        if (viewMode === 'globe') {
+                            setPendingFocus(null);
+                            setGlobeView(null);
+                            setViewMode('flat');
+                        } else if (transformRef.current) {
+                            // Mount the globe over the spot currently in view
+                            handoverToGlobe(transformRef.current.state);
+                        } else {
+                            setGlobeView(null);
+                            setViewMode('globe');
+                        }
+                    }}
                 >
-                    Reset
+                    {viewMode === 'globe' ? "2D Map" : "3D Globe"}
                 </button>
+                {viewMode === 'flat' && (
+                    <>
+                        <button
+                            type="button"
+                            className={styles.iconButton}
+                            aria-label="Zoom in"
+                            onClick={() => transformRef.current?.zoomIn?.(0.4)}
+                        >
+                            +
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.iconButton}
+                            aria-label="Zoom out"
+                            onClick={() => {
+                                // Programmatic zoom never fires onZoomStop, so the
+                                // zoomed-all-the-way-out state hands over here instead
+                                const ref = transformRef.current;
+                                if (!ref) return;
+                                if (ref.state.scale <= 0.45) {
+                                    handoverToGlobe(ref.state);
+                                } else {
+                                    ref.zoomOut?.(0.4);
+                                }
+                            }}
+                        >
+                            -
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.toolbarButton}
+                            onClick={() => transformRef.current?.resetTransform?.(300, 'easeOut')}
+                        >
+                            Reset
+                        </button>
+                    </>
+                )}
             </form>
 
             {isMosaicMode && (
@@ -475,76 +600,117 @@ export const Grid = () => {
                 </div>
             )}
 
-            <TransformWrapper
-                initialScale={initialTransform.scale}
-                initialPositionX={initialTransform.positionX}
-                initialPositionY={initialTransform.positionY}
-                minScale={0.1}
-                maxScale={10}
-                centerOnInit={!blockParam}
-                limitToBounds={true}
-                wheel={{ step: 0.1 }}
-                panning={{ velocityDisabled: false }}
-                onTransform={(ref) => {
-                    setCurrentScale(ref.state.scale);
-                    updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY);
-                }}
-                onInit={(ref) => {
-                    transformRef.current = ref;
-                    setCurrentScale(ref.state.scale);
-                    updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY);
-                }}
-            >
-                <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-                    <div style={{ position: 'relative' }}>
-                        <canvas
-                            ref={canvasRef}
-                            width={CANVAS_RES}
-                            height={CANVAS_RES}
-                            style={{
-                                margin: `${CANVAS_MARGIN}px`,
-                                display: 'block',
-                                // At high zoom the img overlays handle image quality.
-                                // Pixelated rendering keeps empty block borders crisp.
-                                imageRendering: currentScale >= HIGH_RES_THRESHOLD ? 'pixelated' : 'auto',
-                            }}
-                            onClick={handleCanvasClick}
-                            onMouseDown={isMosaicMode ? (event) => event.stopPropagation() : undefined}
-                            onClickCapture={isMosaicMode ? handleMosaicCanvasClick : undefined}
-                            onMouseMove={(event) => {
-                                if (isMosaicMode) {
-                                    handleMosaicMouseMove(event);
-                                    return;
-                                }
-                                handleMouseMove(event);
-                            }}
-                            onMouseLeave={handleMouseLeave}
-                            tabIndex={0}
-                            aria-label="Interactive block grid. Use mouse to pan/zoom, or click a block to view details."
-                            onKeyDown={handleKeyDown}
-                            className={styles.canvas}
+            {viewMode === 'globe' ? (
+                <div key="globe" className={styles.viewFade}>
+                    <ErrorBoundary
+                        fallback={
+                            <div className={styles.globeFallback}>
+                                <p>3D view isn&apos;t available in this browser.</p>
+                                <button
+                                    type="button"
+                                    className={`${styles.toolbarButton} ${styles.globeFallbackButton}`}
+                                    onClick={handleGlobeUnavailable}
+                                >
+                                    Use 2D Map
+                                </button>
+                            </div>
+                        }
+                    >
+                        <MarsGlobe
+                            blocks={blocks}
+                            selectedBlockId={selectedBlock?.id ?? null}
+                            onSelectBlock={handleGlobeSelect}
+                            initialView={globeView}
+                            onZoomIntoSurface={handleZoomIntoSurface}
+                            onWebGLUnavailable={handleGlobeUnavailable}
                         />
-                        {highResOverlays.map(({ block, col, row }) => (
-                            <img
-                                key={block.id}
-                                src={toSafeExternalUrl(block.imageUrl)!}
-                                alt=""
-                                draggable={false}
+                    </ErrorBoundary>
+                </div>
+            ) : (
+                <div key="flat" className={styles.viewFade}>
+                <TransformWrapper
+                    initialScale={flatMountTransform.scale}
+                    initialPositionX={flatMountTransform.positionX}
+                    initialPositionY={flatMountTransform.positionY}
+                    minScale={0.15}
+                    maxScale={10}
+                    centerOnInit={!blockParam && pendingFocus === null}
+                    limitToBounds={true}
+                    wheel={{ step: 0.1 }}
+                    panning={{ velocityDisabled: false }}
+                    onTransform={(ref) => {
+                        scaleRef.current = ref.state.scale;
+                        setIsHighRes(prev => (prev ? ref.state.scale > HIGH_RES_OFF : ref.state.scale >= HIGH_RES_ON));
+                        updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY);
+                    }}
+                    onZoomStop={(ref) => {
+                        // Switch to the globe only once the gesture settles, never mid-pinch
+                        if (ref.state.scale < GLOBE_SWITCH_SCALE) {
+                            handoverToGlobe(ref.state);
+                        }
+                    }}
+                    onInit={(ref) => {
+                        transformRef.current = ref;
+                        scaleRef.current = ref.state.scale;
+                        setIsHighRes(ref.state.scale >= HIGH_RES_ON);
+                        updateVisibility(ref.state.scale, ref.state.positionX, ref.state.positionY);
+                    }}
+                >
+                    <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+                        <div style={{ position: 'relative' }}>
+                            <canvas
+                                ref={canvasRef}
+                                width={CANVAS_RES}
+                                height={CANVAS_RES}
                                 style={{
-                                    position: 'absolute',
-                                    left: col * BLOCK_SIZE + CANVAS_MARGIN,
-                                    top: row * BLOCK_SIZE + CANVAS_MARGIN,
-                                    width: BLOCK_SIZE,
-                                    height: BLOCK_SIZE,
-                                    objectFit: parseMosaicImageUrl(block.imageUrl) ? 'fill' : 'contain',
-                                    pointerEvents: 'none',
-                                    userSelect: 'none',
+                                    margin: `${CANVAS_MARGIN}px`,
+                                    display: 'block',
+                                    // At high zoom the img overlays handle image quality.
+                                    // Pixelated rendering keeps empty block borders crisp.
+                                    imageRendering: isHighRes ? 'pixelated' : 'auto',
                                 }}
+                                onClick={handleCanvasClick}
+                                onMouseDown={isMosaicMode ? (event) => event.stopPropagation() : undefined}
+                                onClickCapture={isMosaicMode ? handleMosaicCanvasClick : undefined}
+                                onMouseMove={(event) => {
+                                    if (isMosaicMode) {
+                                        handleMosaicMouseMove(event);
+                                        return;
+                                    }
+                                    handleMouseMove(event);
+                                }}
+                                onMouseLeave={handleMouseLeave}
+                                tabIndex={0}
+                                aria-label="Interactive block grid. Use mouse to pan/zoom, or click a block to view details."
+                                onKeyDown={handleKeyDown}
+                                className={styles.canvas}
                             />
-                        ))}
-                    </div>
-                </TransformComponent>
-            </TransformWrapper>
+                            {highResOverlays.map(({ block, col, row }) => (
+                                // User-supplied external images; next/image optimization
+                                // is not applicable to arbitrary hosts here.
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    key={block.id}
+                                    src={toSafeExternalUrl(block.imageUrl)!}
+                                    alt=""
+                                    draggable={false}
+                                    style={{
+                                        position: 'absolute',
+                                        left: col * BLOCK_SIZE + CANVAS_MARGIN,
+                                        top: row * BLOCK_SIZE + CANVAS_MARGIN,
+                                        width: BLOCK_SIZE,
+                                        height: BLOCK_SIZE,
+                                        objectFit: parseMosaicImageUrl(block.imageUrl) ? 'fill' : 'cover',
+                                        pointerEvents: 'none',
+                                        userSelect: 'none',
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    </TransformComponent>
+                </TransformWrapper>
+                </div>
+            )}
 
             {hoveredBlock && !isMobileViewport && (
                 <div
@@ -614,8 +780,7 @@ export const Grid = () => {
                     if (successBlock) {
                         const freshBlock = blocks.find((block) => block.id === successBlock.id);
                         if (freshBlock) {
-                            setSelectedBlock(freshBlock);
-                            setSidebarMode('edit');
+                            focusBlockInFlat(freshBlock.id, 'edit');
                         }
                         setSuccessBlock(null);
                     }
@@ -639,9 +804,7 @@ export const Grid = () => {
                         ui_source: "my_blocks_list",
                         is_for_sale: block.isForSale,
                     });
-                    setSelectedBlock(block);
-                    setSidebarMode('edit');
-                    zoomToBlock(block.id);
+                    focusBlockInFlat(block.id, 'edit');
                 }}
             />
 
@@ -651,11 +814,7 @@ export const Grid = () => {
                         blocks={viewingOwnerBlocks}
                         title={`Blocks by ${viewingOwner.slice(0, 4)}...${viewingOwner.slice(-4)}`}
                         onClear={() => setViewingOwner(null)}
-                        onSelectBlock={(block) => {
-                            setSelectedBlock(block);
-                            setSidebarMode('view');
-                            zoomToBlock(block.id);
-                        }}
+                        onSelectBlock={(block) => focusBlockInFlat(block.id, 'view')}
                     />
                 </div>
             )}

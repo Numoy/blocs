@@ -92,8 +92,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const id = parseGridBlockId(rawId);
     if (id === null) {
         return {
-            title: "Invalid Block",
-            description: "Explore the live 10,000 block grid on Solana.",
+            title: "Invalid Plot",
+            description: "Explore the live 10,000 plot Mars map on Solana.",
             alternates: {
                 canonical: "/",
             },
@@ -110,47 +110,47 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
     if (!block) {
         return {
-            title: `Block #${id}`,
-            description: `View block #${id} on Blocs, the decentralized 100x100 grid on Solana.`,
+            title: `Plot #${id}`,
+            description: `View land plot #${id} on Mars Blocs, the decentralized 100x100 grid on Planet Mars.`,
             alternates: {
                 canonical: blockPath,
             },
             openGraph: {
-                title: `Block #${id}`,
-                description: `View block #${id} on Blocs, the decentralized 100x100 grid on Solana.`,
+                title: `Plot #${id}`,
+                description: `View land plot #${id} on Mars Blocs, the decentralized 100x100 grid on Planet Mars.`,
                 url: blockUrl,
-                siteName: "Blocs",
+                siteName: "Mars Blocs",
                 type: "website",
                 images: [
                     {
                         url: "/og-image.png",
                         width: 1200,
                         height: 630,
-                        alt: `Blocs block #${id}`,
+                        alt: `Mars Blocs plot #${id}`,
                     },
                 ],
             },
             twitter: {
                 card: "summary_large_image",
-                title: `Block #${id}`,
-                description: `View block #${id} on Blocs, the decentralized 100x100 grid on Solana.`,
+                title: `Plot #${id}`,
+                description: `View land plot #${id} on Mars Blocs, the decentralized 100x100 grid on Planet Mars.`,
                 images: ["/og-image.png"],
             },
         };
     }
 
     const textPreview = block.text ? truncate(block.text, 48) : "";
-    const title = textPreview ? `Block #${id}: "${textPreview}"` : `Block #${id}`;
+    const title = textPreview ? `Plot #${id}: "${textPreview}"` : `Plot #${id}`;
     const description = block.imageUrl
-        ? "Explore this image block on Blocs and see its on-chain owner and metadata."
-        : `Owned by ${block.owner.slice(0, 4)}...${block.owner.slice(-4)} on the Blocs grid.`;
+        ? "Explore this image plot on Mars Blocs and see its on-chain owner and metadata."
+        : `Owned by ${block.owner.slice(0, 4)}...${block.owner.slice(-4)} on the Mars Blocs colony map.`;
 
     const safeImageUrl = toSafeExternalUrl(block.imageUrl);
     const ogImage = safeImageUrl
         ? [
             {
                 url: safeImageUrl,
-                alt: `Image for block #${id} on Blocs`,
+                alt: `Image for plot #${id} on Mars Blocs`,
             },
         ]
         : [
@@ -158,7 +158,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
                 url: "/og-image.png",
                 width: 1200,
                 height: 630,
-                alt: `Blocs block #${id}`,
+                alt: `Mars Blocs plot #${id}`,
             },
         ];
 
@@ -172,7 +172,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             title,
             description,
             url: blockUrl,
-            siteName: "Blocs",
+            siteName: "Mars Blocs",
             type: "website",
             images: ogImage,
         },

@@ -6,6 +6,11 @@ vi.mock("next-plausible", () => ({
     default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock("next/font/google", () => ({
+    Orbitron: () => ({ variable: "--font-display" }),
+    Space_Grotesk: () => ({ variable: "--font-sans" }),
+}));
+
 vi.mock("sonner", () => ({
     Toaster: () => null,
 }));

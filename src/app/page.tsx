@@ -3,24 +3,24 @@ import type { Metadata } from "next";
 import { Grid } from "@/components/grid/Grid";
 
 const homeDescription =
-  "Explore the live 100x100 on-chain grid on Solana. Discover, buy, and trade ownership of one of 10,000 permanent blocks.";
+  "1 Planet. 10,000 Plots. Claim your piece of Mars. Explore the interactive 3D globe of Mars on Solana, claim land plots, and customize your settlement.";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Blocs | 10,000 Blocks on Solana",
+    absolute: "Mars Blocs | 10,000 Plots on Planet Mars",
   },
   description: homeDescription,
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Blocs | 10,000 Blocks on Solana",
+    title: "Mars Blocs | 10,000 Plots on Planet Mars",
     description: homeDescription,
     url: "/",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Blocs | 10,000 Blocks on Solana",
+    title: "Mars Blocs | 10,000 Plots on Planet Mars",
     description: homeDescription,
     images: ["/og-image.png"],
   },
@@ -29,9 +29,9 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <>
-      <h1 className="sr-only">Blocs: 10,000 blocks on Solana</h1>
+      <h1 className="sr-only">Mars Blocs: 10,000 land plots on Planet Mars</h1>
       <p className="sr-only">
-        Buy, sell, and manage ownership of permanent blocks on a decentralized 100x100 grid.
+        Claim, trade, and build settlements on a decentralized 100x100 Mars map registered on Solana.
       </p>
       <Suspense fallback={<div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Grid...</div>}>
         <Grid />

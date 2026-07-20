@@ -73,7 +73,7 @@
     border: 1px solid var(--border-soft);
     border-radius: var(--radius-md);
     overflow: hidden;
-    background: #111;
+    background: #0e0b18;
 }
 
 .previewTile {
