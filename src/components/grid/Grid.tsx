@@ -229,19 +229,27 @@ export const Grid = () => {
         setViewMode('globe');
     }, []);
 
-    // Handle initial deep-linked block selection
+    // Handle initial deep-linked block selection. `blocks` gets a new array
+    // reference on every background sync, so without this guard the effect
+    // would re-fire on every refresh and keep forcing the user back to the
+    // deep-linked block/view even after they've closed the sidebar or
+    // navigated elsewhere. Applying it once per blockParam value fixes that
+    // while still re-applying if the URL's ?block= actually changes.
+    const appliedBlockParamRef = useRef<string | null>(null);
     useEffect(() => {
-        if (blockParam && blocks.length > 0) {
-            const id = parseGridBlockId(blockParam);
-            if (id !== null && id >= 0 && id < blocks.length) {
-                const block = blocks[id];
-                if (block) {
-                    setTimeout(() => {
-                        setSelectedBlock(block);
-                        setSidebarMode('view');
-                        setViewMode('flat');
-                    }, 0);
-                }
+        if (!blockParam || blocks.length === 0) return;
+        if (appliedBlockParamRef.current === blockParam) return;
+
+        const id = parseGridBlockId(blockParam);
+        if (id !== null && id >= 0 && id < blocks.length) {
+            const block = blocks[id];
+            if (block) {
+                appliedBlockParamRef.current = blockParam;
+                setTimeout(() => {
+                    setSelectedBlock(block);
+                    setSidebarMode('view');
+                    setViewMode('flat');
+                }, 0);
             }
         }
     }, [blockParam, blocks, setSelectedBlock, setSidebarMode, setViewMode]);

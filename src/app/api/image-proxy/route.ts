@@ -35,22 +35,54 @@ export async function GET(request: NextRequest) {
     }
 
     if (!upstream.ok) {
+        void upstream.body?.cancel();
         return NextResponse.json({ error: "Upstream error" }, { status: 502 });
     }
 
     const contentType = upstream.headers.get("content-type") ?? "";
     if (!contentType.startsWith("image/")) {
+        void upstream.body?.cancel();
         return NextResponse.json({ error: "Not an image" }, { status: 415 });
     }
 
     const declaredLength = Number(upstream.headers.get("content-length") ?? "0");
     if (declaredLength > MAX_IMAGE_BYTES) {
+        void upstream.body?.cancel();
         return NextResponse.json({ error: "Image too large" }, { status: 413 });
     }
 
-    const body = await upstream.arrayBuffer();
-    if (body.byteLength > MAX_IMAGE_BYTES) {
-        return NextResponse.json({ error: "Image too large" }, { status: 413 });
+    if (!upstream.body) {
+        return NextResponse.json({ error: "Empty response" }, { status: 502 });
+    }
+
+    // Enforce the size cap while streaming, not after buffering — an upstream
+    // host that omits or understates Content-Length could otherwise be used
+    // to exhaust process memory by streaming an unbounded body before the
+    // length was ever checked.
+    const reader = upstream.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+
+    try {
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            total += value.byteLength;
+            if (total > MAX_IMAGE_BYTES) {
+                await reader.cancel("Image too large").catch(() => {});
+                return NextResponse.json({ error: "Image too large" }, { status: 413 });
+            }
+            chunks.push(value);
+        }
+    } catch {
+        return NextResponse.json({ error: "Upstream read failed" }, { status: 502 });
+    }
+
+    const body = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+        body.set(chunk, offset);
+        offset += chunk.byteLength;
     }
 
     return new NextResponse(body, {
