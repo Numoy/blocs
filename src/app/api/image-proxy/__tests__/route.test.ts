@@ -1,14 +1,21 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET } from "@/app/api/image-proxy/route";
 
 const request = (url: string) =>
     new NextRequest(`https://app.example.com/api/image-proxy?url=${encodeURIComponent(url)}`);
 
+const ALLOWED_HOST = "cdn.example.com";
+
+beforeEach(() => {
+    vi.stubEnv("HETZNER_ENDPOINT", `https://${ALLOWED_HOST}`);
+});
+
 afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
 });
 
 describe("image-proxy route", () => {
@@ -22,6 +29,16 @@ describe("image-proxy route", () => {
         vi.stubGlobal("fetch", fetchSpy);
 
         const response = await GET(request("http://10.0.0.5/a.jpg"));
+
+        expect(response.status).toBe(400);
+        expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("rejects a public host outside the configured object storage allow-list", async () => {
+        const fetchSpy = vi.fn();
+        vi.stubGlobal("fetch", fetchSpy);
+
+        const response = await GET(request("https://not-our-bucket.example.com/a.jpg"));
 
         expect(response.status).toBe(400);
         expect(fetchSpy).not.toHaveBeenCalled();

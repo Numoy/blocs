@@ -17,13 +17,37 @@ const PRIVATE_HOST_PATTERNS = [
     /^\[?fe80:/i,
 ];
 
+// The proxy is only meant to fetch images from our own object storage bucket
+// (used for CORS-safe WebGL texture loads on the 3D globe) — never arbitrary
+// user-supplied hosts, which is what CodeQL's SSRF query requires: a fixed
+// allow-list, not a private-IP blocklist. Derived from the same public-facing
+// env vars as src/utils/s3.ts, but without requiring the S3 credentials that
+// module needs for actual uploads.
+const resolveAllowedHost = (): string | null => {
+    const region = process.env.HETZNER_REGION?.trim() || "fsn1";
+    const raw =
+        process.env.HETZNER_PUBLIC_BASE_URL?.trim() ||
+        process.env.HETZNER_ENDPOINT?.trim() ||
+        `https://${region}.your-objectstorage.com`;
+    const withProtocol = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(raw) ? raw : `https://${raw}`;
+    try {
+        return new URL(withProtocol).hostname.toLowerCase();
+    } catch {
+        return null;
+    }
+};
+
+const isAllowedRemoteHost = (hostname: string): boolean => {
+    const allowedHost = resolveAllowedHost();
+    if (!allowedHost) return false;
+    const host = hostname.toLowerCase();
+    return host === allowedHost || host.endsWith(`.${allowedHost}`);
+};
+
 // Returns the parsed URL if it's safe to server-side fetch (https, no
 // embedded credentials, not a bare/internal-looking hostname, not a private
-// or link-local IP range), or null if it should be rejected. Block imageUrl
-// values are arbitrary user-supplied public hosts (not just our own object
-// storage), so this intentionally has no fixed host allowlist — it's a
-// best-effort private/internal-range blocklist, not a substitute for
-// network-level egress controls against DNS rebinding.
+// or link-local IP range, and matches our configured object storage host),
+// or null if it should be rejected.
 export const isSafeRemoteUrl = (raw: string): URL | null => {
     let parsed: URL;
     try {
@@ -37,5 +61,6 @@ export const isSafeRemoteUrl = (raw: string): URL | null => {
     // Bare hostnames (no dot) are typically internal service names
     if (!host.includes(".")) return null;
     if (PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(host))) return null;
+    if (!isAllowedRemoteHost(host)) return null;
     return parsed;
 };
