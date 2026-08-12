@@ -16,7 +16,7 @@
         "prettier": "^3.8.3",
         "ts-mocha": "^11.1.0",
         "ts-node": "^10.9.2",
-        "typescript": "^6.0.3"
+        "typescript": "^7.0.2"
     },
     "resolutions": {
         "bn.js": "^5.2.3",
