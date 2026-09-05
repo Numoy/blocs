@@ -244,7 +244,7 @@ jobs:
           push-to-registry: true
 
       - name: Generate image SBOM (SPDX JSON)
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26
         with:
           image: ${{ env.REGISTRY }}/${{ steps.image_repo.outputs.value }}@${{ steps.build_image.outputs.digest }}
           format: spdx-json
